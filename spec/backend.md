@@ -18,7 +18,7 @@
 # Web 框架
 axum = { version = "0.8", features = ["multipart"] }
 tower = { version = "0.5", features = ["full"] }
-tower-http = { version = "0.6", features = ["cors", "trace", "limit"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "limit"] }
 
 # 异步运行时
 tokio = { version = "1", features = ["full"] }
@@ -29,16 +29,16 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # 数据库
-sqlx = { version = "0.8", features = ["sqlite", "runtime-tokio", "migrate", "chrono", "uuid"] }
+sqlx = { version = "0.9", features = ["sqlite", "runtime-tokio", "migrate", "chrono", "uuid"] }
 
 # 认证
-jsonwebtoken = "9"
+jsonwebtoken = "10"
 argon2 = "0.5"
 
 # UUID / 时间 / 随机数
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
-rand = "0.9"
+rand = "0.10"
 base64 = "0.22"
 
 # 错误处理
@@ -49,7 +49,7 @@ anyhow = "1"
 dotenvy = "0.15"
 
 # 文件系统监控（跨平台：macOS FSEvents / Linux inotify，notify 自动选择后端）
-notify = "7"
+notify = "8"
 libc = "0.2"
 
 # MIME 类型检测
