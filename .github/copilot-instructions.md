@@ -6,7 +6,15 @@ The authoritative spec is [`spec/backend.md`](../spec/backend.md) — read it be
 
 ## Project status
 
-The backend is greenfield: `src/main.rs` is still `Hello, world!` and `Cargo.toml` has no dependencies yet. When starting implementation, add dependencies and build modules following the layout and **实现顺序 (implementation order)** at the end of `spec/backend.md`.
+Follow the implementation plan in @CLAUDE.md.
+
+When executing work:
+
+* complete steps in order unless blocked
+* make small commits/changes
+* run relevant tests after each milestone
+* report progress against the plan
+* stop and explain blockers before making large speculative changes
 
 ## Commands
 

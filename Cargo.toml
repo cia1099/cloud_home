@@ -4,3 +4,46 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+# Web 框架
+axum = { version = "0.8", features = ["multipart"] }
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "limit"] }
+
+# 异步运行时
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
+
+# 序列化
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# 数据库
+sqlx = { version = "0.9", features = ["sqlite", "runtime-tokio", "migrate", "chrono", "uuid"] }
+
+# 认证
+jsonwebtoken = { version = "10", default-features = false, features = ["rust_crypto"] }
+argon2 = "0.5"
+
+# UUID / 时间 / 随机数
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+rand = "0.10"
+base64 = "0.22"
+
+# 错误处理
+thiserror = "2"
+anyhow = "1"
+
+# 环境变量
+dotenvy = "0.15"
+
+# 文件系统监控（跨平台：macOS FSEvents / Linux inotify，notify 自动选择后端）
+notify = "8"
+libc = "0.2"
+
+# MIME 类型检测
+mime_guess = "2"
+
+# 日志
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
