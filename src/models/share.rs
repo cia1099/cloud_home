@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use utoipa::ToSchema;
 
 /// 数据库中的分享链接行。
 #[derive(Debug, Clone, FromRow)]
@@ -16,7 +17,7 @@ pub struct ShareLink {
 }
 
 /// 创建分享请求体。
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateShareDto {
     pub file_id: String,
     #[serde(default = "default_can_download")]
@@ -30,7 +31,7 @@ fn default_can_download() -> bool {
 }
 
 /// 对外返回的分享信息（含完整 URL）。
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ShareResponse {
     pub id: String,
     pub file_id: String,
@@ -61,7 +62,7 @@ impl ShareResponse {
 }
 
 /// 公开访问时返回的分享文件信息。
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct PublicShareResponse {
     pub name: String,
     pub file_type: String,
@@ -69,4 +70,10 @@ pub struct PublicShareResponse {
     pub mime_type: Option<String>,
     pub can_download: bool,
     pub shared_by: String,
+}
+
+/// GET /shares 响应体。
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ShareListResponse {
+    pub items: Vec<ShareResponse>,
 }

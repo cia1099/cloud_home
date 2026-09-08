@@ -5,46 +5,85 @@ use axum::extract::{Multipart, Path as AxumPath, Query, State};
 use axum::http::StatusCode;
 use axum::http::header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE};
 use axum::response::{IntoResponse, Response};
-use axum::{Json, response::Json as JsonResp};
-use serde_json::{Value, json};
 use tokio::io::AsyncWriteExt;
 
 use crate::auth::AuthUser;
 use crate::drive::path_resolver;
-use crate::error::{AppError, AppResult};
+use crate::error::{AppError, AppResult, ErrorResponse};
+use crate::models::common::OkResponse;
 use crate::models::file::{
-    FILE_TYPE_FILE, FileEntry, FileResponse, ListQuery, MoveDto, RenameDto,
+    FILE_TYPE_FILE, FileEntry, FileListResponse, FileResponse, ListQuery, MoveDto, RenameDto,
 };
+use crate::openapi::ApiResponse;
 use crate::services::{file_service, trash_service};
 use crate::state::AppState;
 
 /// GET /files?parent_id=
+#[utoipa::path(
+    get,
+    path = "/files",
+    tag = "files",
+    params(ListQuery),
+    responses(
+        (status = 200, description = "目录内容", body = ApiResponse<FileListResponse>),
+        (status = 400, description = "parent_id 不是资料夹", body = ErrorResponse),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 404, description = "parent_id 不存在", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
 pub async fn list(
     State(state): State<AppState>,
     user: AuthUser,
     Query(q): Query<ListQuery>,
-) -> AppResult<JsonResp<Value>> {
+) -> AppResult<ApiResponse<FileListResponse>> {
     let items = file_service::list_dir(&state.db, &user.user_id, q.parent_id.as_deref()).await?;
-    let data: Vec<FileResponse> = items.into_iter().map(FileResponse::from).collect();
-    Ok(Json(json!({ "data": { "items": data } })))
+    let items: Vec<FileResponse> = items.into_iter().map(FileResponse::from).collect();
+    Ok(ApiResponse::new(FileListResponse { items }))
 }
 
 /// GET /files/:id
+#[utoipa::path(
+    get,
+    path = "/files/{id}",
+    tag = "files",
+    params(("id" = String, Path, description = "文件/资料夹 id")),
+    responses(
+        (status = 200, description = "文件元数据", body = ApiResponse<FileResponse>),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 404, description = "文件不存在", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
 pub async fn get_metadata(
     State(state): State<AppState>,
     user: AuthUser,
     AxumPath(id): AxumPath<String>,
-) -> AppResult<JsonResp<Value>> {
+) -> AppResult<ApiResponse<FileResponse>> {
     let entry = file_service::get_owned(&state.db, &user.user_id, &id).await?;
-    Ok(Json(json!({ "data": FileResponse::from(entry) })))
+    Ok(ApiResponse::new(FileResponse::from(entry)))
 }
 
 /// POST /files/upload （multipart/form-data）
+#[utoipa::path(
+    post,
+    path = "/files/upload",
+    tag = "files",
+    request_body(content = crate::models::file::UploadForm, content_type = "multipart/form-data"),
+    responses(
+        (status = 201, description = "上传成功", body = ApiResponse<FileResponse>),
+        (status = 400, description = "参数校验失败", body = ErrorResponse),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 409, description = "已存在同名项目", body = ErrorResponse),
+        (status = 503, description = "外接硬盘不可用", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
 pub async fn upload(
     State(state): State<AppState>,
     user: AuthUser,
     mut multipart: Multipart,
-) -> AppResult<(StatusCode, JsonResp<Value>)> {
+) -> AppResult<(StatusCode, ApiResponse<FileResponse>)> {
     let data_root = state.drive_manager.require_data_root().await?;
 
     let file_id = uuid::Uuid::new_v4().to_string();
@@ -117,7 +156,10 @@ pub async fn upload(
     .await;
 
     match result {
-        Ok(entry) => Ok((StatusCode::CREATED, Json(json!({ "data": FileResponse::from(entry) })))),
+        Ok(entry) => Ok((
+            StatusCode::CREATED,
+            ApiResponse::new(FileResponse::from(entry)),
+        )),
         Err(e) => {
             let _ = tokio::fs::remove_file(&physical_path).await;
             Err(e)
@@ -165,6 +207,24 @@ async fn finalize_upload(
 }
 
 /// GET /files/:id/download
+#[utoipa::path(
+    get,
+    path = "/files/{id}/download",
+    tag = "files",
+    params(("id" = String, Path, description = "文件 id")),
+    responses(
+        (status = 200, description = "文件内容", content_type = "application/octet-stream", body = [u8],
+         headers(
+             ("Content-Disposition" = String, description = "attachment; filename*=UTF-8''<name>"),
+             ("Content-Length" = i64),
+         )),
+        (status = 400, description = "资料夹不能下载", body = ErrorResponse),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 404, description = "文件不存在", body = ErrorResponse),
+        (status = 503, description = "外接硬盘不可用", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
 pub async fn download(
     State(state): State<AppState>,
     user: AuthUser,
@@ -175,35 +235,81 @@ pub async fn download(
 }
 
 /// PATCH /files/:id  重命名
+#[utoipa::path(
+    patch,
+    path = "/files/{id}",
+    tag = "files",
+    params(("id" = String, Path, description = "文件/资料夹 id")),
+    request_body = RenameDto,
+    responses(
+        (status = 200, description = "重命名成功", body = ApiResponse<FileResponse>),
+        (status = 400, description = "名称不合法", body = ErrorResponse),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 404, description = "文件不存在", body = ErrorResponse),
+        (status = 409, description = "已存在同名项目", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
 pub async fn rename(
     State(state): State<AppState>,
     user: AuthUser,
     AxumPath(id): AxumPath<String>,
-    Json(dto): Json<RenameDto>,
-) -> AppResult<JsonResp<Value>> {
+    axum::Json(dto): axum::Json<RenameDto>,
+) -> AppResult<ApiResponse<FileResponse>> {
     let entry = file_service::rename(&state.db, &user.user_id, &id, &dto.name).await?;
-    Ok(Json(json!({ "data": FileResponse::from(entry) })))
+    Ok(ApiResponse::new(FileResponse::from(entry)))
 }
 
 /// POST /files/:id/move
+#[utoipa::path(
+    post,
+    path = "/files/{id}/move",
+    tag = "files",
+    params(("id" = String, Path, description = "文件/资料夹 id")),
+    request_body = MoveDto,
+    responses(
+        (status = 200, description = "移动成功", body = ApiResponse<FileResponse>),
+        (status = 400, description = "目标非法或形成环", body = ErrorResponse),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 404, description = "文件或目标目录不存在", body = ErrorResponse),
+        (status = 409, description = "目标目录下已存在同名项目", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
 pub async fn move_file(
     State(state): State<AppState>,
     user: AuthUser,
     AxumPath(id): AxumPath<String>,
-    Json(dto): Json<MoveDto>,
-) -> AppResult<JsonResp<Value>> {
-    let entry =
-        file_service::move_entry(&state.db, &user.user_id, &id, dto.target_parent_id.as_deref())
-            .await?;
-    Ok(Json(json!({ "data": FileResponse::from(entry) })))
+    axum::Json(dto): axum::Json<MoveDto>,
+) -> AppResult<ApiResponse<FileResponse>> {
+    let entry = file_service::move_entry(
+        &state.db,
+        &user.user_id,
+        &id,
+        dto.target_parent_id.as_deref(),
+    )
+    .await?;
+    Ok(ApiResponse::new(FileResponse::from(entry)))
 }
 
 /// DELETE /files/:id  软删除（移入回收站）
+#[utoipa::path(
+    delete,
+    path = "/files/{id}",
+    tag = "files",
+    params(("id" = String, Path, description = "文件/资料夹 id")),
+    responses(
+        (status = 200, description = "已移入回收站", body = ApiResponse<OkResponse>),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 404, description = "文件不存在", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
 pub async fn delete(
     State(state): State<AppState>,
     user: AuthUser,
     AxumPath(id): AxumPath<String>,
-) -> AppResult<JsonResp<Value>> {
+) -> AppResult<ApiResponse<OkResponse>> {
     trash_service::soft_delete(
         &state.db,
         state.config.trash_retention_days,
@@ -211,7 +317,7 @@ pub async fn delete(
         &id,
     )
     .await?;
-    Ok(Json(json!({ "data": { "ok": true } })))
+    Ok(ApiResponse::new(OkResponse { ok: true }))
 }
 
 /// 以流式方式返回文件内容。供本人下载与公开下载共用。
@@ -239,10 +345,7 @@ pub async fn stream_file(
         .mime_type
         .clone()
         .unwrap_or_else(|| "application/octet-stream".to_string());
-    let disposition = format!(
-        "attachment; filename*=UTF-8''{}",
-        urlencode(&entry.name)
-    );
+    let disposition = format!("attachment; filename*=UTF-8''{}", urlencode(&entry.name));
 
     let response = Response::builder()
         .status(StatusCode::OK)

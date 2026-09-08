@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use utoipa::ToSchema;
 
 /// 数据库中的用户行。
 #[derive(Debug, Clone, FromRow)]
@@ -15,7 +16,7 @@ pub struct User {
 }
 
 /// 注册请求体。
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateUserDto {
     pub username: String,
     pub email: String,
@@ -23,14 +24,14 @@ pub struct CreateUserDto {
 }
 
 /// 登录请求体：`identifier` 可为 username 或 email。
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct LoginDto {
     pub identifier: String,
     pub password: String,
 }
 
 /// 对外返回的用户信息（不含密码哈希）。
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct UserResponse {
     pub id: String,
     pub username: String,
@@ -47,4 +48,12 @@ impl From<User> for UserResponse {
             created_at: u.created_at,
         }
     }
+}
+
+/// 注册 / 登录成功后返回的凭证信息。
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AuthResponse {
+    pub token: String,
+    pub expires_at: String,
+    pub user: UserResponse,
 }

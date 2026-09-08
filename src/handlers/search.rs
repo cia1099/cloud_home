@@ -1,18 +1,18 @@
 //! 搜索端点：按名称模糊匹配当前用户的文件与资料夹。
 
 use axum::extract::{Query, State};
-use axum::{Json, response::Json as JsonResp};
-use serde::Deserialize;
-use serde_json::{Value, json};
+use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 
 use crate::auth::AuthUser;
 use crate::db::Db;
-use crate::error::{AppError, AppResult};
+use crate::error::{AppError, AppResult, ErrorResponse};
 use crate::models::file::FileEntry;
+use crate::openapi::ApiResponse;
 use crate::services::file_service;
 use crate::state::AppState;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct SearchQuery {
     pub q: String,
     #[serde(rename = "type")]
@@ -21,12 +21,53 @@ pub struct SearchQuery {
     pub per_page: Option<i64>,
 }
 
+/// 搜索结果中的单条文件/资料夹记录。
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SearchResultItem {
+    pub id: String,
+    pub name: String,
+    pub file_type: String,
+    pub size_bytes: i64,
+    pub mime_type: Option<String>,
+    pub parent_id: Option<String>,
+    pub parent_path: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct Pagination {
+    pub page: i64,
+    pub per_page: i64,
+    pub total: i64,
+}
+
+/// GET /search 响应体。
+#[derive(Debug, Serialize, ToSchema)]
+pub struct SearchResponse {
+    pub query: String,
+    pub items: Vec<SearchResultItem>,
+    pub pagination: Pagination,
+}
+
 /// GET /search
+#[utoipa::path(
+    get,
+    path = "/search",
+    tag = "search",
+    params(SearchQuery),
+    responses(
+        (status = 200, description = "搜索结果", body = ApiResponse<SearchResponse>),
+        (status = 400, description = "参数校验失败", body = ErrorResponse),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
 pub async fn search(
     State(state): State<AppState>,
     user: AuthUser,
     Query(params): Query<SearchQuery>,
-) -> AppResult<JsonResp<Value>> {
+) -> AppResult<ApiResponse<SearchResponse>> {
     let q = params.q.trim();
     if q.is_empty() || q.len() > 100 {
         return Err(AppError::BadRequest("q 长度需在 1..=100 之间".into()));
@@ -43,8 +84,13 @@ pub async fn search(
     let pattern = format!("%{q}%");
 
     // 统计总数。
-    let total = count_matches(&state.db, &user.user_id, &pattern, params.type_filter.as_deref())
-        .await?;
+    let total = count_matches(
+        &state.db,
+        &user.user_id,
+        &pattern,
+        params.type_filter.as_deref(),
+    )
+    .await?;
 
     // 取当前页。
     let rows = fetch_matches(
@@ -59,28 +105,30 @@ pub async fn search(
 
     let mut items = Vec::with_capacity(rows.len());
     for entry in rows {
-        let parent_path = build_parent_path(&state.db, &user.user_id, entry.parent_id.as_deref())
-            .await?;
-        items.push(json!({
-            "id": entry.id,
-            "name": entry.name,
-            "file_type": entry.file_type,
-            "size_bytes": entry.size_bytes,
-            "mime_type": entry.mime_type,
-            "parent_id": entry.parent_id,
-            "parent_path": parent_path,
-            "created_at": entry.created_at,
-            "updated_at": entry.updated_at,
-        }));
+        let parent_path =
+            build_parent_path(&state.db, &user.user_id, entry.parent_id.as_deref()).await?;
+        items.push(SearchResultItem {
+            id: entry.id,
+            name: entry.name,
+            file_type: entry.file_type,
+            size_bytes: entry.size_bytes,
+            mime_type: entry.mime_type,
+            parent_id: entry.parent_id,
+            parent_path,
+            created_at: entry.created_at,
+            updated_at: entry.updated_at,
+        });
     }
 
-    Ok(Json(json!({
-        "data": {
-            "query": q,
-            "items": items,
-            "pagination": { "page": page, "per_page": per_page, "total": total }
-        }
-    })))
+    Ok(ApiResponse::new(SearchResponse {
+        query: q.to_string(),
+        items,
+        pagination: Pagination {
+            page,
+            per_page,
+            total,
+        },
+    }))
 }
 
 async fn count_matches(
@@ -89,24 +137,27 @@ async fn count_matches(
     pattern: &str,
     type_filter: Option<&str>,
 ) -> AppResult<i64> {
-    let (count,): (i64,) = match type_filter {
-        Some(t) => sqlx::query_as(
-            "SELECT COUNT(*) FROM files WHERE owner_id = ? AND is_deleted = 0 \
+    let (count,): (i64,) =
+        match type_filter {
+            Some(t) => {
+                sqlx::query_as(
+                    "SELECT COUNT(*) FROM files WHERE owner_id = ? AND is_deleted = 0 \
              AND name LIKE ? AND file_type = ?",
-        )
-        .bind(owner_id)
-        .bind(pattern)
-        .bind(t)
-        .fetch_one(db)
-        .await?,
-        None => sqlx::query_as(
-            "SELECT COUNT(*) FROM files WHERE owner_id = ? AND is_deleted = 0 AND name LIKE ?",
-        )
-        .bind(owner_id)
-        .bind(pattern)
-        .fetch_one(db)
-        .await?,
-    };
+                )
+                .bind(owner_id)
+                .bind(pattern)
+                .bind(t)
+                .fetch_one(db)
+                .await?
+            }
+            None => sqlx::query_as(
+                "SELECT COUNT(*) FROM files WHERE owner_id = ? AND is_deleted = 0 AND name LIKE ?",
+            )
+            .bind(owner_id)
+            .bind(pattern)
+            .fetch_one(db)
+            .await?,
+        };
     Ok(count)
 }
 
@@ -119,37 +170,37 @@ async fn fetch_matches(
     offset: i64,
 ) -> AppResult<Vec<FileEntry>> {
     let rows = match type_filter {
-        Some(t) => sqlx::query_as::<_, FileEntry>(
-            "SELECT * FROM files WHERE owner_id = ? AND is_deleted = 0 AND name LIKE ? \
+        Some(t) => {
+            sqlx::query_as::<_, FileEntry>(
+                "SELECT * FROM files WHERE owner_id = ? AND is_deleted = 0 AND name LIKE ? \
              AND file_type = ? ORDER BY name ASC LIMIT ? OFFSET ?",
-        )
-        .bind(owner_id)
-        .bind(pattern)
-        .bind(t)
-        .bind(per_page)
-        .bind(offset)
-        .fetch_all(db)
-        .await?,
-        None => sqlx::query_as::<_, FileEntry>(
-            "SELECT * FROM files WHERE owner_id = ? AND is_deleted = 0 AND name LIKE ? \
+            )
+            .bind(owner_id)
+            .bind(pattern)
+            .bind(t)
+            .bind(per_page)
+            .bind(offset)
+            .fetch_all(db)
+            .await?
+        }
+        None => {
+            sqlx::query_as::<_, FileEntry>(
+                "SELECT * FROM files WHERE owner_id = ? AND is_deleted = 0 AND name LIKE ? \
              ORDER BY name ASC LIMIT ? OFFSET ?",
-        )
-        .bind(owner_id)
-        .bind(pattern)
-        .bind(per_page)
-        .bind(offset)
-        .fetch_all(db)
-        .await?,
+            )
+            .bind(owner_id)
+            .bind(pattern)
+            .bind(per_page)
+            .bind(offset)
+            .fetch_all(db)
+            .await?
+        }
     };
     Ok(rows)
 }
 
 /// 由 parent_id 向上拼出可读路径，如 `Documents/2025`。根目录返回空字符串。
-async fn build_parent_path(
-    db: &Db,
-    owner_id: &str,
-    parent_id: Option<&str>,
-) -> AppResult<String> {
+async fn build_parent_path(db: &Db, owner_id: &str, parent_id: Option<&str>) -> AppResult<String> {
     let mut segments: Vec<String> = Vec::new();
     let mut current = parent_id.map(|s| s.to_string());
     // 限制深度，防御异常数据形成的环。

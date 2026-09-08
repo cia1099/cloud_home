@@ -5,6 +5,7 @@ mod drive;
 mod error;
 mod handlers;
 mod models;
+mod openapi;
 mod services;
 mod state;
 mod tasks;
@@ -115,11 +116,10 @@ async fn upsert_drive(pool: &db::Db, mount: &std::path::Path) -> anyhow::Result<
     let mount_str = mount.display().to_string();
     let now = now_rfc3339();
 
-    let existing: Option<(String,)> =
-        sqlx::query_as("SELECT id FROM drives WHERE mount_path = ?")
-            .bind(&mount_str)
-            .fetch_optional(pool)
-            .await?;
+    let existing: Option<(String,)> = sqlx::query_as("SELECT id FROM drives WHERE mount_path = ?")
+        .bind(&mount_str)
+        .fetch_optional(pool)
+        .await?;
 
     if let Some((id,)) = existing {
         sqlx::query("UPDATE drives SET is_active = 1, last_seen_at = ? WHERE id = ?")

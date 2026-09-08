@@ -1,7 +1,8 @@
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use serde_json::json;
+use serde::Serialize;
+use utoipa::ToSchema;
 
 /// 全局错误类型，统一映射为 HTTP 响应。
 ///
@@ -77,12 +78,28 @@ impl IntoResponse for AppError {
             other => other.to_string(),
         };
 
-        let body = Json(json!({
-            "error": { "code": code, "message": message }
-        }));
+        let body = Json(ErrorResponse {
+            error: ErrorDetail {
+                code: code.to_string(),
+                message,
+            },
+        });
 
         (status, body).into_response()
     }
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+/// 错误响应体中 `error` 字段的内容。
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ErrorDetail {
+    pub code: String,
+    pub message: String,
+}
+
+/// 统一错误响应体：`{ "error": { "code": "...", "message": "..." } }`。
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ErrorResponse {
+    pub error: ErrorDetail,
+}

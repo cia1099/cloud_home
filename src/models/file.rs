@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use utoipa::{IntoParams, ToSchema};
 
 /// 文件类型。
 pub const FILE_TYPE_FILE: &str = "file";
@@ -30,13 +31,13 @@ impl FileEntry {
 }
 
 /// 列目录查询参数。
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct ListQuery {
     pub parent_id: Option<String>,
 }
 
 /// 建立资料夹请求体。
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateFolderDto {
     pub name: String,
     #[serde(default)]
@@ -44,19 +45,19 @@ pub struct CreateFolderDto {
 }
 
 /// 重命名请求体。
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RenameDto {
     pub name: String,
 }
 
 /// 移动请求体。
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct MoveDto {
     pub target_parent_id: Option<String>,
 }
 
 /// 对外返回的文件信息。
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct FileResponse {
     pub id: String,
     pub name: String,
@@ -81,4 +82,23 @@ impl From<FileEntry> for FileResponse {
             updated_at: f.updated_at,
         }
     }
+}
+
+/// GET /files 响应体。
+#[derive(Debug, Serialize, ToSchema)]
+pub struct FileListResponse {
+    pub items: Vec<FileResponse>,
+}
+
+/// 文档专用：描述 `POST /files/upload` 的 multipart/form-data 请求体形状。
+///
+/// handler 实际使用 axum 的 `Multipart` 提取器手动解析字段，并不直接反序列化此结构体——
+/// 若日后修改 `files::upload` 手动匹配的字段名（`file` / `name` / `parent_id`），需同步更新此处。
+#[derive(Debug, ToSchema)]
+#[allow(dead_code)]
+pub struct UploadForm {
+    #[schema(value_type = String, format = Binary)]
+    pub file: Vec<u8>,
+    pub name: Option<String>,
+    pub parent_id: Option<String>,
 }

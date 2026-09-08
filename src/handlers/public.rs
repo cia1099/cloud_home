@@ -2,20 +2,31 @@
 
 use axum::extract::{Path as AxumPath, State};
 use axum::response::Response;
-use axum::{Json, response::Json as JsonResp};
-use serde_json::{Value, json};
 
-use crate::error::{AppError, AppResult};
+use crate::error::{AppError, AppResult, ErrorResponse};
 use crate::handlers::files;
 use crate::models::share::PublicShareResponse;
+use crate::openapi::ApiResponse;
 use crate::services::share_service;
 use crate::state::AppState;
 
 /// GET /public/shares/:token
+#[utoipa::path(
+    get,
+    path = "/public/shares/{token}",
+    tag = "public",
+    params(("token" = String, Path, description = "分享令牌")),
+    responses(
+        (status = 200, description = "分享文件信息", body = ApiResponse<PublicShareResponse>),
+        (status = 404, description = "分享不存在", body = ErrorResponse),
+        (status = 410, description = "分享已过期", body = ErrorResponse),
+    ),
+    security()
+)]
 pub async fn info(
     State(state): State<AppState>,
     AxumPath(token): AxumPath<String>,
-) -> AppResult<JsonResp<Value>> {
+) -> AppResult<ApiResponse<PublicShareResponse>> {
     let (share, file, shared_by) = share_service::resolve_public(&state.db, &token).await?;
     let resp = PublicShareResponse {
         name: file.name,
@@ -25,10 +36,28 @@ pub async fn info(
         can_download: share.can_download != 0,
         shared_by,
     };
-    Ok(Json(json!({ "data": resp })))
+    Ok(ApiResponse::new(resp))
 }
 
 /// GET /public/shares/:token/download
+#[utoipa::path(
+    get,
+    path = "/public/shares/{token}/download",
+    tag = "public",
+    params(("token" = String, Path, description = "分享令牌")),
+    responses(
+        (status = 200, description = "文件内容", content_type = "application/octet-stream", body = [u8],
+         headers(
+             ("Content-Disposition" = String, description = "attachment; filename*=UTF-8''<name>"),
+             ("Content-Length" = i64),
+         )),
+        (status = 403, description = "该分享禁止下载", body = ErrorResponse),
+        (status = 404, description = "分享不存在", body = ErrorResponse),
+        (status = 410, description = "分享已过期", body = ErrorResponse),
+        (status = 503, description = "外接硬盘不可用", body = ErrorResponse),
+    ),
+    security()
+)]
 pub async fn download(
     State(state): State<AppState>,
     AxumPath(token): AxumPath<String>,

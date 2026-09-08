@@ -12,61 +12,66 @@ pub mod trash;
 use axum::Router;
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderValue, Method};
-use axum::routing::{delete, get, post};
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::trace::TraceLayer;
+use utoipa::OpenApi;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
+use crate::openapi::{ApiDoc, docs_router};
 use crate::state::AppState;
 
-/// 构造完整的应用 Router（含 `/api/v1` 前缀与中间件）。
+/// 构造完整的应用 Router（含 `/api/v1` 前缀、`/docs` 文档与中间件）。
 pub fn build_router(state: AppState) -> Router {
     let cors = build_cors(&state);
     let body_limit = RequestBodyLimitLayer::new(state.config.max_upload_size_bytes());
 
-    let api = Router::new()
-        .route("/health", get(health))
+    let api: OpenApiRouter<AppState> = OpenApiRouter::new()
+        .routes(routes!(health))
         // 认证
-        .route("/auth/register", post(auth::register))
-        .route("/auth/login", post(auth::login))
-        .route("/auth/logout", post(auth::logout))
-        .route("/auth/me", get(auth::me))
+        .routes(routes!(auth::register))
+        .routes(routes!(auth::login))
+        .routes(routes!(auth::logout))
+        .routes(routes!(auth::me))
         // 硬盘
-        .route("/drives", get(drives::list))
+        .routes(routes!(drives::list))
         // 文件
-        .route("/files", get(files::list))
-        .route("/files/upload", post(files::upload))
-        .route(
-            "/files/{id}",
-            get(files::get_metadata)
-                .patch(files::rename)
-                .delete(files::delete),
-        )
-        .route("/files/{id}/download", get(files::download))
-        .route("/files/{id}/move", post(files::move_file))
+        .routes(routes!(files::list))
+        .routes(routes!(files::upload))
+        .routes(routes!(files::get_metadata, files::rename, files::delete))
+        .routes(routes!(files::download))
+        .routes(routes!(files::move_file))
         // 资料夹
-        .route("/folders", post(folders::create))
+        .routes(routes!(folders::create))
         // 搜索
-        .route("/search", get(search::search))
+        .routes(routes!(search::search))
         // 回收站
-        .route("/trash", get(trash::list).delete(trash::empty))
-        .route("/trash/{id}/restore", post(trash::restore))
-        .route("/trash/{id}", delete(trash::delete_one))
+        .routes(routes!(trash::list, trash::empty))
+        .routes(routes!(trash::restore))
+        .routes(routes!(trash::delete_one))
         // 分享
-        .route("/shares", post(shares::create).get(shares::list))
-        .route("/shares/{id}", delete(shares::revoke))
+        .routes(routes!(shares::create, shares::list))
+        .routes(routes!(shares::revoke))
         // 公开访问（无 auth）
-        .route("/public/shares/{token}", get(public::info))
-        .route("/public/shares/{token}/download", get(public::download));
+        .routes(routes!(public::info))
+        .routes(routes!(public::download));
 
-    Router::new()
+    let (api_router, openapi) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/api/v1", api)
+        .split_for_parts();
+
+    api_router
+        .merge(docs_router(openapi))
         .layer(body_limit)
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
 
+#[utoipa::path(get, path = "/health", tag = "health", responses(
+    (status = 200, description = "服务健康", body = String)
+))]
 async fn health() -> &'static str {
     "ok"
 }
