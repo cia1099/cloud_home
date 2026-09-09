@@ -91,6 +91,24 @@ cargo clippy   # Lint
 cargo test     # 运行测试
 ```
 
+### Test
+token
+```
+eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjMzdlN2Q2Ni0xMTljLTRhY2UtOTc1Yi03N2M4ZDQ4MDhlMjEiLCJpYXQiOjE3ODg4NTQzNTEsImV4cCI6MTc4OTQ1OTE1MX0.eHtVho6hV5IbxrSEc7pqdparKaku0KwWpSzUkJ2P8GE
+
+parent_id=c37e7d66-119c-4ace-975b-77c8d4808e21
+folder_id="c63a0f00-46ae-49ef-9a2b-f2fb9869c3ae"
+```
+* upload
+```sh
+curl /api/v1/files/upload \
+  --request POST \
+  --header 'Content-Type: multipart/form-data' \
+  --cookie 'auth_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJjMzdlN2Q2Ni0xMTljLTRhY2UtOTc1Yi03N2M4ZDQ4MDhlMjEiLCJpYXQiOjE3ODg4NTQzNTEsImV4cCI6MTc4OTQ1OTE1MX0.eHtVho6hV5IbxrSEc7pqdparKaku0KwWpSzUkJ2P8GE' \
+  --form 'file=@filename'
+```
+
+
 ## 前端
 
 `ui/`（Next.js）稍后实现，当前阶段后端优先。

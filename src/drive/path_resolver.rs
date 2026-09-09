@@ -28,3 +28,12 @@ pub fn file_dir(data_root: &Path, user_id: &str, file_id: &str) -> PathBuf {
 pub fn file_path(data_root: &Path, user_id: &str, file_id: &str) -> PathBuf {
     file_dir(data_root, user_id, file_id).join(file_id)
 }
+
+/// 缩略图缓存路径：`{data_root}/users/{user_id}/.thumbnails/{file_id}_{size}.jpg`。
+pub fn thumbnail_path(data_root: &Path, user_id: &str, file_id: &str, size: u32) -> PathBuf {
+    data_root
+        .join("users")
+        .join(user_id)
+        .join(".thumbnails")
+        .join(format!("{file_id}_{size}.jpg"))
+}

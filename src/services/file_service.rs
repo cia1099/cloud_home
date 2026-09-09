@@ -1,6 +1,10 @@
 //! 文件与资料夹业务逻辑。
 
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
+
 use crate::db::Db;
+use crate::drive::path_resolver;
 use crate::error::{AppError, AppResult};
 use crate::models::file::{FILE_TYPE_FOLDER, FileEntry};
 use crate::util::now_rfc3339;
@@ -24,32 +28,31 @@ pub async fn list_dir(
     owner_id: &str,
     parent_id: Option<&str>,
 ) -> AppResult<Vec<FileEntry>> {
-    let rows = match parent_id {
-        Some(pid) => {
-            // 校验父目录存在且属于本人。
-            let parent = get_owned(db, owner_id, pid).await?;
-            if !parent.is_folder() {
-                return Err(AppError::BadRequest("parent_id 不是资料夹".into()));
-            }
-            sqlx::query_as::<_, FileEntry>(
-                "SELECT * FROM files WHERE owner_id = ? AND parent_id = ? AND is_deleted = 0 \
+    let rows =
+        match parent_id {
+            Some(pid) => {
+                // 校验父目录存在且属于本人。
+                let parent = get_owned(db, owner_id, pid).await?;
+                if !parent.is_folder() {
+                    return Err(AppError::BadRequest("parent_id 不是资料夹".into()));
+                }
+                sqlx::query_as::<_, FileEntry>(
+                    "SELECT * FROM files WHERE owner_id = ? AND parent_id = ? AND is_deleted = 0 \
                  ORDER BY file_type DESC, name ASC",
-            )
-            .bind(owner_id)
-            .bind(pid)
-            .fetch_all(db)
-            .await?
-        }
-        None => {
-            sqlx::query_as::<_, FileEntry>(
+                )
+                .bind(owner_id)
+                .bind(pid)
+                .fetch_all(db)
+                .await?
+            }
+            None => sqlx::query_as::<_, FileEntry>(
                 "SELECT * FROM files WHERE owner_id = ? AND parent_id IS NULL AND is_deleted = 0 \
                  ORDER BY file_type DESC, name ASC",
             )
             .bind(owner_id)
             .fetch_all(db)
-            .await?
-        }
-    };
+            .await?,
+        };
     Ok(rows)
 }
 
@@ -162,7 +165,9 @@ pub async fn move_entry(
     if let Some(target) = target_parent_id
         && (target == id || is_descendant(db, owner_id, id, target).await?)
     {
-        return Err(AppError::BadRequest("不能将资料夹移动到自身或其子目录".into()));
+        return Err(AppError::BadRequest(
+            "不能将资料夹移动到自身或其子目录".into(),
+        ));
     }
 
     ensure_name_available(db, owner_id, target_parent_id, &entry.name).await?;
@@ -244,4 +249,61 @@ pub fn validate_name(name: &str) -> AppResult<()> {
 /// 供搜索使用：判断类型字符串是否合法。
 pub fn is_valid_type_filter(t: &str) -> bool {
     t == crate::models::file::FILE_TYPE_FILE || t == FILE_TYPE_FOLDER
+}
+
+/// 一条待打包进 ZIP 的文件条目。
+pub struct DownloadEntry {
+    /// 在 ZIP 归档内的相对路径（含资料夹层级前缀）。
+    pub zip_path: String,
+    /// 磁盘上的物理路径。
+    pub physical_path: PathBuf,
+}
+
+/// 展开一批 id（文件或资料夹，资料夹递归展开）为待打包的文件条目列表，
+/// 并计算各自在 ZIP 内的相对路径。任一 id 不存在或非本人所有则返回 404。
+///
+/// 同一物理文件若因多个所选 id 重叠而被多次收集（如同时选中某资料夹及其子文件），
+/// 仅保留第一次出现的路径，避免归档内重复。
+pub async fn collect_download_entries(
+    db: &Db,
+    data_root: &Path,
+    owner_id: &str,
+    ids: &[String],
+) -> AppResult<Vec<DownloadEntry>> {
+    let mut seen = HashSet::new();
+    let mut entries = Vec::new();
+    // (节点, 该节点在 ZIP 内的路径前缀)。用栈做迭代式深度优先展开，避免异步递归。
+    let mut stack: Vec<(FileEntry, String)> = Vec::new();
+
+    for root_id in ids {
+        let root = get_owned(db, owner_id, root_id).await?;
+        stack.push((root, String::new()));
+    }
+
+    while let Some((node, prefix)) = stack.pop() {
+        if node.is_folder() {
+            let children = sqlx::query_as::<_, FileEntry>(
+                "SELECT * FROM files WHERE owner_id = ? AND parent_id = ? AND is_deleted = 0 \
+                 ORDER BY file_type DESC, name ASC",
+            )
+            .bind(owner_id)
+            .bind(&node.id)
+            .fetch_all(db)
+            .await?;
+            let child_prefix = format!("{prefix}{}/", node.name);
+            for child in children {
+                stack.push((child, child_prefix.clone()));
+            }
+        } else {
+            if !seen.insert(node.id.clone()) {
+                continue;
+            }
+            entries.push(DownloadEntry {
+                zip_path: format!("{prefix}{}", node.name),
+                physical_path: path_resolver::file_path(data_root, owner_id, &node.id),
+            });
+        }
+    }
+
+    Ok(entries)
 }

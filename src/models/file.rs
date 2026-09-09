@@ -90,6 +90,23 @@ pub struct FileListResponse {
     pub items: Vec<FileResponse>,
 }
 
+/// 缩略图查询参数。
+#[derive(Debug, Deserialize, IntoParams)]
+pub struct ThumbnailQuery {
+    #[serde(default = "default_thumbnail_size")]
+    pub size: u32,
+}
+
+fn default_thumbnail_size() -> u32 {
+    256
+}
+
+/// 批量下载请求体：文件与资料夹 id 列表（资料夹会递归展开）。
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct DownloadRequest {
+    pub ids: Vec<String>,
+}
+
 /// 文档专用：描述 `POST /files/upload` 的 multipart/form-data 请求体形状。
 ///
 /// handler 实际使用 axum 的 `Multipart` 提取器手动解析字段，并不直接反序列化此结构体——

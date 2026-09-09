@@ -2,10 +2,13 @@
 
 use axum::body::Body;
 use axum::extract::{Multipart, Path as AxumPath, Query, State};
-use axum::http::StatusCode;
-use axum::http::header::{CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_TYPE};
+use axum::http::header::{
+    ACCEPT_RANGES, CACHE_CONTROL, CONTENT_DISPOSITION, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE,
+    RANGE,
+};
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::auth::AuthUser;
 use crate::drive::path_resolver;
@@ -13,10 +16,18 @@ use crate::error::{AppError, AppResult, ErrorResponse};
 use crate::models::common::OkResponse;
 use crate::models::file::{
     FILE_TYPE_FILE, FileEntry, FileListResponse, FileResponse, ListQuery, MoveDto, RenameDto,
+    ThumbnailQuery,
 };
 use crate::openapi::ApiResponse;
-use crate::services::{file_service, trash_service};
+use crate::services::{file_service, thumbnail_service, trash_service};
 use crate::state::AppState;
+
+/// `Content-Disposition` 类型：`download` 强制另存，`raw` 内联预览。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Disposition {
+    Inline,
+    Attachment,
+}
 
 /// GET /files?parent_id=
 #[utoipa::path(
@@ -206,7 +217,7 @@ async fn finalize_upload(
     .await
 }
 
-/// GET /files/:id/download
+/// GET /files/:id/download  强制另存（`Content-Disposition: attachment`）。
 #[utoipa::path(
     get,
     path = "/files/{id}/download",
@@ -217,10 +228,14 @@ async fn finalize_upload(
          headers(
              ("Content-Disposition" = String, description = "attachment; filename*=UTF-8''<name>"),
              ("Content-Length" = i64),
+             ("Accept-Ranges" = String, description = "bytes"),
          )),
+        (status = 206, description = "部分内容（响应 Range 请求）", content_type = "application/octet-stream", body = [u8],
+         headers(("Content-Range" = String, description = "bytes {start}-{end}/{total}"))),
         (status = 400, description = "资料夹不能下载", body = ErrorResponse),
         (status = 401, description = "认证失败", body = ErrorResponse),
         (status = 404, description = "文件不存在", body = ErrorResponse),
+        (status = 416, description = "Range 不满足"),
         (status = 503, description = "外接硬盘不可用", body = ErrorResponse),
     ),
     security(("cookie_auth" = []), ("bearer_auth" = []))
@@ -229,9 +244,91 @@ pub async fn download(
     State(state): State<AppState>,
     user: AuthUser,
     AxumPath(id): AxumPath<String>,
+    headers: HeaderMap,
 ) -> AppResult<Response> {
     let entry = file_service::get_owned(&state.db, &user.user_id, &id).await?;
-    stream_file(&state, &user.user_id, &entry).await
+    let range = range_header(&headers);
+    stream_file(
+        &state,
+        &user.user_id,
+        &entry,
+        Disposition::Attachment,
+        range,
+    )
+    .await
+}
+
+/// GET /files/:id/raw  内联预览（`Content-Disposition: inline`），支持 HTTP Range，
+/// 用于图片/视频等在前端直接渲染（`<img>` / `<video>`）而非触发下载。
+///
+/// 鉴权与其他端点一致（Cookie 优先，回退 Bearer）——刻意不做成公开端点：
+/// 文件 id 一旦出现在 `<img src>` 中就可能通过浏览器历史/Referer/日志泄露，
+/// 公开等同于签发一个永不过期、不可撤销的访问凭证，会破坏多账户隔离。
+/// 真正需要「任何人可查看」的场景请使用 `/public/shares/{token}`。
+#[utoipa::path(
+    get,
+    path = "/files/{id}/raw",
+    tag = "files",
+    params(("id" = String, Path, description = "文件 id")),
+    responses(
+        (status = 200, description = "文件内容（内联）", content_type = "application/octet-stream", body = [u8],
+         headers(("Accept-Ranges" = String, description = "bytes"))),
+        (status = 206, description = "部分内容（响应 Range 请求，用于视频拖动/大图渐进加载）",
+         content_type = "application/octet-stream", body = [u8],
+         headers(("Content-Range" = String, description = "bytes {start}-{end}/{total}"))),
+        (status = 400, description = "资料夹不能预览", body = ErrorResponse),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 404, description = "文件不存在", body = ErrorResponse),
+        (status = 416, description = "Range 不满足"),
+        (status = 503, description = "外接硬盘不可用", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
+pub async fn raw(
+    State(state): State<AppState>,
+    user: AuthUser,
+    AxumPath(id): AxumPath<String>,
+    headers: HeaderMap,
+) -> AppResult<Response> {
+    let entry = file_service::get_owned(&state.db, &user.user_id, &id).await?;
+    let range = range_header(&headers);
+    stream_file(&state, &user.user_id, &entry, Disposition::Inline, range).await
+}
+
+/// GET /files/:id/thumbnail?size=256  图片缩略图（JPEG，磁盘缓存），用于画廊网格。
+#[utoipa::path(
+    get,
+    path = "/files/{id}/thumbnail",
+    tag = "files",
+    params(("id" = String, Path, description = "文件 id"), ThumbnailQuery),
+    responses(
+        (status = 200, description = "缩略图", content_type = "image/jpeg", body = [u8]),
+        (status = 400, description = "非图片文件或 size 不在允许范围内", body = ErrorResponse),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 404, description = "文件不存在", body = ErrorResponse),
+        (status = 503, description = "外接硬盘不可用", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
+pub async fn thumbnail(
+    State(state): State<AppState>,
+    user: AuthUser,
+    AxumPath(id): AxumPath<String>,
+    Query(q): Query<ThumbnailQuery>,
+) -> AppResult<Response> {
+    let entry = file_service::get_owned(&state.db, &user.user_id, &id).await?;
+    let data_root = state.drive_manager.require_data_root().await?;
+    let bytes = thumbnail_service::get_or_create(&data_root, &user.user_id, &entry, q.size).await?;
+
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, "image/jpeg")
+        .header(CONTENT_LENGTH, bytes.len())
+        .header(CONTENT_DISPOSITION, "inline")
+        .header(CACHE_CONTROL, "private, max-age=31536000, immutable")
+        .body(Body::from(bytes))
+        .map_err(|e| AppError::Other(anyhow::anyhow!("构造响应失败: {e}")))?;
+    Ok(response.into_response())
 }
 
 /// PATCH /files/:id  重命名
@@ -320,11 +417,137 @@ pub async fn delete(
     Ok(ApiResponse::new(OkResponse { ok: true }))
 }
 
-/// 以流式方式返回文件内容。供本人下载与公开下载共用。
+/// POST /files/download  批量打包下载（流式 ZIP）。
+///
+/// `ids` 可混合文件与资料夹 id，资料夹会递归展开为其全部子孙文件；
+/// 每个 id 均按当前用户强制账户隔离校验，任一不存在或非本人所有则整体 404。
+/// 响应体为流式生成（边打包边发送），不预先缓冲整个压缩包，内存占用恒定。
+#[utoipa::path(
+    post,
+    path = "/files/download",
+    tag = "files",
+    request_body = crate::models::file::DownloadRequest,
+    responses(
+        (status = 200, description = "ZIP 压缩包（流式）", content_type = "application/zip", body = [u8],
+         headers(("Content-Disposition" = String, description = "attachment; filename=\"cloud_home_download.zip\""))),
+        (status = 400, description = "ids 为空或未选中任何可下载文件", body = ErrorResponse),
+        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 404, description = "存在不属于本人或不存在的 id", body = ErrorResponse),
+        (status = 503, description = "外接硬盘不可用", body = ErrorResponse),
+    ),
+    security(("cookie_auth" = []), ("bearer_auth" = []))
+)]
+pub async fn download_zip(
+    State(state): State<AppState>,
+    user: AuthUser,
+    axum::Json(req): axum::Json<crate::models::file::DownloadRequest>,
+) -> AppResult<Response> {
+    if req.ids.is_empty() {
+        return Err(AppError::BadRequest("ids 不能为空".into()));
+    }
+
+    let data_root = state.drive_manager.require_data_root().await?;
+    let entries =
+        file_service::collect_download_entries(&state.db, &data_root, &user.user_id, &req.ids)
+            .await?;
+    if entries.is_empty() {
+        return Err(AppError::BadRequest("未选中任何可下载文件".into()));
+    }
+
+    // 校验/展开全部在流开始前完成——响应一旦开始流式输出就无法再改变 HTTP 状态码。
+    let (reader, writer) = tokio::io::duplex(64 * 1024);
+    tokio::spawn(crate::services::zip_service::write_zip(writer, entries));
+
+    let stream = tokio_util::io::ReaderStream::new(reader);
+    let body = Body::from_stream(stream);
+
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header(CONTENT_TYPE, "application/zip")
+        .header(
+            CONTENT_DISPOSITION,
+            "attachment; filename=\"cloud_home_download.zip\"",
+        )
+        .body(body)
+        .map_err(|e| AppError::Other(anyhow::anyhow!("构造响应失败: {e}")))?;
+
+    Ok(response.into_response())
+}
+
+/// 从请求头中取出 `Range` 值（若存在）。
+fn range_header(headers: &HeaderMap) -> Option<&str> {
+    headers.get(RANGE).and_then(|v| v.to_str().ok())
+}
+
+/// 单段 `Range` 请求头的解析结果。
+enum RangeResult {
+    /// 无 Range 或无法解析（含多段 Range，本实现不支持）——返回完整内容。
+    Full,
+    /// 合法单段范围（含头尾字节，闭区间）。
+    Partial(u64, u64),
+    /// Range 请求的起始位置超出文件长度，无法满足。
+    Unsatisfiable,
+}
+
+/// 解析形如 `bytes=200-1000` / `bytes=200-` / `bytes=-500` 的单段 Range 请求头。
+/// 仅支持单段——含逗号的多段请求视为不满足解析条件，退回完整内容（对图片/视频场景足够）。
+fn resolve_range(header: Option<&str>, file_len: u64) -> RangeResult {
+    let Some(h) = header else {
+        return RangeResult::Full;
+    };
+    let Some(spec) = h.strip_prefix("bytes=") else {
+        return RangeResult::Full;
+    };
+    if spec.contains(',') {
+        return RangeResult::Full;
+    }
+    let Some((start_s, end_s)) = spec.split_once('-') else {
+        return RangeResult::Full;
+    };
+
+    if start_s.is_empty() {
+        // 后缀范围：bytes=-500 表示最后 500 字节。
+        let Ok(suffix) = end_s.parse::<u64>() else {
+            return RangeResult::Full;
+        };
+        if suffix == 0 {
+            return RangeResult::Full;
+        }
+        if file_len == 0 {
+            return RangeResult::Unsatisfiable;
+        }
+        let start = file_len.saturating_sub(suffix);
+        return RangeResult::Partial(start, file_len - 1);
+    }
+
+    let Ok(start) = start_s.parse::<u64>() else {
+        return RangeResult::Full;
+    };
+    if start >= file_len {
+        return RangeResult::Unsatisfiable;
+    }
+    let end = if end_s.is_empty() {
+        file_len - 1
+    } else {
+        match end_s.parse::<u64>() {
+            Ok(e) => e.min(file_len - 1),
+            Err(_) => return RangeResult::Full,
+        }
+    };
+    if end < start {
+        return RangeResult::Full;
+    }
+    RangeResult::Partial(start, end)
+}
+
+/// 以流式方式返回文件内容，支持内联/附件两种 disposition 与 HTTP Range 部分请求。
+/// 供本人下载（`download`/`raw`）与公开下载共用。
 pub async fn stream_file(
     state: &AppState,
     owner_id: &str,
     entry: &FileEntry,
+    disposition: Disposition,
+    range: Option<&str>,
 ) -> AppResult<Response> {
     if entry.is_folder() {
         return Err(AppError::BadRequest("资料夹不能下载".into()));
@@ -333,29 +556,65 @@ pub async fn stream_file(
     let data_root = state.drive_manager.require_data_root().await?;
     let path = path_resolver::file_path(&data_root, owner_id, &entry.id);
 
-    let file = tokio::fs::File::open(&path)
+    let mut file = tokio::fs::File::open(&path)
         .await
         .map_err(|_| AppError::NotFound)?;
     let metadata = file.metadata().await?;
-
-    let stream = tokio_util::io::ReaderStream::new(file);
-    let body = Body::from_stream(stream);
+    let file_len = metadata.len();
 
     let mime = entry
         .mime_type
         .clone()
         .unwrap_or_else(|| "application/octet-stream".to_string());
-    let disposition = format!("attachment; filename*=UTF-8''{}", urlencode(&entry.name));
+    let disposition_kind = match disposition {
+        Disposition::Inline => "inline",
+        Disposition::Attachment => "attachment",
+    };
+    let disposition_value = format!(
+        "{disposition_kind}; filename*=UTF-8''{}",
+        urlencode(&entry.name)
+    );
 
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header(CONTENT_TYPE, mime)
-        .header(CONTENT_LENGTH, metadata.len())
-        .header(CONTENT_DISPOSITION, disposition)
-        .body(body)
-        .map_err(|e| AppError::Other(anyhow::anyhow!("构造下载响应失败: {e}")))?;
-
-    Ok(response.into_response())
+    match resolve_range(range, file_len) {
+        RangeResult::Unsatisfiable => {
+            let response = Response::builder()
+                .status(StatusCode::RANGE_NOT_SATISFIABLE)
+                .header(CONTENT_RANGE, format!("bytes */{file_len}"))
+                .body(Body::empty())
+                .map_err(|e| AppError::Other(anyhow::anyhow!("构造响应失败: {e}")))?;
+            Ok(response.into_response())
+        }
+        RangeResult::Full => {
+            let stream = tokio_util::io::ReaderStream::new(file);
+            let body = Body::from_stream(stream);
+            let response = Response::builder()
+                .status(StatusCode::OK)
+                .header(CONTENT_TYPE, mime)
+                .header(CONTENT_LENGTH, file_len)
+                .header(CONTENT_DISPOSITION, disposition_value)
+                .header(ACCEPT_RANGES, "bytes")
+                .body(body)
+                .map_err(|e| AppError::Other(anyhow::anyhow!("构造响应失败: {e}")))?;
+            Ok(response.into_response())
+        }
+        RangeResult::Partial(start, end) => {
+            file.seek(std::io::SeekFrom::Start(start)).await?;
+            let len = end - start + 1;
+            let limited = file.take(len);
+            let stream = tokio_util::io::ReaderStream::new(limited);
+            let body = Body::from_stream(stream);
+            let response = Response::builder()
+                .status(StatusCode::PARTIAL_CONTENT)
+                .header(CONTENT_TYPE, mime)
+                .header(CONTENT_LENGTH, len)
+                .header(CONTENT_DISPOSITION, disposition_value)
+                .header(CONTENT_RANGE, format!("bytes {start}-{end}/{file_len}"))
+                .header(ACCEPT_RANGES, "bytes")
+                .body(body)
+                .map_err(|e| AppError::Other(anyhow::anyhow!("构造响应失败: {e}")))?;
+            Ok(response.into_response())
+        }
+    }
 }
 
 /// 最小 URL 编码，用于 Content-Disposition 的 filename*。
