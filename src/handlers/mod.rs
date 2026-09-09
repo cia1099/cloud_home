@@ -39,7 +39,7 @@ pub fn build_router(state: AppState) -> Router {
         // 文件
         .routes(routes!(files::list))
         .routes(routes!(files::upload))
-        .routes(routes!(files::download_zip))
+        .routes(routes!(files::download_archive))
         .routes(routes!(files::get_metadata, files::rename, files::delete))
         .routes(routes!(files::download))
         .routes(routes!(files::raw))

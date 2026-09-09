@@ -101,10 +101,40 @@ fn default_thumbnail_size() -> u32 {
     256
 }
 
-/// 批量下载请求体：文件与资料夹 id 列表（资料夹会递归展开）。
+/// 批量下载归档格式。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, ToSchema)]
+pub enum DownloadFormat {
+    #[default]
+    #[serde(rename = "zip")]
+    Zip,
+    #[serde(rename = "tar.gz")]
+    TarGz,
+}
+
+impl DownloadFormat {
+    /// 归档文件扩展名（含前导点）。
+    pub fn extension(self) -> &'static str {
+        match self {
+            DownloadFormat::Zip => ".zip",
+            DownloadFormat::TarGz => ".tar.gz",
+        }
+    }
+
+    /// 归档的 `Content-Type`。
+    pub fn content_type(self) -> &'static str {
+        match self {
+            DownloadFormat::Zip => "application/zip",
+            DownloadFormat::TarGz => "application/gzip",
+        }
+    }
+}
+
+/// 批量下载请求体：文件与资料夹 id 列表（资料夹会递归展开），可选归档格式（默认 ZIP）。
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct DownloadRequest {
     pub ids: Vec<String>,
+    #[serde(default)]
+    pub format: DownloadFormat,
 }
 
 /// 文档专用：描述 `POST /files/upload` 的 multipart/form-data 请求体形状。

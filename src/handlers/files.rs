@@ -417,19 +417,20 @@ pub async fn delete(
     Ok(ApiResponse::new(OkResponse { ok: true }))
 }
 
-/// POST /files/download  批量打包下载（流式 ZIP）。
+/// POST /files/download  批量打包下载（流式归档，ZIP 或 tar.gz，前端通过 `format` 字段选择）。
 ///
 /// `ids` 可混合文件与资料夹 id，资料夹会递归展开为其全部子孙文件；
 /// 每个 id 均按当前用户强制账户隔离校验，任一不存在或非本人所有则整体 404。
-/// 响应体为流式生成（边打包边发送），不预先缓冲整个压缩包，内存占用恒定。
+/// 响应体为流式生成（边打包边发送），不预先缓冲整个归档，内存占用恒定。
 #[utoipa::path(
     post,
     path = "/files/download",
     tag = "files",
     request_body = crate::models::file::DownloadRequest,
     responses(
-        (status = 200, description = "ZIP 压缩包（流式）", content_type = "application/zip", body = [u8],
-         headers(("Content-Disposition" = String, description = "attachment; filename=\"cloud_home_download.zip\""))),
+        (status = 200, description = "归档文件（流式；ZIP 或 tar.gz，取决于请求体 format 字段，默认 ZIP）",
+         content_type = "application/octet-stream", body = [u8],
+         headers(("Content-Disposition" = String, description = "attachment; filename=\"cloud_home_download.zip|tar.gz\""))),
         (status = 400, description = "ids 为空或未选中任何可下载文件", body = ErrorResponse),
         (status = 401, description = "认证失败", body = ErrorResponse),
         (status = 404, description = "存在不属于本人或不存在的 id", body = ErrorResponse),
@@ -437,7 +438,7 @@ pub async fn delete(
     ),
     security(("cookie_auth" = []), ("bearer_auth" = []))
 )]
-pub async fn download_zip(
+pub async fn download_archive(
     State(state): State<AppState>,
     user: AuthUser,
     axum::Json(req): axum::Json<crate::models::file::DownloadRequest>,
@@ -455,18 +456,22 @@ pub async fn download_zip(
     }
 
     // 校验/展开全部在流开始前完成——响应一旦开始流式输出就无法再改变 HTTP 状态码。
+    let format = req.format;
     let (reader, writer) = tokio::io::duplex(64 * 1024);
-    tokio::spawn(crate::services::zip_service::write_zip(writer, entries));
+    tokio::spawn(crate::services::archive_service::write_archive(
+        format, writer, entries,
+    ));
 
     let stream = tokio_util::io::ReaderStream::new(reader);
     let body = Body::from_stream(stream);
 
+    let filename = format!("cloud_home_download{}", format.extension());
     let response = Response::builder()
         .status(StatusCode::OK)
-        .header(CONTENT_TYPE, "application/zip")
+        .header(CONTENT_TYPE, format.content_type())
         .header(
             CONTENT_DISPOSITION,
-            "attachment; filename=\"cloud_home_download.zip\"",
+            format!("attachment; filename=\"{filename}\""),
         )
         .body(body)
         .map_err(|e| AppError::Other(anyhow::anyhow!("构造响应失败: {e}")))?;
