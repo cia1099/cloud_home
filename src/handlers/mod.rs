@@ -2,12 +2,14 @@
 
 pub mod auth;
 pub mod drives;
+pub mod events;
 pub mod files;
 pub mod folders;
 pub mod public;
 pub mod search;
 pub mod shares;
 pub mod trash;
+pub mod usage;
 
 use axum::Router;
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
@@ -47,6 +49,11 @@ pub fn build_router(state: AppState) -> Router {
         .routes(routes!(files::move_file))
         // 资料夹
         .routes(routes!(folders::create))
+        // 空间占用
+        .routes(routes!(usage::current))
+        .routes(routes!(usage::breakdown))
+        // 实时事件（SSE）
+        .routes(routes!(events::stream))
         // 搜索
         .routes(routes!(search::search))
         // 回收站

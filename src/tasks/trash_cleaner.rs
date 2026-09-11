@@ -4,10 +4,11 @@ use std::time::Duration;
 
 use crate::db::Db;
 use crate::drive::DriveManager;
+use crate::events::ChangeNotifier;
 use crate::services::trash_service;
 
 /// 启动清理循环（在 `main` 中 `tokio::spawn`）。
-pub fn spawn(db: Db, drive_manager: DriveManager, interval_hours: u64) {
+pub fn spawn(db: Db, drive_manager: DriveManager, interval_hours: u64, events: ChangeNotifier) {
     let interval = Duration::from_secs(interval_hours.max(1) * 3600);
 
     tokio::spawn(async move {
@@ -25,7 +26,11 @@ pub fn spawn(db: Db, drive_manager: DriveManager, interval_hours: u64) {
 
             match trash_service::cleanup_expired(&db, &data_root).await {
                 Ok(0) => {}
-                Ok(n) => tracing::info!(cleaned = n, "回收站定时清理完成"),
+                Ok(n) => {
+                    tracing::info!(cleaned = n, "回收站定时清理完成");
+                    // 跨账户批量删除，范围未知，通知所有订阅者刷新。
+                    events.notify_all();
+                }
                 Err(e) => tracing::warn!(error = %e, "回收站定时清理出错"),
             }
         }

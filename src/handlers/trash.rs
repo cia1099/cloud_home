@@ -4,6 +4,7 @@ use axum::extract::{Path as AxumPath, State};
 
 use crate::auth::AuthUser;
 use crate::error::{AppResult, ErrorResponse};
+use crate::models::event::{ChangeKind, FileChangeEvent};
 use crate::models::file::FileResponse;
 use crate::models::trash::{FreedBytesResponse, TrashEmptyResponse, TrashListResponse};
 use crate::openapi::ApiResponse;
@@ -48,7 +49,16 @@ pub async fn restore(
     AxumPath(id): AxumPath<String>,
 ) -> AppResult<ApiResponse<FileResponse>> {
     let entry = trash_service::restore(&state.db, &user.user_id, &id).await?;
-    Ok(ApiResponse::new(FileResponse::from(entry)))
+    let response = FileResponse::from(entry);
+    state.events.notify(
+        &user.user_id,
+        FileChangeEvent {
+            kind: ChangeKind::Restored,
+            parent_ids: vec![response.parent_id.clone()],
+            file: Some(response.clone()),
+        },
+    );
+    Ok(ApiResponse::new(response))
 }
 
 /// DELETE /trash/:id  立即永久删除单个文件
@@ -72,6 +82,13 @@ pub async fn delete_one(
 ) -> AppResult<ApiResponse<FreedBytesResponse>> {
     let data_root = state.drive_manager.require_data_root().await?;
     let bytes = trash_service::delete_permanent(&state.db, &data_root, &user.user_id, &id).await?;
+    state
+        .events
+        .notify(&user.user_id, FileChangeEvent {
+            kind: ChangeKind::Purged,
+            file: None,
+            parent_ids: Vec::new(),
+        });
     Ok(ApiResponse::new(FreedBytesResponse {
         freed_bytes: bytes as i64,
     }))
@@ -95,6 +112,15 @@ pub async fn empty(
 ) -> AppResult<ApiResponse<TrashEmptyResponse>> {
     let data_root = state.drive_manager.require_data_root().await?;
     let (count, bytes) = trash_service::empty(&state.db, &data_root, &user.user_id).await?;
+    if count > 0 {
+        state
+            .events
+            .notify(&user.user_id, FileChangeEvent {
+                kind: ChangeKind::Purged,
+                file: None,
+                parent_ids: Vec::new(),
+            });
+    }
     Ok(ApiResponse::new(TrashEmptyResponse {
         deleted_count: count as i64,
         freed_bytes: bytes as i64,

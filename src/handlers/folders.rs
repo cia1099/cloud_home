@@ -6,6 +6,7 @@ use axum::http::StatusCode;
 
 use crate::auth::AuthUser;
 use crate::error::{AppResult, ErrorResponse};
+use crate::models::event::{ChangeKind, FileChangeEvent};
 use crate::models::file::{CreateFolderDto, FILE_TYPE_FOLDER, FileResponse};
 use crate::openapi::ApiResponse;
 use crate::services::file_service;
@@ -56,8 +57,15 @@ pub async fn create(
     )
     .await?;
 
-    Ok((
-        StatusCode::CREATED,
-        ApiResponse::new(FileResponse::from(entry)),
-    ))
+    let response = FileResponse::from(entry);
+    state.events.notify(
+        &user.user_id,
+        FileChangeEvent {
+            kind: ChangeKind::Created,
+            parent_ids: vec![response.parent_id.clone()],
+            file: Some(response.clone()),
+        },
+    );
+
+    Ok((StatusCode::CREATED, ApiResponse::new(response)))
 }

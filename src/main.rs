@@ -3,6 +3,7 @@ mod config;
 mod db;
 mod drive;
 mod error;
+mod events;
 mod handlers;
 mod models;
 mod openapi;
@@ -55,11 +56,14 @@ async fn main() -> anyhow::Result<()> {
     // 5. 标记硬盘可用。
     drive_manager.set_active(Some(mount.clone())).await;
 
+    let events = crate::events::ChangeNotifier::new();
+
     let state = AppState {
         db: pool.clone(),
         config: config.clone(),
         drive_manager: drive_manager.clone(),
         drive_id,
+        events: events.clone(),
     };
 
     // 6. 启动后台任务：回收站清理 + 硬盘监控。
@@ -67,6 +71,7 @@ async fn main() -> anyhow::Result<()> {
         pool.clone(),
         drive_manager.clone(),
         config.trash_cleanup_interval_hours,
+        events.clone(),
     );
     tasks::drive_monitor::spawn(config.clone(), drive_manager.clone(), mount.clone());
 

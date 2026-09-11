@@ -57,7 +57,7 @@ pub struct MoveDto {
 }
 
 /// 对外返回的文件信息。
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct FileResponse {
     pub id: String,
     pub name: String,

@@ -14,6 +14,7 @@ use crate::auth::AuthUser;
 use crate::drive::path_resolver;
 use crate::error::{AppError, AppResult, ErrorResponse};
 use crate::models::common::OkResponse;
+use crate::models::event::{ChangeKind, FileChangeEvent};
 use crate::models::file::{
     FILE_TYPE_FILE, FileEntry, FileListResponse, FileResponse, ListQuery, MoveDto, RenameDto,
     ThumbnailQuery,
@@ -167,10 +168,18 @@ pub async fn upload(
     .await;
 
     match result {
-        Ok(entry) => Ok((
-            StatusCode::CREATED,
-            ApiResponse::new(FileResponse::from(entry)),
-        )),
+        Ok(entry) => {
+            let response = FileResponse::from(entry);
+            state.events.notify(
+                &user.user_id,
+                FileChangeEvent {
+                    kind: ChangeKind::Created,
+                    parent_ids: vec![response.parent_id.clone()],
+                    file: Some(response.clone()),
+                },
+            );
+            Ok((StatusCode::CREATED, ApiResponse::new(response)))
+        }
         Err(e) => {
             let _ = tokio::fs::remove_file(&physical_path).await;
             Err(e)
@@ -354,7 +363,16 @@ pub async fn rename(
     axum::Json(dto): axum::Json<RenameDto>,
 ) -> AppResult<ApiResponse<FileResponse>> {
     let entry = file_service::rename(&state.db, &user.user_id, &id, &dto.name).await?;
-    Ok(ApiResponse::new(FileResponse::from(entry)))
+    let response = FileResponse::from(entry);
+    state.events.notify(
+        &user.user_id,
+        FileChangeEvent {
+            kind: ChangeKind::Updated,
+            parent_ids: vec![response.parent_id.clone()],
+            file: Some(response.clone()),
+        },
+    );
+    Ok(ApiResponse::new(response))
 }
 
 /// POST /files/:id/move
@@ -379,6 +397,10 @@ pub async fn move_file(
     AxumPath(id): AxumPath<String>,
     axum::Json(dto): axum::Json<MoveDto>,
 ) -> AppResult<ApiResponse<FileResponse>> {
+    let old_parent_id = file_service::get_owned(&state.db, &user.user_id, &id)
+        .await?
+        .parent_id;
+
     let entry = file_service::move_entry(
         &state.db,
         &user.user_id,
@@ -386,7 +408,19 @@ pub async fn move_file(
         dto.target_parent_id.as_deref(),
     )
     .await?;
-    Ok(ApiResponse::new(FileResponse::from(entry)))
+    let response = FileResponse::from(entry);
+
+    let mut parent_ids = vec![old_parent_id, response.parent_id.clone()];
+    parent_ids.dedup();
+    state.events.notify(
+        &user.user_id,
+        FileChangeEvent {
+            kind: ChangeKind::Updated,
+            parent_ids,
+            file: Some(response.clone()),
+        },
+    );
+    Ok(ApiResponse::new(response))
 }
 
 /// DELETE /files/:id  软删除（移入回收站）
@@ -407,6 +441,8 @@ pub async fn delete(
     user: AuthUser,
     AxumPath(id): AxumPath<String>,
 ) -> AppResult<ApiResponse<OkResponse>> {
+    let entry = file_service::get_owned(&state.db, &user.user_id, &id).await?;
+
     trash_service::soft_delete(
         &state.db,
         state.config.trash_retention_days,
@@ -414,6 +450,16 @@ pub async fn delete(
         &id,
     )
     .await?;
+
+    let response = FileResponse::from(entry);
+    state.events.notify(
+        &user.user_id,
+        FileChangeEvent {
+            kind: ChangeKind::Deleted,
+            parent_ids: vec![response.parent_id.clone()],
+            file: Some(response),
+        },
+    );
     Ok(ApiResponse::new(OkResponse { ok: true }))
 }
 

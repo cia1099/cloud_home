@@ -61,3 +61,6 @@ async_zip = { version = "0.0.19", features = ["tokio", "deflate"] }
 futures-lite = "2.6.1"
 tar = { version = "0.4.46", default-features = false }
 flate2 = "1.1.10"
+
+# 实时事件推送（SSE）
+async-stream = "0.3"
