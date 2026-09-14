@@ -246,6 +246,18 @@ pub fn validate_name(name: &str) -> AppResult<()> {
     Ok(())
 }
 
+/// 按文件名推断 MIME；将 mime_guess 的非标准媒体类型纠正为浏览器认可的标准值
+/// （Safari 播放音视频时会严格依据 `Content-Type`）。
+pub fn guess_mime(name: &str) -> Option<String> {
+    let mime = mime_guess::from_path(name).first_raw()?;
+    let normalized = match mime {
+        "audio/m4a" => "audio/mp4",
+        "video/x-m4v" => "video/mp4",
+        other => other,
+    };
+    Some(normalized.to_string())
+}
+
 /// 供搜索使用：判断类型字符串是否合法。
 pub fn is_valid_type_filter(t: &str) -> bool {
     t == crate::models::file::FILE_TYPE_FILE || t == FILE_TYPE_FOLDER

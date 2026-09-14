@@ -206,9 +206,7 @@ async fn finalize_upload(
     file_service::validate_parent(&state.db, owner_id, parent_id).await?;
     file_service::ensure_name_available(&state.db, owner_id, parent_id, &name).await?;
 
-    let mime = mime_guess::from_path(&name)
-        .first_raw()
-        .map(|s| s.to_string());
+    let mime = file_service::guess_mime(&name);
     let path_str = physical_path.to_string_lossy().to_string();
 
     file_service::insert_entry(
@@ -268,12 +266,25 @@ pub async fn download(
 }
 
 /// GET /files/:id/raw  内联预览（`Content-Disposition: inline`），支持 HTTP Range，
-/// 用于图片/视频等在前端直接渲染（`<img>` / `<video>`）而非触发下载。
+/// 用于图片/音频/视频在前端直接渲染（`<img>` / `<audio>` / `<video>`）而非触发下载。
+///
+/// 音视频播放正是依赖此处已有的两个特性：
+/// - 单段 Range（`bytes=start-end` / `start-` / `-suffix`），支持拖动进度条与
+///   Safari 探测式的 `bytes=0-1` 首次请求；
+/// - 流式响应体，播放大文件不会把整个文件读入内存。
+///
+/// 两端调用方式：
+/// - **Web**：`<video controls src="/api/v1/files/{id}/raw">` /
+///   `<audio controls src="...">`，同源请求会自动携带 `auth_token` Cookie；
+/// - **Flutter**：`video_player` 的 `VideoPlayerController.networkUrl(uri,
+///   httpHeaders: {'Authorization': 'Bearer <jwt>'})`，或 `just_audio` 的
+///   `AudioSource.uri(uri, headers: {...})`。
 ///
 /// 鉴权与其他端点一致（Cookie 优先，回退 Bearer）——刻意不做成公开端点：
 /// 文件 id 一旦出现在 `<img src>` 中就可能通过浏览器历史/Referer/日志泄露，
 /// 公开等同于签发一个永不过期、不可撤销的访问凭证，会破坏多账户隔离。
-/// 真正需要「任何人可查看」的场景请使用 `/public/shares/{token}`。
+/// 真正需要「任何人可查看」的场景请使用 `/public/shares/{token}`
+/// （该端点当前仅支持下载，暂不支持内联播放）。
 #[utoipa::path(
     get,
     path = "/files/{id}/raw",
@@ -531,6 +542,7 @@ fn range_header(headers: &HeaderMap) -> Option<&str> {
 }
 
 /// 单段 `Range` 请求头的解析结果。
+#[derive(Debug, PartialEq)]
 enum RangeResult {
     /// 无 Range 或无法解析（含多段 Range，本实现不支持）——返回完整内容。
     Full,
@@ -680,4 +692,121 @@ fn urlencode(s: &str) -> String {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::services::file_service::guess_mime;
+
+    const LEN: u64 = 1000;
+
+    #[test]
+    fn no_range_header_is_full() {
+        assert_eq!(resolve_range(None, LEN), RangeResult::Full);
+    }
+
+    #[test]
+    fn non_bytes_unit_is_full() {
+        assert_eq!(resolve_range(Some("items=0-1"), LEN), RangeResult::Full);
+    }
+
+    #[test]
+    fn multi_range_is_full() {
+        assert_eq!(
+            resolve_range(Some("bytes=0-1,5-6"), LEN),
+            RangeResult::Full
+        );
+    }
+
+    #[test]
+    fn safari_probe_bytes_0_1() {
+        assert_eq!(
+            resolve_range(Some("bytes=0-1"), LEN),
+            RangeResult::Partial(0, 1)
+        );
+    }
+
+    #[test]
+    fn chrome_initial_bytes_0_dash() {
+        assert_eq!(
+            resolve_range(Some("bytes=0-"), LEN),
+            RangeResult::Partial(0, LEN - 1)
+        );
+    }
+
+    #[test]
+    fn seek_to_offset() {
+        assert_eq!(
+            resolve_range(Some("bytes=500-"), LEN),
+            RangeResult::Partial(500, LEN - 1)
+        );
+    }
+
+    #[test]
+    fn end_past_eof_is_clamped() {
+        assert_eq!(
+            resolve_range(Some("bytes=0-999999999"), LEN),
+            RangeResult::Partial(0, LEN - 1)
+        );
+    }
+
+    #[test]
+    fn suffix_range() {
+        assert_eq!(
+            resolve_range(Some("bytes=-500"), LEN),
+            RangeResult::Partial(LEN - 500, LEN - 1)
+        );
+    }
+
+    #[test]
+    fn suffix_larger_than_file_is_whole_file() {
+        assert_eq!(
+            resolve_range(Some("bytes=-5000"), LEN),
+            RangeResult::Partial(0, LEN - 1)
+        );
+    }
+
+    #[test]
+    fn start_at_eof_is_unsatisfiable() {
+        assert_eq!(
+            resolve_range(Some("bytes=1000-"), LEN),
+            RangeResult::Unsatisfiable
+        );
+    }
+
+    #[test]
+    fn start_past_eof_is_unsatisfiable() {
+        assert_eq!(
+            resolve_range(Some("bytes=5000-"), LEN),
+            RangeResult::Unsatisfiable
+        );
+    }
+
+    #[test]
+    fn any_range_on_empty_file_is_unsatisfiable() {
+        assert_eq!(resolve_range(Some("bytes=0-"), 0), RangeResult::Unsatisfiable);
+    }
+
+    #[test]
+    fn guess_mime_normalizes_apple_audio() {
+        assert_eq!(guess_mime("voice.m4a").as_deref(), Some("audio/mp4"));
+        assert_eq!(guess_mime("VOICE.M4A").as_deref(), Some("audio/mp4"));
+    }
+
+    #[test]
+    fn guess_mime_normalizes_apple_video() {
+        assert_eq!(guess_mime("clip.m4v").as_deref(), Some("video/mp4"));
+    }
+
+    #[test]
+    fn guess_mime_passes_through_standard_types() {
+        assert_eq!(guess_mime("movie.mp4").as_deref(), Some("video/mp4"));
+        assert_eq!(guess_mime("song.mp3").as_deref(), Some("audio/mpeg"));
+    }
+
+    #[test]
+    fn guess_mime_none_without_extension() {
+        assert_eq!(guess_mime("README"), None);
+    }
 }
