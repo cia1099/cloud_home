@@ -45,6 +45,32 @@ pub enum AppError {
 }
 
 impl AppError {
+    /// 按变体分级记录日志。
+    ///
+    /// `Unauthorized`/`Forbidden` 刻意不在此记录——这里没有 `AuthUser`，
+    /// 记下来也是匿名、无上下文的一行；它们已在真正产生处（`auth/extractor.rs`、
+    /// `auth/jwt.rs`、`handlers/public.rs` 的 403 分支）带着真实身份记录过了，
+    /// 此处再记一遍只会造成重复。
+    fn log(&self) {
+        match self {
+            AppError::Database(_) | AppError::Io(_) | AppError::Other(_) => {
+                // Debug（`?`）而非 Display（`%`）：Other(anyhow::Error) 的 Debug
+                // 会打印完整 "Caused by:" 链，Display 只有最外层一句。
+                tracing::error!(error = ?self, "内部错误");
+            }
+            AppError::DriveUnavailable => {
+                tracing::warn!(reason = "drive_unavailable", "外接硬盘不可用");
+            }
+            AppError::Conflict(_) | AppError::Gone => {
+                tracing::debug!(error = %self, "请求冲突/已过期");
+            }
+            AppError::NotFound | AppError::BadRequest(_) | AppError::PayloadTooLarge => {
+                tracing::debug!(error = %self, "请求被拒绝");
+            }
+            AppError::Unauthorized | AppError::Forbidden => {}
+        }
+    }
+
     fn parts(&self) -> (StatusCode, &'static str) {
         match self {
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED"),
@@ -65,11 +91,7 @@ impl AppError {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, code) = self.parts();
-
-        // 内部错误记录日志，但不向客户端泄露细节。
-        if status == StatusCode::INTERNAL_SERVER_ERROR {
-            tracing::error!(error = %self, "内部错误");
-        }
+        self.log();
 
         let message = match &self {
             AppError::Database(_) | AppError::Io(_) | AppError::Other(_) => {

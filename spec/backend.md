@@ -18,7 +18,7 @@
 # Web 框架
 axum = { version = "0.8", features = ["multipart"] }
 tower = { version = "0.5", features = ["full"] }
-tower-http = { version = "0.7", features = ["cors", "trace", "limit"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "limit", "request-id", "catch-panic"] }
 
 # 异步运行时
 tokio = { version = "1", features = ["full"] }
@@ -58,6 +58,9 @@ mime_guess = "2"
 # 日志
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+# 按大小滚动日志文件（tracing-appender 内建滚动仅支持按时间）
+file-rotate = "0.8"
 ```
 
 ---
@@ -79,6 +82,7 @@ cloud_home/
     ├── main.rs           # 入口：组装 AppState、启动服务和 trash_cleaner 任务
     ├── config.rs         # 从 .env 加载的配置结构体
     ├── error.rs          # AppError 枚举，实现 IntoResponse
+    ├── logging.rs        # 日志初始化（双路输出）、audit! 宏、git 风格改名记法
     ├── state.rs          # AppState { db, config, drive_manager }
     ├── db/
     │   └── mod.rs        # SqlitePool 初始化，运行 sqlx migrate
@@ -410,6 +414,97 @@ LIMIT ? OFFSET ?
 
 ---
 
+## 日志与审计
+
+**文件：** `src/logging.rs`（初始化、`audit!` 宏、`git_rename_notation` 辅助函数）。
+
+### 双路输出
+
+| Sink | 格式 | 用途 |
+|------|------|------|
+| 控制台（stdout） | `LOG_FORMAT`（默认 `pretty`，可选 `json`） | 本地 `cargo run` 时人眼阅读 |
+| 文件（`LOG_DIR/cloud_home.log`） | 恒为 JSON | 供云端日志采集/监控代理（Filebeat/Promtail/Datadog Agent 等）读取 |
+
+文件按**大小**滚动（`file-rotate` crate；`tracing-appender` 内建滚动仅支持按时间，不适用）：超过 `LOG_MAX_SIZE_MB`（默认 1）即把当前文件整体改名为 `cloud_home.log.1`，重新开始写入空文件；只保留 1 个备份，总占用约 2×`LOG_MAX_SIZE_MB`。保留 1 个备份而非直接原地截断，是为了让日志采集方有机会读完被滚动出去的旧文件而不丢行——原地截断在采集方读取滞后时会造成静默丢失。
+
+日志目录默认 `./logs`（本地磁盘，非外接硬盘）——外接硬盘的消失正是最需要被记录的事件之一，若日志本身写在盘上，卸载瞬间的日志就可能连带丢失。
+
+### target 与过滤
+
+三个自定义 target：
+
+| target | 内容 |
+|--------|------|
+| `audit` | 谁做了什么（登录/上传/删除…）——审计主线索 |
+| `http` | 访问日志，每个请求一行（`event="http.request"`，含 request_id、status、latency_ms） |
+| `cloud_home::*` | 普通诊断日志 |
+
+无 `RUST_LOG` 时默认过滤：`cloud_home=info,http=info,audit=info,tower_http=warn`。访问日志由本项目自己在 `http` target 发出，不再依赖 `tower_http` 内建 span 的 debug 级别输出。
+
+### 请求关联
+
+`SetRequestIdLayer` 在无 `x-request-id` 请求头时生成 UUID（`MakeRequestUuid`，复用既有 `uuid` 依赖），`PropagateRequestIdLayer` 写回响应头，上游反向代理传入的 id 会被原样保留。`TraceLayer::make_span_with` 建立 `http` span，携带：
+
+- `request_id`
+- `method`
+- `route`：**路由模板**（如 `/api/v1/public/shares/{token}`），**绝不用原始路径**——分享 token 等敏感值出现在路径中，写入外发日志文件等同泄露
+- `client_ip`：`TRUST_PROXY_HEADERS=true` 时取 `X-Forwarded-For`/`X-Real-IP` 首跳，否则取 TCP 对端地址（`ConnectInfo`，默认 `false`，防伪造）
+- `user_id`、`username`：初始为空，由 `AuthUser` 提取器在验证 JWT 成功后用 `Span::current().record(...)` 回填
+
+JWT 的 `Claims` 因此新增 `username` 字段（`#[serde(default)]` 兼容改动前签发的旧 token，7 天内自然过期淘汰），使得同一请求内的所有日志行——包括 `error.rs` 中原本拿不到用户上下文的一条——都自动带上可读身份，无需每个调用点手动传递。
+
+> **JSON 形状提示：** span 字段嵌套在 `span` 对象下，不会展平进事件本身。示例：
+> ```json
+> {"target":"audit","event":"file.upload","result":"success","file_id":"…",
+>  "span":{"request_id":"…","user_id":"…","username":"…","route":"…","name":"http"}}
+> ```
+> 下游查询用 `span.request_id` / `span.user_id`。审计调用点在身份是事件核心时（登录事件本身，以及任何可能脱离请求 span 发出的行，如后台任务）仍显式再传一份 `user_id`/`username`。
+
+### 字段约定
+
+- `event`：`领域.动作`（如 `file.upload`、`auth.login`），点号分隔，段内小写下划线。
+- `result`：`"success"` | `"failure"` | `"started"`（流式响应：已授权并开始，非「字节已全部送达」，见下）。
+- 失败行附加 `reason`，取自封闭词表：`unknown_user`、`bad_password`、`token_missing`、`token_invalid`、`duplicate_username_or_email`、`not_owner`、`share_expired`、`download_disabled`、`drive_unavailable`。
+- **可读优先于晦涩**：有 id 就尽量同时给人类名字——`file_name` 伴 `file_id`，`username` 伴 `user_id`。
+- **改名/移动用 git 风格记法**：`change` 字段用 `git diff --stat` 式的重命名记法渲染（`git_rename_notation`），折叠公共前后缀，差异中段用花括号——如 `Documents/2025/{draft.txt => final.txt}`、`{Documents/2025 => Archive}/photo.jpg`。`old_path`/`new_path` 离散字段同时记录，供机器查询；`change` 是给人看的渲染结果。
+- 字段名统一：`user_id`、`username`、`file_id`、`file_name`、`file_path`、`old_path`/`new_path`、`change`、`file_type`、`size_bytes`、`parent_id`、`old_parent_id`/`new_parent_id`、`count`、`freed_bytes`、`share_id`、`share_token_prefix`（仅前 8 字符）、`owner_id`。
+- 级别：成功 → info；用户导致的失败（401/403/409/410）→ warn；服务端失败 → error；常规 404/400 → debug（避免淹没审计信号）。
+- **绝不记录**：密码、`password_hash`、`jwt_secret`、完整 JWT、完整分享 token、`/public/shares/*` 的原始路径、搜索关键字原文。
+
+### 事件目录
+
+| event | 位置 | 关键字段 |
+|---|---|---|
+| `auth.register` success | `handlers/auth.rs` | `user_id`, `username` |
+| `auth.register` failure | 同上（Conflict 分支） | `reason="duplicate_username_or_email"`, `username` |
+| `auth.login` failure（用户不存在） | 同上 | `reason="unknown_user"`, `identifier` |
+| `auth.login` failure（密码错误） | 同上 | `reason="bad_password"`, `user_id`, `username` |
+| `auth.login` success | 同上 | `user_id`, `username` |
+| `auth.logout` | 同上 | `user_id` |
+| `auth.token_rejected` | `auth/extractor.rs`（`token_missing`）、`auth/jwt.rs`（`token_invalid`） | warn, `reason` |
+| `file.upload` | `handlers/files.rs` | `file_id`, `file_name`, `file_path`, `size_bytes` |
+| `file.download` | 同上 | `file_id`, `file_name`, `file_path`, `size_bytes` |
+| `file.raw` | 同上 | `file_id`, `file_name`, `size_bytes`——**刻意不解析路径**（媒体拖动每次 seek 都是新请求，避免每次都触发一次路径回溯查询） |
+| `file.rename` | 同上 | `file_id`, `change`, `old_path`, `new_path` |
+| `file.move` | 同上 | `file_id`, `change`, `old_path`, `new_path` |
+| `file.delete`（软删除） | 同上 | `file_id`, `file_name`, `file_path`, `size_bytes` |
+| `file.download_archive` | 同上 | `count`, `format`；`result="started"`（打包在独立 task 中进行，handler 不会收到完成信号） |
+| `folder.create` | `handlers/folders.rs` | `file_id`, `file_name`, `file_path` |
+| `trash.restore` | `handlers/trash.rs` | `file_id`, `file_name`, `file_path` |
+| `trash.delete`（永久删除） | 同上 | `trash_id`, `freed_bytes` |
+| `trash.empty` | 同上 | `count`, `freed_bytes` |
+| `share.create` | `handlers/shares.rs` | `share_id`, `file_id`, `share_token_prefix`, `expires_at`, `can_download` |
+| `share.revoke` | 同上 | `share_id` |
+| `public.share_view` | `handlers/public.rs`（访问者匿名） | `share_token_prefix`, `owner_id`, `file_id` + span 的 `client_ip` |
+| `public.share_download` | 同上 | 同上 + `size_bytes`；失败 `reason="download_disabled"` |
+| `drive.attached` / `drive.detached` | `tasks/drive_monitor.rs` | `mount` |
+| `task.trash_cleanup` | `tasks/trash_cleaner.rs` | `count` |
+| `process.panic` | panic hook（`logging.rs`） | 自动带当前请求 span（若有） |
+
+**流式响应完成度说明：** `download`/`raw`/`public.share_download` 返回的是 `ReaderStream`；`download_archive` 把打包工作 `tokio::spawn` 到独立 task 后立即返回响应头。「handler 返回 Ok」的含义是「传输已授权并开始」，不是「字节已全部送达」——响应体是流式的，handler 返回时并不知道客户端是否真正读完。单文件流按 `"success"` 记（审计意义在于「已被授权拿到这些字节」），批量打包按 `"started"` 记。字节级送达确认不在本设计范围内。
+
+---
+
 ## 关键配置（.env）
 
 ```env
@@ -423,9 +518,19 @@ JWT_EXPIRES_IN_HOURS=168
 MAX_UPLOAD_SIZE_MB=4096
 TRASH_RETENTION_DAYS=7
 TRASH_CLEANUP_INTERVAL_HOURS=1
-RUST_LOG=cloud_home=info,tower_http=debug
+RUST_LOG=cloud_home=info,http=info,audit=info,tower_http=warn
 CORS_ALLOWED_ORIGINS=http://localhost:3000
 PUBLIC_BASE_URL=http://localhost:8080
+
+# 日志文件目录（本地磁盘，非外接硬盘）
+LOG_DIR=./logs
+# 控制台格式：pretty（默认，人类可读）| json。文件恒为 json。
+LOG_FORMAT=pretty
+LOG_FILE_ENABLED=true
+# 单个日志文件大小上限（MB），超过即滚动，保留 1 个备份（cloud_home.log.1）
+LOG_MAX_SIZE_MB=1
+# 是否信任反向代理的 X-Forwarded-For / X-Real-IP（生产上 nginx/Caddy 之后再开启）
+TRUST_PROXY_HEADERS=false
 ```
 
 > `DATABASE_URL` 由程序在运行时根据侦测到的硬盘路径自动构造，无需在 .env 中写死。

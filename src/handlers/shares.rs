@@ -33,7 +33,23 @@ pub async fn create(
 ) -> AppResult<(StatusCode, ApiResponse<ShareResponse>)> {
     let link = share_service::create(&state.db, &user.user_id, &dto).await?;
     let resp = ShareResponse::from_link(link, &state.config.public_base_url);
+    crate::audit!(
+        info,
+        "share.create",
+        "success",
+        share_id = %resp.id,
+        file_id = %resp.file_id,
+        share_token_prefix = %token_prefix(&resp.token),
+        expires_at = ?resp.expires_at,
+        can_download = resp.can_download,
+        "创建分享链接"
+    );
     Ok((StatusCode::CREATED, ApiResponse::new(resp)))
+}
+
+/// 仅取 token 前 8 字符用于日志——完整 token 是访问凭证，绝不可写入日志文件。
+fn token_prefix(token: &str) -> String {
+    token.chars().take(8).collect()
 }
 
 /// GET /shares
@@ -78,5 +94,6 @@ pub async fn revoke(
     AxumPath(id): AxumPath<String>,
 ) -> AppResult<ApiResponse<OkResponse>> {
     share_service::revoke(&state.db, &user.user_id, &id).await?;
+    crate::audit!(info, "share.revoke", "success", share_id = %id, "撤销分享链接");
     Ok(ApiResponse::new(OkResponse { ok: true }))
 }

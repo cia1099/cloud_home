@@ -3,7 +3,10 @@ use std::path::PathBuf;
 /// 全局配置，从 .env / 环境变量加载。
 ///
 /// 注意：`DATABASE_URL` 不在此处，它由程序在运行时根据侦测到的硬盘路径构造。
-#[derive(Debug, Clone)]
+///
+/// 刻意不 `#[derive(Debug)]`——`jwt_secret` 是明文密钥，手写 Debug 将其脱敏，
+/// 杜绝整体 `{:?}` 打印时泄露。
+#[derive(Clone)]
 pub struct Config {
     pub server_host: String,
     pub server_port: u16,
@@ -18,6 +21,39 @@ pub struct Config {
     pub trash_cleanup_interval_hours: u64,
     pub cors_allowed_origins: Vec<String>,
     pub public_base_url: String,
+    /// 日志文件目录（本地磁盘，非外接硬盘——硬盘卸载正是最需要记录的时刻）。
+    pub log_dir: PathBuf,
+    /// 控制台日志格式：`pretty`（默认，人类可读）或 `json`。文件恒为 JSON。
+    pub log_format: String,
+    /// 是否写日志文件。
+    pub log_file_enabled: bool,
+    /// 单个日志文件大小上限（MB），超过即滚动。
+    pub log_max_size_mb: u64,
+    /// 是否信任反向代理的 `X-Forwarded-For` / `X-Real-IP`（默认 false，防伪造）。
+    pub trust_proxy_headers: bool,
+}
+
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Config")
+            .field("server_host", &self.server_host)
+            .field("server_port", &self.server_port)
+            .field("volumes_watch_path", &self.volumes_watch_path)
+            .field("drive_data_dir", &self.drive_data_dir)
+            .field("jwt_secret", &"<redacted>")
+            .field("jwt_expires_in_hours", &self.jwt_expires_in_hours)
+            .field("max_upload_size_mb", &self.max_upload_size_mb)
+            .field("trash_retention_days", &self.trash_retention_days)
+            .field("trash_cleanup_interval_hours", &self.trash_cleanup_interval_hours)
+            .field("cors_allowed_origins", &self.cors_allowed_origins)
+            .field("public_base_url", &self.public_base_url)
+            .field("log_dir", &self.log_dir)
+            .field("log_format", &self.log_format)
+            .field("log_file_enabled", &self.log_file_enabled)
+            .field("log_max_size_mb", &self.log_max_size_mb)
+            .field("trust_proxy_headers", &self.trust_proxy_headers)
+            .finish()
+    }
 }
 
 impl Config {
@@ -43,6 +79,11 @@ impl Config {
                 .filter(|s| !s.is_empty())
                 .collect(),
             public_base_url: env_or("PUBLIC_BASE_URL", "http://localhost:8080"),
+            log_dir: PathBuf::from(env_or("LOG_DIR", "./logs")),
+            log_format: env_or("LOG_FORMAT", "pretty"),
+            log_file_enabled: env_parse("LOG_FILE_ENABLED", true)?,
+            log_max_size_mb: env_parse("LOG_MAX_SIZE_MB", 1)?,
+            trust_proxy_headers: env_parse("TRUST_PROXY_HEADERS", false)?,
         })
     }
 

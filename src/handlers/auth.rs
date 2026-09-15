@@ -38,6 +38,14 @@ pub async fn register(
             .fetch_optional(&state.db)
             .await?;
     if existing.is_some() {
+        crate::audit!(
+            warn,
+            "auth.register",
+            "failure",
+            reason = "duplicate_username_or_email",
+            username = %dto.username,
+            "注册失败：用户名或邮箱已被注册"
+        );
         return Err(AppError::Conflict("用户名或邮箱已被注册".into()));
     }
 
@@ -59,6 +67,14 @@ pub async fn register(
     .await?;
 
     let user = fetch_user(&state, &id).await?;
+    crate::audit!(
+        info,
+        "auth.register",
+        "success",
+        user_id = %user.id,
+        username = %user.username,
+        "注册成功"
+    );
     issue_auth_response(&state, user, StatusCode::CREATED)
 }
 
@@ -77,19 +93,47 @@ pub async fn login(
     State(state): State<AppState>,
     Json(dto): Json<LoginDto>,
 ) -> AppResult<(StatusCode, HeaderMap, ApiResponse<AuthResponse>)> {
-    let user = sqlx::query_as::<_, User>(
+    let found = sqlx::query_as::<_, User>(
         "SELECT * FROM users WHERE (username = ? OR email = ?) AND is_active = 1",
     )
     .bind(&dto.identifier)
     .bind(&dto.identifier)
     .fetch_optional(&state.db)
-    .await?
-    .ok_or(AppError::Unauthorized)?;
+    .await?;
+
+    let Some(user) = found else {
+        crate::audit!(
+            warn,
+            "auth.login",
+            "failure",
+            reason = "unknown_user",
+            identifier = %dto.identifier,
+            "登录失败：用户不存在"
+        );
+        return Err(AppError::Unauthorized);
+    };
 
     if !password::verify(&dto.password, &user.password_hash) {
+        crate::audit!(
+            warn,
+            "auth.login",
+            "failure",
+            reason = "bad_password",
+            user_id = %user.id,
+            username = %user.username,
+            "登录失败：密码错误"
+        );
         return Err(AppError::Unauthorized);
     }
 
+    crate::audit!(
+        info,
+        "auth.login",
+        "success",
+        user_id = %user.id,
+        username = %user.username,
+        "登录成功"
+    );
     issue_auth_response(&state, user, StatusCode::OK)
 }
 
@@ -105,7 +149,8 @@ pub async fn login(
     ),
     security(("cookie_auth" = []), ("bearer_auth" = []))
 )]
-pub async fn logout(_user: AuthUser) -> AppResult<(HeaderMap, ApiResponse<OkResponse>)> {
+pub async fn logout(user: AuthUser) -> AppResult<(HeaderMap, ApiResponse<OkResponse>)> {
+    crate::audit!(info, "auth.logout", "success", user_id = %user.user_id, "登出");
     let mut headers = HeaderMap::new();
     let clear = "auth_token=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0";
     headers.insert(SET_COOKIE, clear.parse().unwrap());
@@ -164,6 +209,7 @@ fn issue_auth_response(
     let (token, expires_at) = jwt::issue(
         &state.config.jwt_secret,
         &user.id,
+        &user.username,
         state.config.jwt_expires_in_hours,
     )?;
 

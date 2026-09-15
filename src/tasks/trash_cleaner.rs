@@ -27,7 +27,7 @@ pub fn spawn(db: Db, drive_manager: DriveManager, interval_hours: u64, events: C
             match trash_service::cleanup_expired(&db, &data_root).await {
                 Ok(0) => {}
                 Ok(n) => {
-                    tracing::info!(cleaned = n, "回收站定时清理完成");
+                    crate::audit!(info, "task.trash_cleanup", "success", count = n, "回收站定时清理完成");
                     // 跨账户批量删除，范围未知，通知所有订阅者刷新。
                     events.notify_all();
                 }

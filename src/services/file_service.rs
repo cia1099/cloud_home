@@ -319,3 +319,51 @@ pub async fn collect_download_entries(
 
     Ok(entries)
 }
+
+/// 由 parent_id 向上拼出可读路径，如 `Documents/2025`。根目录返回空字符串。
+///
+/// 供 `handlers/search.rs`（展示 `parent_path`）与审计日志（拼 `file_path`）共用。
+pub async fn parent_path(db: &Db, owner_id: &str, parent_id: Option<&str>) -> AppResult<String> {
+    let mut segments: Vec<String> = Vec::new();
+    let mut current = parent_id.map(|s| s.to_string());
+    // 限制深度，防御异常数据形成的环。
+    let mut guard = 0;
+    while let Some(id) = current {
+        guard += 1;
+        if guard > 256 {
+            break;
+        }
+        let row: Option<(String, Option<String>)> =
+            sqlx::query_as("SELECT name, parent_id FROM files WHERE id = ? AND owner_id = ?")
+                .bind(&id)
+                .bind(owner_id)
+                .fetch_optional(db)
+                .await?;
+        match row {
+            Some((name, parent)) => {
+                segments.push(name);
+                current = parent;
+            }
+            None => break,
+        }
+    }
+    segments.reverse();
+    Ok(segments.join("/"))
+}
+
+/// `parent_path` 加上叶子名，拼出完整逻辑路径，如 `Documents/2025/photo.jpg`。
+/// 供审计日志使用；日志调用方应以 `.unwrap_or_else(|_| "?".into())` 兜底，
+/// 绝不能让拼路径失败连累一个本已成功的操作返回 500。
+pub async fn full_path(
+    db: &Db,
+    owner_id: &str,
+    parent_id: Option<&str>,
+    name: &str,
+) -> AppResult<String> {
+    let parent = parent_path(db, owner_id, parent_id).await?;
+    if parent.is_empty() {
+        Ok(name.to_string())
+    } else {
+        Ok(format!("{parent}/{name}"))
+    }
+}

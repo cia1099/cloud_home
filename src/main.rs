@@ -5,6 +5,7 @@ mod drive;
 mod error;
 mod events;
 mod handlers;
+mod logging;
 mod models;
 mod openapi;
 mod services;
@@ -12,11 +13,11 @@ mod state;
 mod tasks;
 mod util;
 
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Context;
-use tracing_subscriber::EnvFilter;
 
 use crate::config::Config;
 use crate::drive::{DriveManager, detector, path_resolver};
@@ -25,9 +26,11 @@ use crate::util::now_rfc3339;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    init_tracing();
-
+    // 先加载配置（内部会 dotenvy 读取 .env），再初始化日志——
+    // 这样 .env 里的 RUST_LOG 才能对 EnvFilter 生效。
     let config = Arc::new(Config::from_env().context("加载配置失败")?);
+    // 必须持有 guard 到进程结束，否则文件日志的非阻塞写线程会停止刷新。
+    let _log_guards = logging::init(&config);
 
     let drive_manager = DriveManager::new(config.drive_data_dir.clone());
 
@@ -83,14 +86,14 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("绑定 {addr} 失败"))?;
     tracing::info!(%addr, "Cloud Home 后端已启动");
 
-    axum::serve(listener, app).await.context("服务运行出错")?;
+    // into_make_service_with_connect_info 让 handler 能拿到 TCP 对端地址（client_ip）。
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .context("服务运行出错")?;
     Ok(())
-}
-
-fn init_tracing() {
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("cloud_home=info,tower_http=info"));
-    tracing_subscriber::fmt().with_env_filter(filter).init();
 }
 
 /// 选择数据盘挂载点：

@@ -106,7 +106,8 @@ pub async fn search(
     let mut items = Vec::with_capacity(rows.len());
     for entry in rows {
         let parent_path =
-            build_parent_path(&state.db, &user.user_id, entry.parent_id.as_deref()).await?;
+            file_service::parent_path(&state.db, &user.user_id, entry.parent_id.as_deref())
+                .await?;
         items.push(SearchResultItem {
             id: entry.id,
             name: entry.name,
@@ -197,33 +198,4 @@ async fn fetch_matches(
         }
     };
     Ok(rows)
-}
-
-/// 由 parent_id 向上拼出可读路径，如 `Documents/2025`。根目录返回空字符串。
-async fn build_parent_path(db: &Db, owner_id: &str, parent_id: Option<&str>) -> AppResult<String> {
-    let mut segments: Vec<String> = Vec::new();
-    let mut current = parent_id.map(|s| s.to_string());
-    // 限制深度，防御异常数据形成的环。
-    let mut guard = 0;
-    while let Some(id) = current {
-        guard += 1;
-        if guard > 256 {
-            break;
-        }
-        let row: Option<(String, Option<String>)> =
-            sqlx::query_as("SELECT name, parent_id FROM files WHERE id = ? AND owner_id = ?")
-                .bind(&id)
-                .bind(owner_id)
-                .fetch_optional(db)
-                .await?;
-        match row {
-            Some((name, parent)) => {
-                segments.push(name);
-                current = parent;
-            }
-            None => break,
-        }
-    }
-    segments.reverse();
-    Ok(segments.join("/"))
 }

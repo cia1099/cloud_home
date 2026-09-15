@@ -52,10 +52,22 @@ pub fn spawn(config: Arc<Config>, drive_manager: DriveManager, chosen_mount: Pat
             let available = mount_is_available(&chosen_mount, &data_dir);
             if available != last_available {
                 if available {
-                    tracing::info!(mount = %chosen_mount.display(), "数据盘重新挂载");
+                    crate::audit!(
+                        info,
+                        "drive.attached",
+                        "success",
+                        mount = %chosen_mount.display(),
+                        "数据盘重新挂载"
+                    );
                     drive_manager.set_active(Some(chosen_mount.clone())).await;
                 } else {
-                    tracing::warn!(mount = %chosen_mount.display(), "数据盘已卸载，写操作将返回 503");
+                    crate::audit!(
+                        warn,
+                        "drive.detached",
+                        "failure",
+                        mount = %chosen_mount.display(),
+                        "数据盘已卸载，写操作将返回 503"
+                    );
                     drive_manager.set_active(None).await;
                 }
                 last_available = available;

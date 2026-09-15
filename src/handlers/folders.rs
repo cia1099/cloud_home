@@ -58,6 +58,23 @@ pub async fn create(
     .await?;
 
     let response = FileResponse::from(entry);
+    let file_path = file_service::full_path(
+        &state.db,
+        &user.user_id,
+        response.parent_id.as_deref(),
+        &response.name,
+    )
+    .await
+    .unwrap_or_else(|_| "?".into());
+    crate::audit!(
+        info,
+        "folder.create",
+        "success",
+        file_id = %response.id,
+        file_name = %response.name,
+        file_path = %file_path,
+        "创建资料夹"
+    );
     state.events.notify(
         &user.user_id,
         FileChangeEvent {

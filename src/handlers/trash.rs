@@ -50,6 +50,23 @@ pub async fn restore(
 ) -> AppResult<ApiResponse<FileResponse>> {
     let entry = trash_service::restore(&state.db, &user.user_id, &id).await?;
     let response = FileResponse::from(entry);
+    let file_path = crate::services::file_service::full_path(
+        &state.db,
+        &user.user_id,
+        response.parent_id.as_deref(),
+        &response.name,
+    )
+    .await
+    .unwrap_or_else(|_| "?".into());
+    crate::audit!(
+        info,
+        "trash.restore",
+        "success",
+        file_id = %response.id,
+        file_name = %response.name,
+        file_path = %file_path,
+        "恢复文件"
+    );
     state.events.notify(
         &user.user_id,
         FileChangeEvent {
@@ -82,6 +99,14 @@ pub async fn delete_one(
 ) -> AppResult<ApiResponse<FreedBytesResponse>> {
     let data_root = state.drive_manager.require_data_root().await?;
     let bytes = trash_service::delete_permanent(&state.db, &data_root, &user.user_id, &id).await?;
+    crate::audit!(
+        info,
+        "trash.delete",
+        "success",
+        trash_id = %id,
+        freed_bytes = bytes,
+        "永久删除文件"
+    );
     state
         .events
         .notify(&user.user_id, FileChangeEvent {
@@ -112,6 +137,14 @@ pub async fn empty(
 ) -> AppResult<ApiResponse<TrashEmptyResponse>> {
     let data_root = state.drive_manager.require_data_root().await?;
     let (count, bytes) = trash_service::empty(&state.db, &data_root, &user.user_id).await?;
+    crate::audit!(
+        info,
+        "trash.empty",
+        "success",
+        count,
+        freed_bytes = bytes,
+        "清空回收站"
+    );
     if count > 0 {
         state
             .events

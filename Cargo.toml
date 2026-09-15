@@ -7,7 +7,7 @@ edition = "2024"
 # Web 框架
 axum = { version = "0.8", features = ["multipart"] }
 tower = { version = "0.5", features = ["full"] }
-tower-http = { version = "0.7", features = ["cors", "trace", "limit"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "limit", "request-id", "catch-panic"] }
 
 # 异步运行时
 tokio = { version = "1", features = ["full"] }
@@ -47,6 +47,9 @@ mime_guess = "2"
 # 日志
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"
+# 按大小滚动日志文件（tracing-appender 内建滚动仅支持按时间）
+file-rotate = "0.8"
 
 # OpenAPI 文档 + Scalar 交互式 UI
 utoipa = { version = "5.5.0", features = ["axum_extras"] }

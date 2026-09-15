@@ -170,6 +170,24 @@ pub async fn upload(
     match result {
         Ok(entry) => {
             let response = FileResponse::from(entry);
+            let file_path = file_service::full_path(
+                &state.db,
+                &user.user_id,
+                response.parent_id.as_deref(),
+                &response.name,
+            )
+            .await
+            .unwrap_or_else(|_| "?".into());
+            crate::audit!(
+                info,
+                "file.upload",
+                "success",
+                file_id = %response.id,
+                file_name = %response.name,
+                file_path = %file_path,
+                size_bytes = response.size_bytes,
+                "上传文件"
+            );
             state.events.notify(
                 &user.user_id,
                 FileChangeEvent {
@@ -255,14 +273,35 @@ pub async fn download(
 ) -> AppResult<Response> {
     let entry = file_service::get_owned(&state.db, &user.user_id, &id).await?;
     let range = range_header(&headers);
-    stream_file(
+    let response = stream_file(
         &state,
         &user.user_id,
         &entry,
         Disposition::Attachment,
         range,
     )
+    .await?;
+    // "success" 指传输已授权并开始，非「字节已全部送达」——响应体是流式的，
+    // handler 返回时并不知道客户端是否真正读完。
+    let file_path = file_service::full_path(
+        &state.db,
+        &user.user_id,
+        entry.parent_id.as_deref(),
+        &entry.name,
+    )
     .await
+    .unwrap_or_else(|_| "?".into());
+    crate::audit!(
+        info,
+        "file.download",
+        "success",
+        file_id = %entry.id,
+        file_name = %entry.name,
+        file_path = %file_path,
+        size_bytes = entry.size_bytes,
+        "下载文件"
+    );
+    Ok(response)
 }
 
 /// GET /files/:id/raw  内联预览（`Content-Disposition: inline`），支持 HTTP Range，
@@ -312,7 +351,18 @@ pub async fn raw(
 ) -> AppResult<Response> {
     let entry = file_service::get_owned(&state.db, &user.user_id, &id).await?;
     let range = range_header(&headers);
-    stream_file(&state, &user.user_id, &entry, Disposition::Inline, range).await
+    let response = stream_file(&state, &user.user_id, &entry, Disposition::Inline, range).await?;
+    // 路径刻意不解析：媒体拖动每次都是新请求，避免每次 seek 都触发一次路径回溯查询。
+    crate::audit!(
+        info,
+        "file.raw",
+        "success",
+        file_id = %entry.id,
+        file_name = %entry.name,
+        size_bytes = entry.size_bytes,
+        "预览/播放文件"
+    );
+    Ok(response)
 }
 
 /// GET /files/:id/thumbnail?size=256  图片缩略图（JPEG，磁盘缓存），用于画廊网格。
@@ -373,8 +423,38 @@ pub async fn rename(
     AxumPath(id): AxumPath<String>,
     axum::Json(dto): axum::Json<RenameDto>,
 ) -> AppResult<ApiResponse<FileResponse>> {
+    // 改名前先取旧 entry，供审计日志拼 old_path/change（改名后旧名已不可得）。
+    let before = file_service::get_owned(&state.db, &user.user_id, &id).await?;
     let entry = file_service::rename(&state.db, &user.user_id, &id, &dto.name).await?;
     let response = FileResponse::from(entry);
+
+    let old_path = file_service::full_path(
+        &state.db,
+        &user.user_id,
+        before.parent_id.as_deref(),
+        &before.name,
+    )
+    .await
+    .unwrap_or_else(|_| "?".into());
+    let new_path = file_service::full_path(
+        &state.db,
+        &user.user_id,
+        response.parent_id.as_deref(),
+        &response.name,
+    )
+    .await
+    .unwrap_or_else(|_| "?".into());
+    crate::audit!(
+        info,
+        "file.rename",
+        "success",
+        file_id = %response.id,
+        change = %crate::logging::git_rename_notation(&old_path, &new_path),
+        old_path = %old_path,
+        new_path = %new_path,
+        "重命名文件"
+    );
+
     state.events.notify(
         &user.user_id,
         FileChangeEvent {
@@ -408,9 +488,17 @@ pub async fn move_file(
     AxumPath(id): AxumPath<String>,
     axum::Json(dto): axum::Json<MoveDto>,
 ) -> AppResult<ApiResponse<FileResponse>> {
-    let old_parent_id = file_service::get_owned(&state.db, &user.user_id, &id)
-        .await?
-        .parent_id;
+    let before = file_service::get_owned(&state.db, &user.user_id, &id).await?;
+    let old_parent_id = before.parent_id.clone();
+    // 移动前先拼旧路径——父链尚未改变，移动后再查会得到新链。
+    let old_path = file_service::full_path(
+        &state.db,
+        &user.user_id,
+        before.parent_id.as_deref(),
+        &before.name,
+    )
+    .await
+    .unwrap_or_else(|_| "?".into());
 
     let entry = file_service::move_entry(
         &state.db,
@@ -420,6 +508,25 @@ pub async fn move_file(
     )
     .await?;
     let response = FileResponse::from(entry);
+
+    let new_path = file_service::full_path(
+        &state.db,
+        &user.user_id,
+        response.parent_id.as_deref(),
+        &response.name,
+    )
+    .await
+    .unwrap_or_else(|_| "?".into());
+    crate::audit!(
+        info,
+        "file.move",
+        "success",
+        file_id = %response.id,
+        change = %crate::logging::git_rename_notation(&old_path, &new_path),
+        old_path = %old_path,
+        new_path = %new_path,
+        "移动文件"
+    );
 
     let mut parent_ids = vec![old_parent_id, response.parent_id.clone()];
     parent_ids.dedup();
@@ -454,6 +561,17 @@ pub async fn delete(
 ) -> AppResult<ApiResponse<OkResponse>> {
     let entry = file_service::get_owned(&state.db, &user.user_id, &id).await?;
 
+    // 删除前拼路径（文件此时仍存在，路径可解析；软删后 is_deleted=1 不影响，
+    // 但趁 entry 仍在手边一并处理，避免多一次查询）。
+    let file_path = file_service::full_path(
+        &state.db,
+        &user.user_id,
+        entry.parent_id.as_deref(),
+        &entry.name,
+    )
+    .await
+    .unwrap_or_else(|_| "?".into());
+
     trash_service::soft_delete(
         &state.db,
         state.config.trash_retention_days,
@@ -463,6 +581,16 @@ pub async fn delete(
     .await?;
 
     let response = FileResponse::from(entry);
+    crate::audit!(
+        info,
+        "file.delete",
+        "success",
+        file_id = %response.id,
+        file_name = %response.name,
+        file_path = %file_path,
+        size_bytes = response.size_bytes,
+        "移入回收站"
+    );
     state.events.notify(
         &user.user_id,
         FileChangeEvent {
@@ -513,7 +641,18 @@ pub async fn download_archive(
     }
 
     // 校验/展开全部在流开始前完成——响应一旦开始流式输出就无法再改变 HTTP 状态码。
+    // 此后打包在独立 task 里进行，handler 不会再收到完成信号，故 result="started"
+    // 而非 "success"：这里只保证「已授权、已开始」。
     let format = req.format;
+    let count = entries.len() as i64;
+    crate::audit!(
+        info,
+        "file.download_archive",
+        "started",
+        count,
+        format = ?format,
+        "批量打包下载"
+    );
     let (reader, writer) = tokio::io::duplex(64 * 1024);
     tokio::spawn(crate::services::archive_service::write_archive(
         format, writer, entries,

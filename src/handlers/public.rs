@@ -30,6 +30,15 @@ pub async fn info(
     AxumPath(token): AxumPath<String>,
 ) -> AppResult<ApiResponse<PublicShareResponse>> {
     let (share, file, shared_by) = share_service::resolve_public(&state.db, &token).await?;
+    crate::audit!(
+        info,
+        "public.share_view",
+        "success",
+        share_token_prefix = %token_prefix(&token),
+        owner_id = %share.owner_id,
+        file_id = %file.id,
+        "查看分享信息"
+    );
     let resp = PublicShareResponse {
         name: file.name,
         file_type: file.file_type,
@@ -39,6 +48,11 @@ pub async fn info(
         shared_by,
     };
     Ok(ApiResponse::new(resp))
+}
+
+/// 仅取 token 前 8 字符用于日志——完整 token 是访问凭证，绝不可写入日志文件。
+fn token_prefix(token: &str) -> String {
+    token.chars().take(8).collect()
 }
 
 /// GET /public/shares/:token/download
@@ -72,6 +86,16 @@ pub async fn download(
     let (share, file, _shared_by) = share_service::resolve_public(&state.db, &token).await?;
 
     if share.can_download == 0 {
+        crate::audit!(
+            warn,
+            "public.share_download",
+            "failure",
+            reason = "download_disabled",
+            share_token_prefix = %token_prefix(&token),
+            owner_id = %share.owner_id,
+            file_id = %file.id,
+            "分享禁止下载"
+        );
         return Err(AppError::Forbidden);
     }
 
@@ -84,6 +108,16 @@ pub async fn download(
         range,
     )
     .await?;
+    crate::audit!(
+        info,
+        "public.share_download",
+        "success",
+        share_token_prefix = %token_prefix(&token),
+        owner_id = %share.owner_id,
+        file_id = %file.id,
+        size_bytes = file.size_bytes,
+        "下载分享文件"
+    );
     share_service::record_access(&state.db, &share.id).await?;
     Ok(response)
 }

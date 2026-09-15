@@ -14,13 +14,17 @@ pub mod usage;
 use axum::Router;
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderValue, Method};
+use tower::ServiceBuilder;
+use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
+use crate::logging;
 use crate::openapi::{ApiDoc, docs_router};
 use crate::state::AppState;
 
@@ -28,6 +32,7 @@ use crate::state::AppState;
 pub fn build_router(state: AppState) -> Router {
     let cors = build_cors(&state);
     let body_limit = RequestBodyLimitLayer::new(state.config.max_upload_size_bytes());
+    let trust_proxy = state.config.trust_proxy_headers;
 
     let api: OpenApiRouter<AppState> = OpenApiRouter::new()
         .routes(routes!(health))
@@ -71,11 +76,29 @@ pub fn build_router(state: AppState) -> Router {
         .nest("/api/v1", api)
         .split_for_parts();
 
+    // 中间件栈（自外向内）：
+    //   请求 id 生成 → 传播到响应 → 捕获 panic（转 500，服务不中断）
+    //   → 访问日志 span（含 request_id/method/route/client_ip）
+    //   → CORS → 请求体大小限制 → 路由
+    let middleware = ServiceBuilder::new()
+        .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
+        .layer(PropagateRequestIdLayer::x_request_id())
+        .layer(CatchPanicLayer::new())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(move |req: &axum::http::Request<axum::body::Body>| {
+                    logging::make_span(req, trust_proxy)
+                })
+                .on_request(())
+                .on_response(logging::on_response)
+                .on_failure(()),
+        )
+        .layer(cors)
+        .layer(body_limit);
+
     api_router
         .merge(docs_router(openapi))
-        .layer(body_limit)
-        .layer(cors)
-        .layer(TraceLayer::new_for_http())
+        .layer(middleware)
         .with_state(state)
 }
 
