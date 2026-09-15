@@ -260,6 +260,16 @@ Base URL: `http://localhost:8080/api/v1`
 |------|------|------|------|
 | POST | /folders | JWT | 建立资料夹（body: `{ "name": "...", "parent_id": null }`） |
 
+### 重名处理策略
+
+同目录下、未删除项目之间的 `name` 有唯一性约束（`idx_files_unique_name`）。冲突时的行为依操作而异：
+
+| 操作 | 冲突时行为 |
+|------|-----------|
+| 上传（`POST /files/upload`）、建立资料夹（`POST /folders`） | **自动改名**：仿照操作系统复制文件的做法，在扩展名前插入 `(n)`（n 从 1 起递增直到无冲突），如 `photo.jpg` → `photo(1).jpg`；资料夹直接附加于名称末尾，如 `Documents` → `Documents(1)`。永不失败。 |
+| 重命名（`PATCH /files/:id`）、移动（`POST /files/:id/move`） | **拒绝**，返回 `409 Conflict`。这是用户的显式操作，静默改名会造成困惑，交由前端提示用户另取名称。 |
+| 回收站还原（`POST /trash/:id/restore`） | **自动改名**，追加 `(已还原 <时间戳>)` 后缀，如 `report.pdf (已还原 20260101120000)`；同样永不失败。 |
+
 ### 搜索
 
 | 方法 | 路径 | 认证 | 说明 |

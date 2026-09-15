@@ -19,11 +19,10 @@ use crate::state::AppState;
     tag = "folders",
     request_body = CreateFolderDto,
     responses(
-        (status = 201, description = "资料夹创建成功", body = ApiResponse<FileResponse>),
+        (status = 201, description = "资料夹创建成功；若同名已存在会自动追加 (1)/(2)…… 后缀", body = ApiResponse<FileResponse>),
         (status = 400, description = "名称不合法", body = ErrorResponse),
         (status = 401, description = "认证失败", body = ErrorResponse),
         (status = 404, description = "parent_id 不存在", body = ErrorResponse),
-        (status = 409, description = "已存在同名项目", body = ErrorResponse),
     ),
     security(("cookie_auth" = []), ("bearer_auth" = []))
 )]
@@ -34,11 +33,13 @@ pub async fn create(
 ) -> AppResult<(StatusCode, ApiResponse<FileResponse>)> {
     file_service::validate_name(&dto.name)?;
     file_service::validate_parent(&state.db, &user.user_id, dto.parent_id.as_deref()).await?;
-    file_service::ensure_name_available(
+    // 创建时若同名已存在，仿照系统复制文件的做法自动追加 (1)/(2)……而非拒绝。
+    let name = file_service::dedupe_name(
         &state.db,
         &user.user_id,
         dto.parent_id.as_deref(),
         &dto.name,
+        true,
     )
     .await?;
 
@@ -49,7 +50,7 @@ pub async fn create(
         &user.user_id,
         dto.parent_id.as_deref(),
         &state.drive_id,
-        &dto.name,
+        &name,
         FILE_TYPE_FOLDER,
         0,
         None,

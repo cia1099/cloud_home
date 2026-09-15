@@ -83,10 +83,9 @@ pub async fn get_metadata(
     tag = "files",
     request_body(content = crate::models::file::UploadForm, content_type = "multipart/form-data"),
     responses(
-        (status = 201, description = "上传成功", body = ApiResponse<FileResponse>),
+        (status = 201, description = "上传成功；若同名已存在会自动追加 (1)/(2)…… 后缀", body = ApiResponse<FileResponse>),
         (status = 400, description = "参数校验失败", body = ErrorResponse),
         (status = 401, description = "认证失败", body = ErrorResponse),
-        (status = 409, description = "已存在同名项目", body = ErrorResponse),
         (status = 503, description = "外接硬盘不可用", body = ErrorResponse),
     ),
     security(("cookie_auth" = []), ("bearer_auth" = []))
@@ -222,7 +221,8 @@ async fn finalize_upload(
     let name = name.ok_or_else(|| AppError::BadRequest("缺少文件名".into()))?;
     file_service::validate_name(&name)?;
     file_service::validate_parent(&state.db, owner_id, parent_id).await?;
-    file_service::ensure_name_available(&state.db, owner_id, parent_id, &name).await?;
+    // 上传时若同名已存在，仿照系统复制文件的做法自动追加 (1)/(2)……而非拒绝。
+    let name = file_service::dedupe_name(&state.db, owner_id, parent_id, &name, false).await?;
 
     let mime = file_service::guess_mime(&name);
     let path_str = physical_path.to_string_lossy().to_string();

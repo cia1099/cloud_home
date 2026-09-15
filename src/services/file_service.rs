@@ -67,13 +67,13 @@ pub async fn validate_parent(db: &Db, owner_id: &str, parent_id: Option<&str>) -
     Ok(())
 }
 
-/// 确认同目录下没有重名（未删除）项目。
-pub async fn ensure_name_available(
+/// 某目录下是否已存在同名（未删除）项目。
+pub async fn name_taken(
     db: &Db,
     owner_id: &str,
     parent_id: Option<&str>,
     name: &str,
-) -> AppResult<()> {
+) -> AppResult<bool> {
     let exists: Option<(String,)> = match parent_id {
         Some(pid) => sqlx::query_as(
             "SELECT id FROM files WHERE owner_id = ? AND parent_id = ? AND name = ? AND is_deleted = 0",
@@ -91,10 +91,54 @@ pub async fn ensure_name_available(
         .fetch_optional(db)
         .await?,
     };
-    if exists.is_some() {
+    Ok(exists.is_some())
+}
+
+/// 确认同目录下没有重名（未删除）项目，否则返回 409。
+pub async fn ensure_name_available(
+    db: &Db,
+    owner_id: &str,
+    parent_id: Option<&str>,
+    name: &str,
+) -> AppResult<()> {
+    if name_taken(db, owner_id, parent_id, name).await? {
         return Err(AppError::Conflict(format!("已存在同名项目: {name}")));
     }
     Ok(())
+}
+
+/// 将文件名拆分为主干与扩展名（含前导点）；资料夹或无扩展名时后者为空串。
+/// 首字符为 `.` 的隐藏文件（如 `.gitignore`）不视为有扩展名。
+fn split_stem_ext(name: &str, is_folder: bool) -> (&str, &str) {
+    if is_folder {
+        return (name, "");
+    }
+    match name.rfind('.') {
+        Some(pos) if pos > 0 => (&name[..pos], &name[pos..]),
+        _ => (name, ""),
+    }
+}
+
+/// 若 `desired` 在目标目录下已被占用，仿照操作系统复制文件的做法，
+/// 依次尝试 `stem(1)ext`、`stem(2)ext`……直到找到可用名称；否则原样返回。
+pub async fn dedupe_name(
+    db: &Db,
+    owner_id: &str,
+    parent_id: Option<&str>,
+    desired: &str,
+    is_folder: bool,
+) -> AppResult<String> {
+    if !name_taken(db, owner_id, parent_id, desired).await? {
+        return Ok(desired.to_string());
+    }
+    let (stem, ext) = split_stem_ext(desired, is_folder);
+    for n in 1..10_000 {
+        let candidate = format!("{stem}({n}){ext}");
+        if !name_taken(db, owner_id, parent_id, &candidate).await? {
+            return Ok(candidate);
+        }
+    }
+    Err(AppError::Conflict(format!("无法为 {desired} 生成可用名称")))
 }
 
 /// 插入一条文件/资料夹行。
@@ -365,5 +409,41 @@ pub async fn full_path(
         Ok(name.to_string())
     } else {
         Ok(format!("{parent}/{name}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn split_stem_ext_simple_file() {
+        assert_eq!(split_stem_ext("photo.jpg", false), ("photo", ".jpg"));
+    }
+
+    #[test]
+    fn split_stem_ext_multi_dot() {
+        assert_eq!(split_stem_ext("archive.tar.gz", false), ("archive.tar", ".gz"));
+    }
+
+    #[test]
+    fn split_stem_ext_dotfile_has_no_extension() {
+        assert_eq!(split_stem_ext(".gitignore", false), (".gitignore", ""));
+    }
+
+    #[test]
+    fn split_stem_ext_no_extension() {
+        assert_eq!(split_stem_ext("Makefile", false), ("Makefile", ""));
+    }
+
+    #[test]
+    fn split_stem_ext_folder_never_split() {
+        assert_eq!(split_stem_ext("Documents.old", true), ("Documents.old", ""));
+    }
+
+    #[test]
+    fn dedupe_suffix_has_no_space() {
+        let (stem, ext) = split_stem_ext("photo.jpg", false);
+        assert_eq!(format!("{stem}(1){ext}"), "photo(1).jpg");
     }
 }
