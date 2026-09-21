@@ -15,6 +15,10 @@ pub enum AppError {
     #[error("无权访问该资源")]
     Forbidden,
 
+    /// 403，但带上可读原因（例如标识由 Google/Apple 托管、本地不可编辑）。
+    #[error("{0}")]
+    ForbiddenReason(String),
+
     #[error("资源不存在")]
     NotFound,
 
@@ -67,14 +71,16 @@ impl AppError {
             AppError::NotFound | AppError::BadRequest(_) | AppError::PayloadTooLarge => {
                 tracing::debug!(error = %self, "请求被拒绝");
             }
-            AppError::Unauthorized | AppError::Forbidden => {}
+            AppError::Unauthorized | AppError::Forbidden | AppError::ForbiddenReason(_) => {}
         }
     }
 
     fn parts(&self) -> (StatusCode, &'static str) {
         match self {
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED"),
-            AppError::Forbidden => (StatusCode::FORBIDDEN, "FORBIDDEN"),
+            AppError::Forbidden | AppError::ForbiddenReason(_) => {
+                (StatusCode::FORBIDDEN, "FORBIDDEN")
+            }
             AppError::NotFound => (StatusCode::NOT_FOUND, "NOT_FOUND"),
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, "BAD_REQUEST"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT"),

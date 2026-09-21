@@ -55,6 +55,57 @@ pub async fn soft_delete(
     Ok(())
 }
 
+/// 删除账户时使用：把该用户所有未删除文件一次性标记删除，并为每个顶层项目
+/// 建立回收站记录。所有记录共用调用方传入的 `at`，这个时间戳就是批次标记——
+/// 还原账户时据此只还原「随删除一起进来的」项目，用户先前自己删掉的保持原样。
+/// 返回移入回收站的顶层项目数。
+pub async fn soft_delete_all_for_user(
+    db: &Db,
+    retention_days: i64,
+    owner_id: &str,
+    at: &str,
+) -> AppResult<u64> {
+    let at_dt = chrono::DateTime::parse_from_rfc3339(at)
+        .map_err(|e| AppError::Other(anyhow::anyhow!("删除时间戳解析失败: {e}")))?
+        .with_timezone(&Utc);
+    let expires = (at_dt + Duration::days(retention_days)).to_rfc3339();
+
+    let roots: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, name FROM files \
+         WHERE owner_id = ? AND is_deleted = 0 AND parent_id IS NULL",
+    )
+    .bind(owner_id)
+    .fetch_all(db)
+    .await?;
+
+    let mut tx = db.begin().await?;
+
+    // 整棵树一次更新即可，无需逐个子树遍历。
+    sqlx::query("UPDATE files SET is_deleted = 1, updated_at = ? WHERE owner_id = ? AND is_deleted = 0")
+        .bind(at)
+        .bind(owner_id)
+        .execute(&mut *tx)
+        .await?;
+
+    for (id, name) in &roots {
+        sqlx::query(
+            "INSERT INTO trash (id, file_id, owner_id, original_parent_id, original_name, deleted_at, expires_at) \
+             VALUES (?, ?, ?, NULL, ?, ?, ?)",
+        )
+        .bind(uuid::Uuid::new_v4().to_string())
+        .bind(id)
+        .bind(owner_id)
+        .bind(name)
+        .bind(at)
+        .bind(&expires)
+        .execute(&mut *tx)
+        .await?;
+    }
+
+    tx.commit().await?;
+    Ok(roots.len() as u64)
+}
+
 /// 列出用户回收站内容。
 pub async fn list(db: &Db, owner_id: &str) -> AppResult<Vec<TrashItem>> {
     let items = sqlx::query_as::<_, TrashItem>(

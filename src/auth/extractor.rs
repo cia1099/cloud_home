@@ -20,6 +20,33 @@ pub struct AuthUser {
     pub username: String,
 }
 
+/// 校验签名之后必须再查一次库：token 有效不代表账户仍然可用。
+/// 账户被停用（管理端删除）后，其旧 token 在过期前仍能通过签名校验，
+/// 若不查库，被删用户可继续操作、甚至把自己的文件从回收站里还原出来。
+/// 顺带取回当前用户名，让改名立刻反映到日志里。
+async fn active_user(state: &AppState, user_id: &str) -> Result<String, AppError> {
+    let row: Option<(String, i64)> =
+        sqlx::query_as("SELECT username, is_active FROM users WHERE id = ?")
+            .bind(user_id)
+            .fetch_optional(&state.db)
+            .await?;
+
+    match row {
+        Some((username, 1)) => Ok(username),
+        _ => {
+            crate::audit!(
+                warn,
+                "auth.token_rejected",
+                "failure",
+                reason = "user_inactive",
+                user_id = %user_id,
+                "令牌对应的账户已停用或不存在"
+            );
+            Err(AppError::Unauthorized)
+        }
+    }
+}
+
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = AppError;
 
@@ -35,16 +62,17 @@ impl FromRequestParts<AppState> for AuthUser {
             }
         };
         let claims = jwt::verify(&state.config.jwt_secret, &token)?;
+        let username = active_user(state, &claims.sub).await?;
 
         // 回填当前请求 span 的 user_id / username，使本次请求的所有日志行
         // （含 error.rs 中无上下文的那条）都带上可读身份。
         let span = tracing::Span::current();
         span.record("user_id", claims.sub.as_str());
-        span.record("username", claims.username.as_str());
+        span.record("username", username.as_str());
 
         Ok(AuthUser {
             user_id: claims.sub,
-            username: claims.username,
+            username,
         })
     }
 }

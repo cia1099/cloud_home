@@ -9,8 +9,8 @@ use crate::error::{AppError, AppResult, ErrorResponse};
 use crate::models::common::OkResponse;
 use crate::models::user::{AuthResponse, CreateUserDto, LoginDto, User, UserResponse};
 use crate::openapi::ApiResponse;
+use crate::services::user_service;
 use crate::state::AppState;
-use crate::util::now_rfc3339;
 
 /// POST /auth/register
 #[utoipa::path(
@@ -20,53 +20,61 @@ use crate::util::now_rfc3339;
     request_body = CreateUserDto,
     responses(
         (status = 201, description = "注册成功", body = ApiResponse<AuthResponse>),
-        (status = 400, description = "参数校验失败", body = ErrorResponse),
-        (status = 409, description = "用户名或邮箱已被注册", body = ErrorResponse),
+        (status = 400, description = "参数校验失败，或未提供邮箱与手机号", body = ErrorResponse),
+        (status = 409, description = "邮箱或手机号已被注册", body = ErrorResponse),
     )
 )]
 pub async fn register(
     State(state): State<AppState>,
     Json(dto): Json<CreateUserDto>,
 ) -> AppResult<(StatusCode, HeaderMap, ApiResponse<AuthResponse>)> {
-    validate_registration(&dto)?;
-
-    // 唯一性检查（username / email）。
-    let existing: Option<(String,)> =
-        sqlx::query_as("SELECT id FROM users WHERE username = ? OR email = ?")
-            .bind(&dto.username)
-            .bind(&dto.email)
-            .fetch_optional(&state.db)
-            .await?;
-    if existing.is_some() {
-        crate::audit!(
-            warn,
-            "auth.register",
-            "failure",
-            reason = "duplicate_username_or_email",
-            username = %dto.username,
-            "注册失败：用户名或邮箱已被注册"
-        );
-        return Err(AppError::Conflict("用户名或邮箱已被注册".into()));
+    let username = dto.username.trim();
+    if username.chars().count() < 3 {
+        return Err(AppError::BadRequest("用户名至少 3 个字符".into()));
+    }
+    if dto.password.len() < 8 {
+        return Err(AppError::BadRequest("密码至少 8 个字符".into()));
     }
 
-    let id = uuid::Uuid::new_v4().to_string();
-    let now = now_rfc3339();
-    let hash = password::hash(&dto.password)?;
+    // 邮箱与手机号至少给一个——否则账户没有任何可登录的标识。
+    let email = dto
+        .email
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(user_service::normalize_email)
+        .transpose()?;
+    let phone = dto
+        .phone
+        .as_deref()
+        .filter(|s| !s.trim().is_empty())
+        .map(user_service::normalize_phone)
+        .transpose()?;
+    if email.is_none() && phone.is_none() {
+        return Err(AppError::BadRequest("请至少提供邮箱或手机号".into()));
+    }
 
-    sqlx::query(
-        "INSERT INTO users (id, username, email, password_hash, created_at, updated_at, is_active) \
-         VALUES (?, ?, ?, ?, ?, ?, 1)",
+    // 用户名不再要求唯一；重复的邮箱/手机号由唯一索引在 service 层转成 409。
+    let user = user_service::create(
+        &state.db,
+        username,
+        &dto.password,
+        email.as_deref(),
+        phone.as_deref(),
     )
-    .bind(&id)
-    .bind(&dto.username)
-    .bind(&dto.email)
-    .bind(&hash)
-    .bind(&now)
-    .bind(&now)
-    .execute(&state.db)
-    .await?;
+    .await
+    .inspect_err(|e| {
+        if matches!(e, AppError::Conflict(_)) {
+            crate::audit!(
+                warn,
+                "auth.register",
+                "failure",
+                reason = "duplicate_identifier",
+                username = %username,
+                "注册失败：邮箱或手机号已被使用"
+            );
+        }
+    })?;
 
-    let user = fetch_user(&state, &id).await?;
     crate::audit!(
         info,
         "auth.register",
@@ -75,7 +83,7 @@ pub async fn register(
         username = %user.username,
         "注册成功"
     );
-    issue_auth_response(&state, user, StatusCode::CREATED)
+    issue_auth_response(&state, user, StatusCode::CREATED).await
 }
 
 /// POST /auth/login
@@ -93,27 +101,34 @@ pub async fn login(
     State(state): State<AppState>,
     Json(dto): Json<LoginDto>,
 ) -> AppResult<(StatusCode, HeaderMap, ApiResponse<AuthResponse>)> {
-    let found = sqlx::query_as::<_, User>(
-        "SELECT * FROM users WHERE (username = ? OR email = ?) AND is_active = 1",
-    )
-    .bind(&dto.identifier)
-    .bind(&dto.identifier)
-    .fetch_optional(&state.db)
-    .await?;
+    // identifier 可以是邮箱或手机号；两者都规范化后再查，避免大小写/空白错配。
+    let identifier = normalize_login_identifier(&dto.identifier);
 
-    let Some(user) = found else {
+    let Some(user) = user_service::find_for_login(&state.db, &identifier).await? else {
         crate::audit!(
             warn,
             "auth.login",
             "failure",
             reason = "unknown_user",
-            identifier = %dto.identifier,
+            identifier = %crate::services::otp_service::mask(&identifier),
             "登录失败：用户不存在"
         );
         return Err(AppError::Unauthorized);
     };
 
-    if !password::verify(&dto.password, &user.password_hash) {
+    let Some(credential) = user_service::password_credential(&state.db, &user.id).await? else {
+        crate::audit!(
+            warn,
+            "auth.login",
+            "failure",
+            reason = "no_password_credential",
+            user_id = %user.id,
+            "登录失败：该账户未设置密码（仅限第三方登录）"
+        );
+        return Err(AppError::Unauthorized);
+    };
+
+    if !password::verify(&dto.password, credential.secret.as_deref().unwrap_or("")) {
         crate::audit!(
             warn,
             "auth.login",
@@ -134,7 +149,17 @@ pub async fn login(
         username = %user.username,
         "登录成功"
     );
-    issue_auth_response(&state, user, StatusCode::OK)
+    issue_auth_response(&state, user, StatusCode::OK).await
+}
+
+/// 登录标识既可能是邮箱也可能是手机号，按形态分别规范化；
+/// 规范化失败就原样返回，交给后续查表落到「用户不存在」。
+fn normalize_login_identifier(raw: &str) -> String {
+    if raw.contains('@') {
+        user_service::normalize_email(raw).unwrap_or_else(|_| raw.trim().to_lowercase())
+    } else {
+        user_service::normalize_phone(raw).unwrap_or_else(|_| raw.trim().to_string())
+    }
 }
 
 /// POST /auth/logout
@@ -173,35 +198,15 @@ pub async fn me(
     State(state): State<AppState>,
     user: AuthUser,
 ) -> AppResult<ApiResponse<UserResponse>> {
-    let u = fetch_user(&state, &user.user_id).await?;
-    Ok(ApiResponse::new(UserResponse::from(u)))
+    let u = user_service::get(&state.db, &user.user_id).await?;
+    let ids = user_service::identities(&state.db, &user.user_id).await?;
+    Ok(ApiResponse::new(UserResponse::build(&u, &ids)))
 }
 
 // ---- 辅助 ----
 
-fn validate_registration(dto: &CreateUserDto) -> AppResult<()> {
-    if dto.username.trim().len() < 3 {
-        return Err(AppError::BadRequest("用户名至少 3 个字符".into()));
-    }
-    if !dto.email.contains('@') {
-        return Err(AppError::BadRequest("邮箱格式不正确".into()));
-    }
-    if dto.password.len() < 8 {
-        return Err(AppError::BadRequest("密码至少 8 个字符".into()));
-    }
-    Ok(())
-}
-
-async fn fetch_user(state: &AppState, id: &str) -> AppResult<User> {
-    sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = ?")
-        .bind(id)
-        .fetch_optional(&state.db)
-        .await?
-        .ok_or(AppError::NotFound)
-}
-
 /// 签发 JWT，设置 auth_token Cookie，并返回 token + expires_at + user。
-fn issue_auth_response(
+pub(crate) async fn issue_auth_response(
     state: &AppState,
     user: User,
     status: StatusCode,
@@ -209,20 +214,17 @@ fn issue_auth_response(
     let (token, expires_at) = jwt::issue(
         &state.config.jwt_secret,
         &user.id,
-        &user.username,
         state.config.jwt_expires_in_hours,
     )?;
 
     let mut headers = HeaderMap::new();
-    headers.insert(
-        SET_COOKIE,
-        build_auth_cookie(state, &token).parse().unwrap(),
-    );
+    headers.insert(SET_COOKIE, build_auth_cookie(state, &token).parse().unwrap());
 
+    let ids = user_service::identities(&state.db, &user.id).await?;
     let body = AuthResponse {
         token,
         expires_at,
-        user: UserResponse::from(user),
+        user: UserResponse::build(&user, &ids),
     };
     Ok((status, headers, ApiResponse::new(body)))
 }

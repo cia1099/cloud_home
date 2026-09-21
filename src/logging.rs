@@ -9,9 +9,11 @@
 //! - `http`：访问日志（每个请求一行，含 request_id、状态、耗时）；
 //! - `cloud_home::*`：普通诊断日志。
 
+use std::net::IpAddr;
 use std::time::Duration;
 
 use axum::extract::{ConnectInfo, MatchedPath, Request};
+use axum::http::{Extensions, HeaderMap};
 use axum::response::Response;
 use file_rotate::compression::Compression;
 use file_rotate::suffix::AppendCount;
@@ -130,7 +132,9 @@ pub fn make_span<B>(req: &Request<B>, trust_proxy: bool) -> Span {
         .get::<MatchedPath>()
         .map(MatchedPath::as_str)
         .unwrap_or("unknown");
-    let ip = client_ip(req, trust_proxy);
+    let ip = client_ip(req.headers(), req.extensions(), trust_proxy)
+        .map(|ip| ip.to_string())
+        .unwrap_or_else(|| "unknown".to_string());
 
     tracing::info_span!(
         "http",
@@ -145,28 +149,34 @@ pub fn make_span<B>(req: &Request<B>, trust_proxy: bool) -> Span {
 
 /// 解析客户端 IP：仅在信任反向代理时读取 `X-Forwarded-For` / `X-Real-IP`，
 /// 否则用 TCP 对端地址（`ConnectInfo`）。默认不信任，防伪造。
-fn client_ip<B>(req: &Request<B>, trust_proxy: bool) -> String {
+///
+/// 取 headers/extensions 而非整个 `Request`，好让请求提取器（`Parts`）
+/// 也能复用同一份判定——「客户端 IP 是什么」只此一处定义，不会各写各的。
+pub(crate) fn client_ip(
+    headers: &HeaderMap,
+    extensions: &Extensions,
+    trust_proxy: bool,
+) -> Option<IpAddr> {
     if trust_proxy {
-        if let Some(first) = req
-            .headers()
+        if let Some(first) = headers
             .get("x-forwarded-for")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.split(',').next())
+            && let Ok(ip) = first.trim().parse::<IpAddr>()
         {
-            return first.trim().to_string();
+            return Some(ip);
         }
-        if let Some(ip) = req
-            .headers()
+        if let Some(ip) = headers
             .get("x-real-ip")
             .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<IpAddr>().ok())
         {
-            return ip.trim().to_string();
+            return Some(ip);
         }
     }
-    req.extensions()
+    extensions
         .get::<ConnectInfo<std::net::SocketAddr>>()
-        .map(|ci| ci.0.ip().to_string())
-        .unwrap_or_else(|| "unknown".to_string())
+        .map(|ci| ci.0.ip())
 }
 
 /// `TraceLayer::on_response` 回调：每个请求完成时发一条访问日志。

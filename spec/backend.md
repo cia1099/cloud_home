@@ -73,7 +73,7 @@ cloud_home/
 ├── .env                              # 本地环境变量（git ignore）
 ├── .env.example                      # 模板（纳入 git）
 ├── migrations/
-│   ├── 20240101000001_create_users.sql
+│   ├── 20240101000001_create_users.sql   # users + user_identities + otp_codes
 │   ├── 20240101000002_create_drives.sql
 │   ├── 20240101000003_create_files.sql
 │   ├── 20240101000004_create_trash.sql
@@ -87,7 +87,7 @@ cloud_home/
     ├── db/
     │   └── mod.rs        # SqlitePool 初始化，运行 sqlx migrate
     ├── models/
-    │   ├── user.rs       # User, CreateUserDto, LoginDto
+    │   ├── user.rs       # User, UserIdentity, 各类 DTO 与 UserResponse
     │   ├── file.rs       # FileEntry, FileType enum
     │   ├── share.rs      # ShareLink
     │   └── trash.rs      # TrashEntry
@@ -102,6 +102,8 @@ cloud_home/
     ├── handlers/
     │   ├── mod.rs        # Router 组装，中间件注册
     │   ├── auth.rs       # /auth/*
+    │   ├── me.rs         # /me/*（显示名、密码、标识增改删与验证）
+    │   ├── admin.rs      # /admin/users*（共享口令 + 内网限制，AdminGuard 提取器）
     │   ├── files.rs      # /files/*
     │   ├── folders.rs    # /folders
     │   ├── search.rs     # /search
@@ -111,6 +113,8 @@ cloud_home/
     │   └── drives.rs     # /drives
     ├── services/
     │   ├── file_service.rs   # 文件业务逻辑（上传/下载/移动）
+    │   ├── user_service.rs   # 用户与身份（凭证/标识）、账户软删除与还原
+    │   ├── otp_service.rs    # 验证码签发/投递/校验（投递目前为日志占位）
     │   ├── trash_service.rs  # 软删除、恢复、清理
     │   └── share_service.rs  # token 生成与验证
     └── tasks/
@@ -122,19 +126,62 @@ cloud_home/
 ## 数据库 Schema
 
 ### migrations/20240101000001_create_users.sql
+
+账户基础三张表。`users` 只存个人资料，凭证与标识都在 `user_identities`：
+
 ```sql
 CREATE TABLE users (
-    id            TEXT PRIMARY KEY,
-    username      TEXT NOT NULL UNIQUE,
-    email         TEXT NOT NULL UNIQUE,
-    password_hash TEXT NOT NULL,
-    created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL,
-    is_active     INTEGER NOT NULL DEFAULT 1
+    id         TEXT PRIMARY KEY,
+    username   TEXT NOT NULL,           -- 显示名：可变、不唯一
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    is_active  INTEGER NOT NULL DEFAULT 1,
+    deleted_at TEXT                     -- 账户被运维删除的时刻，同时是回收站批次标记
 );
-CREATE INDEX idx_users_email    ON users(email);
 CREATE INDEX idx_users_username ON users(username);
+
+CREATE TABLE user_identities (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL,
+    provider    TEXT NOT NULL,          -- 'password' | 'email' | 'phone' | 'google' | 'apple'
+    identifier  TEXT NOT NULL,          -- email | E.164 手机号 | 第三方 subject
+    secret      TEXT,                   -- 仅 'password' 存 argon2 哈希
+    verified_at TEXT,                   -- 经 OTP 或第三方确认后写入
+    managed_by  TEXT,                   -- NULL = 用户自有可编辑；'google'|'apple' = 第三方托管只读
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL,
+    UNIQUE (provider, identifier),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE otp_codes (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT,                   -- 可空：为将来手机注册 / 登录预留
+    purpose     TEXT NOT NULL,          -- 'identifier_old' | 'identifier_verify'
+    destination TEXT NOT NULL,
+    code_hash   TEXT NOT NULL,          -- argon2 哈希，绝不明文存储
+    attempts    INTEGER NOT NULL DEFAULT 0,
+    expires_at  TEXT NOT NULL,
+    consumed_at TEXT,
+    created_at  TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
 ```
+
+几个必须记住的取舍：
+
+- **`username` 刻意没有 `UNIQUE`**：它只是显示名，随时可改。顺带一提，
+  SQLite 的列级 `UNIQUE` 由隐式索引支撑、无法单独 DROP——一旦加上，日后想去掉
+  就只能整表重建。这里从一开始就不加。
+- **`password` 与 `email` 是两行**：密码属于账户，邮箱是可更换的标识。拆开之后
+  换邮箱不会碰到密码哈希。`password` 行的 `identifier` 只作留痕，查找一律走
+  `email` / `phone` 行。
+- **`managed_by` 按「每条标识」记录归属，而非按账户**。同一账户可两者兼有：
+  先用邮箱注册、之后绑定 Google 的用户，其邮箱仍归自己编辑。若按账户判定
+  「有 google 标识就全部只读」，会把用户自己建的标识错误冻结。
+- **`users.deleted_at` 是回收站批次标记**：运维删除账户时，该时刻同时写入
+  `users.deleted_at` 与本次产生的每一条 `trash.deleted_at`。还原时据此只还原
+  「随删除一起进来的」项目，用户先前自己删掉的东西保持在回收站里。
 
 ### migrations/20240101000002_create_drives.sql
 ```sql
@@ -231,10 +278,71 @@ Base URL: `http://localhost:8080/api/v1`
 
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
-| POST | /auth/register | 无 | 注册账户，设置 auth_token Cookie，同时返回 token 字段 |
-| POST | /auth/login    | 无 | 登录，设置 auth_token Cookie，同时返回 token + expires_at |
+| POST | /auth/register | 无 | 注册账户（`email` 与 `phone` 至少给一个），设置 auth_token Cookie，同时返回 token 字段 |
+| POST | /auth/login    | 无 | 登录，`identifier` 可为邮箱或手机号，设置 auth_token Cookie，同时返回 token + expires_at |
 | POST | /auth/logout   | JWT | 清除 auth_token Cookie（`Set-Cookie: auth_token=; Max-Age=0`） |
-| GET  | /auth/me       | JWT | 获取当前用户信息 |
+| GET  | /auth/me       | JWT | 获取当前用户信息（含各标识的 verified / managed_by 与 has_password） |
+
+**用户名不唯一**，它只是可随时修改的显示名；登录一律靠邮箱或手机号。
+JWT 的 Claims 里**不带用户名**——`AuthUser` 提取时本就要查库确认账户仍启用，
+顺带取回当前用户名即可，改名能立刻反映到日志里，不存在过时副本。
+
+**注册不做归属校验**（开发期取舍）：可以填入任意邮箱 / 手机号，落库时
+`verified_at` 为空。这带来两个后果，都是有意接受的：
+
+- 未验证的标识同样占用 `UNIQUE(provider, identifier)` 名额，理论上可抢占他人地址。
+  家庭局域网场景可接受；真要对公网开放时应先补上注册验证——`verified_at`
+  与 `purpose` 词表都已就位，属于纯增量改动，无需迁移。
+- 填错的标识**改不回来**：改标识需要旧通道验证码，而验证码发不到一个不存在的地址。
+  逃生出口是运维删除该账户后重新注册（见下方运维端点）。
+
+### 个人资料
+
+| 方法 | 路径 | 认证 | 说明 |
+|------|------|------|------|
+| PATCH  | /me                            | JWT | 修改显示名（非登录标识，无需二次验证） |
+| POST   | /me/password                   | JWT | 修改密码（需当前密码） |
+| POST   | /me/identifier/challenge       | JWT | 向「现有标识」发送验证码，用于随后的增改删 |
+| PUT    | /me/identifier                 | JWT | 新增或修改邮箱 / 手机号 |
+| DELETE | /me/identifier                 | JWT | 删除邮箱 / 手机号（至少须保留一个） |
+| POST   | /me/identifier/verify/request  | JWT | 向自己已登记的标识发送验证码 |
+| POST   | /me/identifier/verify          | JWT | 提交验证码，置 `verified_at` |
+
+**标识变更的两个因素，缺一不可**（这条规则不直观，容易在日后被「简化」掉，故记在此）：
+
+1. 当前密码；
+2. 发往**现有标识**的验证码。
+
+第 2 条才是关键：只验密码的话，密码一旦泄露，攻击者就能把邮箱换成自己的，
+从而永久接管账户；验证旧通道能证明请求者确实持有这个账户。手机与邮箱同等对待——
+旧手机作为持有证明并不比旧邮箱弱。它同时堵住了迂回路径：否则可以先凭密码删掉邮箱、
+再添加自己的，两步达成同样的接管（所以**删除**也要求旧通道验证码）。
+
+**「证明新值」与「设置新值」是解耦的**：新标识一律以未验证状态落库，用户随时可用
+上面的 verify 端点把它标记为已验证。验证码按 `purpose` 隔离，
+`identifier_old` 的码不能拿去当 `identifier_verify` 用。
+
+OTP 限制：6 位数字、5 分钟有效、单码最多 5 次尝试、同一目标每小时最多 3 条。
+**投递目前是开发期占位**：没有 SMTP / SMS 通道，验证码直接写进审计日志
+（`otp.issued`），接入真实发送方时只需替换 `otp_service::deliver` 一个函数。
+
+### 第三方登录（Google / Apple）的约定
+
+OAuth 登录本身（客户端凭证、令牌交换、回调路由）尚未实现，此处先固定契约与支撑它的 schema：
+
+- 第三方托管的标识（`managed_by` 非空）在本地**只读**：`/me/identifier` 一律返回 403，
+  提示去对应平台修改；纯第三方账户也不需要密码，`/me/password` 同样 403。
+- **每次 OAuth 登录都按第三方响应同步资料**：`username` 每次覆盖，
+  `managed_by = <该 provider>` 的标识行随之更新；`managed_by IS NULL` 的行绝不碰。
+  （副作用：在个人资料里改的显示名，只能保留到该用户下次第三方登录为止。）
+- **账户关联**：若第三方返回的、已验证的邮箱能对上某个账户的 `email` 标识，
+  就把 `google`/`apple` 标识挂到**那个账户**上，而不是新建一个——否则用户会多出一个
+  空账户，看起来文件全没了。
+- **第三方邮箱必须是已验证的**。若对方未声明邮箱已验证（或 Apple 返回私密转发地址），
+  **明确拒绝登录并说明原因**，不要静默改为新建账户、也不要隐瞒理由；
+  拿未经证实的地址做关联，正是上面用旧通道验证码堵掉的那条接管路径。
+- **同步撞名**：第三方邮箱已属于另一个账户时，跳过该字段、记一条 `audit!` 警告、
+  放行登录——不该因为一个资料字段把人挡在自己的文件之外。
 
 ### 硬盘状态
 
@@ -421,6 +529,44 @@ LIMIT ? OFFSET ?
 5. **CORS**：必须 `allow_credentials(true)` + 明确 `allowed_origins`（不能用 `*`）；前端请求加 `credentials: 'include'`
 6. **分享 token**：32 字节 CSPRNG + base64url，256-bit 熵
 7. **上传限制**：`tower_http::limit::RequestBodyLimitLayer` 在 handler 前拦截
+8. **令牌不等于账户仍可用**：`AuthUser` 提取时在验签之后**必须再查一次库**确认
+   `is_active = 1`。签名有效只说明令牌没被篡改；账户被运维删除后，其旧令牌在过期前
+   （默认 7 天）依然能通过验签——不查库的话，被删用户可以继续操作，甚至把自己的文件
+   从回收站里还原出来。这次查询顺带取回当前用户名，写入请求 span。
+
+### 运维端点（删除 / 还原账户）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET  | /admin/users         | 列出所有账户（含已停用）及其标识 |
+| POST | /admin/users/delete  | 软删除账户 |
+| POST | /admin/users/restore | 还原账户 |
+
+**这不是权限系统**：没有管理员角色，只有一个共享口令加一层来源限制。三道关卡按序执行，
+且都在读取请求体之前（`AdminGuard` 提取器）：
+
+1. 未配置 `ADMIN_PASSWORD` → `404`（功能没开，就当这条路由不存在）；
+2. 调用方 IP 非回环 / 内网 → `403`，并记 `reason="remote_caller"`；
+3. `X-Admin-Password` 缺失或不符 → `401`（定长比较，避免按字节提前返回泄露前缀）。
+
+口令与请求头的值**绝不写入日志**，`Config` 的手写 `Debug` 也对其脱敏。
+
+> 来源限制的局限要正视：反向代理在前时，对端 IP 就是网关自己的回环地址，内网判定会
+> 形同虚设，除非开启 `TRUST_PROXY_HEADERS` 并信任 `X-Forwarded-For`。它是给局域网机器
+> 加的一层防护，不能替代口令本身。
+
+**定位账户**用请求体里的 `identifier`（匹配**任意** provider：邮箱、手机号，
+或 Google/Apple subject——纯第三方账户既无邮箱也无手机号，必须够得着），
+放在 body 而非 URL，免得出现在上游访问日志里。由于 `UNIQUE` 是
+`(provider, identifier)` 的组合，同一字符串可能在不同 provider 下属于不同账户，
+命中多个时返回 `409`，要求用可选的 `provider` 消歧——绝不猜测删哪一个。
+
+**删除的语义**：该用户所有未删除文件一次性进回收站（共用同一 `deleted_at` 作为批次标记），
+账户置 `is_active = 0`。**用户行永不物理删除**，回收站清理任务到期后只清文件，
+因此保留期过后还原会得到一个可用但空的账户。分享链接刻意不动——
+`share_service::resolve_public` 本就要求文件 `is_deleted = 0`，
+所以链接在文件进回收站的瞬间自然失效，还原后又自动恢复，且每条链接原本的
+`is_active` 不受影响。
 
 ---
 
@@ -541,6 +687,9 @@ LOG_FILE_ENABLED=true
 LOG_MAX_SIZE_MB=1
 # 是否信任反向代理的 X-Forwarded-For / X-Real-IP（生产上 nginx/Caddy 之后再开启）
 TRUST_PROXY_HEADERS=false
+# 运维端点（/admin/users）的共享口令；留空 = 这些端点一律 404（功能关闭）。
+# 另有一层「调用方须来自回环或内网」的限制，注意其在反向代理之后会失效。
+ADMIN_PASSWORD=
 ```
 
 > `DATABASE_URL` 由程序在运行时根据侦测到的硬盘路径自动构造，无需在 .env 中写死。

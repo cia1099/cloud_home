@@ -31,6 +31,8 @@ pub struct Config {
     pub log_max_size_mb: u64,
     /// 是否信任反向代理的 `X-Forwarded-For` / `X-Real-IP`（默认 false，防伪造）。
     pub trust_proxy_headers: bool,
+    /// 运维端点（删除 / 还原账户）的共享口令。未设置即关闭这些端点。
+    pub admin_password: Option<String>,
 }
 
 impl std::fmt::Debug for Config {
@@ -52,6 +54,10 @@ impl std::fmt::Debug for Config {
             .field("log_file_enabled", &self.log_file_enabled)
             .field("log_max_size_mb", &self.log_max_size_mb)
             .field("trust_proxy_headers", &self.trust_proxy_headers)
+            .field(
+                "admin_password",
+                &self.admin_password.as_ref().map(|_| "<redacted>"),
+            )
             .finish()
     }
 }
@@ -84,6 +90,9 @@ impl Config {
             log_file_enabled: env_parse("LOG_FILE_ENABLED", true)?,
             log_max_size_mb: env_parse("LOG_MAX_SIZE_MB", 1)?,
             trust_proxy_headers: env_parse("TRUST_PROXY_HEADERS", false)?,
+            admin_password: std::env::var("ADMIN_PASSWORD")
+                .ok()
+                .filter(|s| !s.trim().is_empty()),
         })
     }
 

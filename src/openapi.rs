@@ -34,7 +34,13 @@ impl<T: Serialize> IntoResponse for ApiResponse<T> {
 /// OpenAPI 顶层文档定义。具体 `paths` 由 `handlers::build_router` 中 `routes!` 宏收集的
 /// 路由信息合并而来，此处只负责安全方案等全局元数据。
 #[derive(OpenApiDerive)]
-#[openapi(modifiers(&SecurityAddon))]
+#[openapi(
+    modifiers(&SecurityAddon),
+    tags(
+        (name = "me", description = "个人资料：显示名、密码、邮箱 / 手机号的增改删与验证"),
+        (name = "admin", description = "运维操作：由共享口令 ADMIN_PASSWORD 与内网来源限制保护，非角色权限系统"),
+    )
+)]
 pub struct ApiDoc;
 
 /// 注册 Cookie / Bearer 两种认证方式，对应 `AuthUser` 提取器的双模式校验逻辑。

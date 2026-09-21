@@ -1,10 +1,12 @@
 //! Router 组装与中间件注册。
 
+pub mod admin;
 pub mod auth;
 pub mod drives;
 pub mod events;
 pub mod files;
 pub mod folders;
+pub mod me;
 pub mod public;
 pub mod search;
 pub mod shares;
@@ -41,6 +43,17 @@ pub fn build_router(state: AppState) -> Router {
         .routes(routes!(auth::login))
         .routes(routes!(auth::logout))
         .routes(routes!(auth::me))
+        // 个人资料
+        .routes(routes!(me::update_profile))
+        .routes(routes!(me::change_password))
+        .routes(routes!(me::challenge))
+        .routes(routes!(me::change_identifier, me::remove_identifier))
+        .routes(routes!(me::verify_request))
+        .routes(routes!(me::verify_identifier))
+        // 运维（共享口令 + 内网限制保护）
+        .routes(routes!(admin::list_users))
+        .routes(routes!(admin::delete_user))
+        .routes(routes!(admin::restore_user))
         // 硬盘
         .routes(routes!(drives::list))
         // 文件
