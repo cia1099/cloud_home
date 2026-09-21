@@ -212,3 +212,12 @@ pub struct AdminActionResponse {
     /// 删除时为移入回收站的顶层项目数；还原时为还原的项目数。
     pub affected_items: u64,
 }
+
+/// 管理端清空某账户回收站的结果。带上账户信息，运维才看得出到底清了谁。
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminPurgeResponse {
+    pub user_id: String,
+    pub username: String,
+    pub deleted_count: i64,
+    pub freed_bytes: i64,
+}

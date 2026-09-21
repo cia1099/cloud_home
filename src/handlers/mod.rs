@@ -54,6 +54,7 @@ pub fn build_router(state: AppState) -> Router {
         .routes(routes!(admin::list_users))
         .routes(routes!(admin::delete_user))
         .routes(routes!(admin::restore_user))
+        .routes(routes!(admin::purge_trash))
         // 硬盘
         .routes(routes!(drives::list))
         // 文件

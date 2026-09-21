@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `POST /admin/trash/purge` empties a single account's trash immediately,
+  reclaiming the disk space without waiting out the retention window. This is
+  the only way to clear a removed account's files: deactivating an account
+  causes its own token to be rejected, so its `DELETE /trash` can no longer be
+  called. Works on active accounts too, and touches only the trash, never live
+  files. Irreversible — restoring afterwards yields a working but empty
+  account.
+
 ## [0.3.0] - 2026-09-21
 
 ### Added

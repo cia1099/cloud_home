@@ -15,12 +15,13 @@ use axum::extract::{FromRequestParts, State};
 use axum::http::request::Parts;
 
 use crate::error::{AppError, AppResult, ErrorResponse};
+use crate::models::event::{ChangeKind, FileChangeEvent};
 use crate::models::user::{
-    AdminActionResponse, AdminTargetDto, AdminUserItem, AdminUserListResponse, IdentityResponse,
-    PROVIDER_PASSWORD,
+    AdminActionResponse, AdminPurgeResponse, AdminTargetDto, AdminUserItem, AdminUserListResponse,
+    IdentityResponse, PROVIDER_PASSWORD,
 };
 use crate::openapi::ApiResponse;
-use crate::services::user_service;
+use crate::services::{trash_service, user_service};
 use crate::state::AppState;
 
 /// 管理端点守卫：功能开关 → 来源网段 → 共享口令，任一不过即拒。
@@ -237,6 +238,70 @@ pub async fn restore_user(
         user_id: user.id,
         username: user.username,
         affected_items: affected,
+    }))
+}
+
+/// POST /admin/trash/purge — 立即清空某账户的回收站（物理删除，不等保留期）。
+///
+/// 为什么必须有这个端点：账户被 `/admin/users/delete` 停用后，它的令牌会被拒绝，
+/// 于是它自己的 `DELETE /trash` 再也调不动——那批文件只能在盘上躺满保留期，
+/// 等清理任务来收。确认不再需要该账户时，这里可以立刻把空间要回来。
+///
+/// 对未停用的账户同样可用，纯粹当作「腾空间」使用；只动回收站，不碰在用文件。
+#[utoipa::path(
+    post,
+    path = "/admin/trash/purge",
+    tag = "admin",
+    request_body = AdminTargetDto,
+    params(("X-Admin-Password" = String, Header, description = "共享运维口令（ADMIN_PASSWORD）")),
+    responses(
+        (status = 200, description = "已清空；返回删除项目数与释放字节数", body = ApiResponse<AdminPurgeResponse>),
+        (status = 401, description = "口令缺失或错误", body = ErrorResponse),
+        (status = 403, description = "非本机 / 内网调用", body = ErrorResponse),
+        (status = 404, description = "账户不存在，或未配置 ADMIN_PASSWORD", body = ErrorResponse),
+        (status = 409, description = "标识命中多个账户，请用 provider 指定", body = ErrorResponse),
+        (status = 503, description = "外接硬盘不可用，无法物理删除", body = ErrorResponse),
+    )
+)]
+pub async fn purge_trash(
+    State(state): State<AppState>,
+    _guard: AdminGuard,
+    Json(dto): Json<AdminTargetDto>,
+) -> AppResult<ApiResponse<AdminPurgeResponse>> {
+    let target =
+        user_service::find_any(&state.db, dto.identifier.trim(), dto.provider.as_deref()).await?;
+
+    // 先确认盘在：物理删除做不了就不该动数据库，否则会留下指向不存在文件的空记录。
+    let data_root = state.drive_manager.require_data_root().await?;
+    let (count, bytes) = trash_service::empty(&state.db, &data_root, &target.id).await?;
+
+    crate::audit!(
+        info,
+        "admin.trash.purge",
+        "success",
+        target_user_id = %target.id,
+        target_username = %target.username,
+        deleted_count = count,
+        freed_bytes = bytes,
+        "运维清空账户回收站"
+    );
+
+    if count > 0 {
+        state.events.notify(
+            &target.id,
+            FileChangeEvent {
+                kind: ChangeKind::Purged,
+                file: None,
+                parent_ids: Vec::new(),
+            },
+        );
+    }
+
+    Ok(ApiResponse::new(AdminPurgeResponse {
+        user_id: target.id,
+        username: target.username,
+        deleted_count: count as i64,
+        freed_bytes: bytes as i64,
     }))
 }
 
