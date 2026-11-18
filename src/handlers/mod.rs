@@ -116,11 +116,25 @@ pub fn build_router(state: AppState) -> Router {
         .with_state(state)
 }
 
+/// GET /health 响应体。
+#[derive(serde::Serialize, utoipa::ToSchema)]
+pub struct HealthResponse {
+    pub status: &'static str,
+    /// 当前运行的版本（Cargo.toml `version`）。
+    pub version: &'static str,
+    /// 编译目标三元组，用于在线更新挑选对应的发布包。
+    pub target: &'static str,
+}
+
 #[utoipa::path(get, path = "/health", tag = "health", responses(
-    (status = 200, description = "服务健康", body = String)
+    (status = 200, description = "服务健康，附带版本信息", body = HealthResponse)
 ))]
-async fn health() -> &'static str {
-    "ok"
+async fn health() -> axum::Json<HealthResponse> {
+    axum::Json(HealthResponse {
+        status: "ok",
+        version: crate::version::VERSION,
+        target: crate::version::TARGET,
+    })
 }
 
 fn build_cors(state: &AppState) -> CorsLayer {

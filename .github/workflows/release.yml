@@ -1,0 +1,105 @@
+name: release
+
+# Pushing a tag like v0.4.0 (or v0.4.0-rc.1) builds every device target,
+# signs a manifest, and publishes a GitHub Release that devices update from.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { target: aarch64-unknown-linux-musl, os: ubuntu-24.04, cross: true }
+          - { target: x86_64-unknown-linux-musl,  os: ubuntu-24.04, cross: true }
+          - { target: aarch64-apple-darwin,       os: macos-14,     cross: false }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag must match Cargo.toml version
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          crate="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          if [ "$tag" != "$crate" ]; then
+            echo "tag v$tag != Cargo.toml version $crate" >&2; exit 1
+          fi
+          echo "VERSION=$tag" >> "$GITHUB_ENV"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build (cross, musl)
+        if: matrix.cross
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross --locked
+          cross build --release --target ${{ matrix.target }}
+
+      - name: Build (native)
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package
+        shell: bash
+        run: |
+          out="cloud_home-${VERSION}-${{ matrix.target }}"
+          mkdir -p "dist/$out"
+          cp "target/${{ matrix.target }}/release/cloud_home" "dist/$out/cloud_home"
+          tar -C dist -czf "dist/$out.tar.gz" "$out"
+          rm -rf "dist/$out"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*.tar.gz
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: Install minisign
+        run: sudo apt-get update && sudo apt-get install -y minisign
+
+      - name: Build manifest and sign it
+        env:
+          MINISIGN_SECRET_KEY: ${{ secrets.MINISIGN_SECRET_KEY }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          python3 scripts/make_manifest.py "$VERSION" "$GITHUB_REPOSITORY" dist
+          # Key is generated passwordless (`minisign -G -W`) and stored as a secret.
+          umask 077
+          printf '%s\n' "$MINISIGN_SECRET_KEY" > "$RUNNER_TEMP/minisign.key"
+          minisign -S -s "$RUNNER_TEMP/minisign.key" -m dist/manifest.json
+          rm -f "$RUNNER_TEMP/minisign.key"
+          ls -l dist
+
+      - name: Release notes from CHANGELOG
+        run: python3 scripts/changelog_section.py "${GITHUB_REF_NAME#v}" > notes.md
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          flags=""
+          case "$GITHUB_REF_NAME" in *-*) flags="--prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" $flags \
+            --title "$GITHUB_REF_NAME" --notes-file notes.md \
+            dist/*.tar.gz dist/manifest.json dist/manifest.json.minisig

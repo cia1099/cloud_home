@@ -17,6 +17,8 @@ pub enum ChangeEvent {
     Changed(Box<Change>),
     /// 全局失效：跨账户批量操作（如回收站定时清理）后使用，不逐个通知。
     RefreshAll,
+    /// 发现了新版本（载荷为版本号）。
+    UpdateAvailable(String),
 }
 
 /// 存储变更通知器，克隆开销低（内部共享一个 `broadcast::Sender`）。
@@ -43,6 +45,11 @@ impl ChangeNotifier {
     /// 通知所有账户重新拉取（范围未知的批量变更）。
     pub fn notify_all(&self) {
         let _ = self.tx.send(ChangeEvent::RefreshAll);
+    }
+
+    /// 通知所有连接：有新版本可装。
+    pub fn notify_update(&self, version: &str) {
+        let _ = self.tx.send(ChangeEvent::UpdateAvailable(version.to_string()));
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<ChangeEvent> {

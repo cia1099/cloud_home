@@ -5,13 +5,16 @@ mod drive;
 mod error;
 mod events;
 mod handlers;
+mod lifecycle;
 mod logging;
 mod models;
 mod openapi;
 mod services;
 mod state;
 mod tasks;
+mod update;
 mod util;
+mod version;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -24,8 +27,26 @@ use crate::drive::{DriveManager, detector, path_resolver};
 use crate::state::AppState;
 use crate::util::now_rfc3339;
 
+/// 优雅关停的最长等待：超过即放弃等在途传输，强制退出，避免被慢客户端无限期拖住。
+const SHUTDOWN_GRACE: std::time::Duration = std::time::Duration::from_secs(60);
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // 命令行开关必须在加载配置之前处理：更新器会在新版本上跑 `--self-test`，
+    // 此时不应要求 .env、也不应碰数据库。
+    match std::env::args().nth(1).as_deref() {
+        Some("--version") | Some("-V") => {
+            println!("cloud_home {} ({})", version::VERSION, version::TARGET);
+            return Ok(());
+        }
+        Some("--self-test") => {
+            // 能走到这里，说明二进制在本机 CPU/OS 上可执行、动态依赖齐全。
+            println!("ok {} {}", version::VERSION, version::TARGET);
+            return Ok(());
+        }
+        _ => {}
+    }
+
     // 先加载配置（内部会 dotenvy 读取 .env），再初始化日志——
     // 这样 .env 里的 RUST_LOG 才能对 EnvFilter 生效。
     let config = Arc::new(Config::from_env().context("加载配置失败")?);
@@ -50,6 +71,13 @@ async fn main() -> anyhow::Result<()> {
 
     // 3. 初始化数据库连接池并运行迁移。
     let db_path = path_resolver::db_path(&data_root);
+    // 启动守卫必须在迁移之前：新版本若反复起不来，要在它再次改动数据库前回滚（并还原备份）。
+    update::boot_guard::run(
+        &config.update_root,
+        update::is_managed(&config.update_root),
+        version::VERSION,
+        &db_path,
+    )?;
     let pool = db::init_pool(&db_path).await.context("初始化数据库失败")?;
     db::run_migrations(&pool).await.context("运行迁移失败")?;
 
@@ -60,6 +88,17 @@ async fn main() -> anyhow::Result<()> {
     drive_manager.set_active(Some(mount.clone())).await;
 
     let events = crate::events::ChangeNotifier::new();
+    let shutdown = tokio_util::sync::CancellationToken::new();
+
+    let activity = lifecycle::ActivityTracker::new();
+    let updater = update::Updater::new(
+        config.clone(),
+        pool.clone(),
+        drive_manager.clone(),
+        activity.clone(),
+        shutdown.clone(),
+        events.clone(),
+    )?;
 
     let state = AppState {
         db: pool.clone(),
@@ -67,6 +106,9 @@ async fn main() -> anyhow::Result<()> {
         drive_manager: drive_manager.clone(),
         drive_id,
         events: events.clone(),
+        activity,
+        shutdown: shutdown.clone(),
+        updater: updater.clone(),
     };
 
     // 6. 启动后台任务：回收站清理 + 硬盘监控。
@@ -77,6 +119,7 @@ async fn main() -> anyhow::Result<()> {
         events.clone(),
     );
     tasks::drive_monitor::spawn(config.clone(), drive_manager.clone(), mount.clone());
+    update::start(&updater);
 
     // 7. 启动 HTTP 服务。
     let app = handlers::build_router(state);
@@ -87,12 +130,24 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!(%addr, "Cloud Home 后端已启动");
 
     // into_make_service_with_connect_info 让 handler 能拿到 TCP 对端地址（client_ip）。
-    axum::serve(
+    let serve = axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
     )
-    .await
-    .context("服务运行出错")?;
+    .with_graceful_shutdown(lifecycle::shutdown_signal(shutdown.clone()));
+
+    // 优雅关停：停止接新连接、等在途请求收尾；但最多等 SHUTDOWN_GRACE。
+    // 令牌一旦被取消（信号或更新器），就开始计时。
+    tokio::select! {
+        res = serve => res.context("服务运行出错")?,
+        _ = async {
+            shutdown.cancelled().await;
+            tokio::time::sleep(SHUTDOWN_GRACE).await;
+        } => {
+            tracing::warn!(grace_secs = SHUTDOWN_GRACE.as_secs(), "优雅关停超时，强制退出");
+        }
+    }
+    tracing::info!("Cloud Home 后端已停止");
     Ok(())
 }
 

@@ -67,3 +67,10 @@ flate2 = "1.1.10"
 
 # 实时事件推送（SSE）
 async-stream = "0.3"
+reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider", "stream"] }
+# TLS 加密后端用 ring：交叉编译 musl 目标时比 aws-lc 省心（只需 C 编译器）
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+minisign-verify = "0.3"
+semver = "1"
+sha2 = "0.11"
+hex = "0.4"

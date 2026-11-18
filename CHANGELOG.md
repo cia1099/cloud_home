@@ -15,6 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   called. Works on active accounts too, and touches only the trash, never live
   files. Irreversible — restoring afterwards yields a working but empty
   account.
+- Online self-update. A tag-triggered GitHub Actions workflow builds
+  `aarch64`/`x86_64` Linux (musl) and Apple Silicon binaries and publishes a
+  minisign-signed `manifest.json` with each release. The device checks for new
+  releases (`UPDATE_MODE=manual|auto`, install window, stable/beta channel),
+  verifies the signature against a key compiled into the binary, checks the
+  package sha256, self-tests the new binary, backs up the database, swaps the
+  `current` symlink and restarts. A release that fails to start 3 times is
+  rolled back automatically, including the database, and is never retried.
+  Only runs from an install directory, never under `cargo run`. See
+  `spec/update.md`. (The `/admin/update` API is not implemented yet.)
+- The binary supports `--version` and `--self-test`.
+- Graceful shutdown on SIGTERM/Ctrl-C: in-flight requests get up to 60 s to
+  finish and SSE streams close themselves, so a restart no longer cuts them off
+  abruptly. A new SSE `update` event announces an available version.
+
+### Changed
+- `GET /health` now returns JSON (`status`, `version`, `target`) instead of the
+  plain text `ok`.
 
 ## [0.3.0] - 2026-09-21
 

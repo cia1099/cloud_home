@@ -4,6 +4,8 @@ use crate::config::Config;
 use crate::db::Db;
 use crate::drive::DriveManager;
 use crate::events::ChangeNotifier;
+use crate::lifecycle::ActivityTracker;
+use tokio_util::sync::CancellationToken;
 
 /// 各 handler 共享的应用状态。
 #[derive(Clone)]
@@ -15,4 +17,10 @@ pub struct AppState {
     pub drive_id: String,
     /// 存储变更广播通知器，供 SSE 端点订阅。
     pub events: ChangeNotifier,
+    /// 在途传输计数（上传/下载/打包），供在线更新判断是否空闲。
+    pub activity: ActivityTracker,
+    /// 关停令牌：取消即触发优雅关停（SIGTERM、更新重启都走它），SSE 流也监听它。
+    pub shutdown: CancellationToken,
+    /// 在线更新器。
+    pub updater: crate::update::Updater,
 }

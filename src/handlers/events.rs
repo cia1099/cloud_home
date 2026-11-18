@@ -65,6 +65,8 @@ pub async fn stream(
 
         loop {
             tokio::select! {
+                // 进程要关停（含在线更新重启）：主动结束流，否则优雅关停会被这条常驻连接拖住。
+                _ = state.shutdown.cancelled() => break,
                 res = rx.recv() => match res {
                     Ok(ChangeEvent::Changed(change)) if change.owner_id == owner_id => {
                         usage_dirty = true;
@@ -74,6 +76,11 @@ pub async fn stream(
                     }
                     Ok(ChangeEvent::Changed(_)) => {
                         // 其他账户的变更，与本连接无关。
+                    }
+                    Ok(ChangeEvent::UpdateAvailable(version)) => {
+                        if let Ok(ev) = Event::default().event("update").json_data(serde_json::json!({ "version": version })) {
+                            yield Ok(ev);
+                        }
                     }
                     Ok(ChangeEvent::RefreshAll) => {
                         usage_dirty = true;

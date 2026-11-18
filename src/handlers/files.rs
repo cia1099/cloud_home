@@ -95,6 +95,8 @@ pub async fn upload(
     user: AuthUser,
     mut multipart: Multipart,
 ) -> AppResult<(StatusCode, ApiResponse<FileResponse>)> {
+    // 上传期间计为在途传输，handler 返回时自动注销。
+    let _activity = state.activity.begin();
     let data_root = state.drive_manager.require_data_root().await?;
 
     let file_id = uuid::Uuid::new_v4().to_string();
@@ -658,7 +660,10 @@ pub async fn download_archive(
         format, writer, entries,
     ));
 
-    let stream = tokio_util::io::ReaderStream::new(reader);
+    let stream = crate::lifecycle::Tracked::new(
+        tokio_util::io::ReaderStream::new(reader),
+        state.activity.begin(),
+    );
     let body = Body::from_stream(stream);
 
     let filename = format!("cloud_home_download{}", format.extension());
@@ -787,7 +792,10 @@ pub async fn stream_file(
             Ok(response.into_response())
         }
         RangeResult::Full => {
-            let stream = tokio_util::io::ReaderStream::new(file);
+            let stream = crate::lifecycle::Tracked::new(
+                tokio_util::io::ReaderStream::new(file),
+                state.activity.begin(),
+            );
             let body = Body::from_stream(stream);
             let response = Response::builder()
                 .status(StatusCode::OK)
@@ -803,7 +811,10 @@ pub async fn stream_file(
             file.seek(std::io::SeekFrom::Start(start)).await?;
             let len = end - start + 1;
             let limited = file.take(len);
-            let stream = tokio_util::io::ReaderStream::new(limited);
+            let stream = crate::lifecycle::Tracked::new(
+                tokio_util::io::ReaderStream::new(limited),
+                state.activity.begin(),
+            );
             let body = Body::from_stream(stream);
             let response = Response::builder()
                 .status(StatusCode::PARTIAL_CONTENT)

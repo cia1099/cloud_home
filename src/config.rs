@@ -33,6 +33,17 @@ pub struct Config {
     pub trust_proxy_headers: bool,
     /// 运维端点（删除 / 还原账户）的共享口令。未设置即关闭这些端点。
     pub admin_password: Option<String>,
+    /// 在线更新：manual（人点安装）| auto（时间窗内空闲时自动装）。
+    pub update_mode: crate::update::settings::Mode,
+    /// 自动安装的时间窗（本地时间）`HH:MM-HH:MM`。
+    pub update_window: String,
+    /// stable（仅正式版）| beta（含 rc 预发布）。
+    pub update_channel: crate::update::settings::Channel,
+    pub update_check_interval_hours: u64,
+    /// 安装根目录（含 versions/、current 符号链接）。`current` 不是符号链接时更新器禁用。
+    pub update_root: PathBuf,
+    /// 覆盖清单所在 URL 前缀——仅供测试用本地镜像，生产不要设置。
+    pub update_base_url: Option<String>,
 }
 
 impl std::fmt::Debug for Config {
@@ -58,6 +69,12 @@ impl std::fmt::Debug for Config {
                 "admin_password",
                 &self.admin_password.as_ref().map(|_| "<redacted>"),
             )
+            .field("update_mode", &self.update_mode)
+            .field("update_window", &self.update_window)
+            .field("update_channel", &self.update_channel)
+            .field("update_check_interval_hours", &self.update_check_interval_hours)
+            .field("update_root", &self.update_root)
+            .field("update_base_url", &self.update_base_url)
             .finish()
     }
 }
@@ -91,6 +108,19 @@ impl Config {
             log_max_size_mb: env_parse("LOG_MAX_SIZE_MB", 1)?,
             trust_proxy_headers: env_parse("TRUST_PROXY_HEADERS", false)?,
             admin_password: std::env::var("ADMIN_PASSWORD")
+                .ok()
+                .filter(|s| !s.trim().is_empty()),
+            update_mode: env_or("UPDATE_MODE", "manual").parse()?,
+            update_window: {
+                let w = env_or("UPDATE_WINDOW", "03:00-05:00");
+                crate::update::settings::Window::parse(&w)
+                    .map_err(|e| anyhow::anyhow!("UPDATE_WINDOW 无效: {e}"))?;
+                w
+            },
+            update_channel: env_or("UPDATE_CHANNEL", "stable").parse()?,
+            update_check_interval_hours: env_parse("UPDATE_CHECK_INTERVAL_HOURS", 6)?,
+            update_root: PathBuf::from(env_or("UPDATE_ROOT", "/opt/cloud_home")),
+            update_base_url: std::env::var("UPDATE_BASE_URL")
                 .ok()
                 .filter(|s| !s.trim().is_empty()),
         })
