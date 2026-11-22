@@ -2,4 +2,6 @@
 Cargo.lock
 .env
 /dev_drive
+/manager-site/node_modules
+/manager-site/report_web
 /logs

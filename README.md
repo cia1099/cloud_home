@@ -111,4 +111,5 @@ curl /api/v1/files/upload \
 
 ## 前端
 
-`ui/`（Next.js）稍后实现，当前阶段后端优先。
+`ui/`（Vite + React + TypeScript）稍后实现，当前阶段后端优先。
+  

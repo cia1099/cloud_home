@@ -24,7 +24,7 @@ cloud_home/
 ├── spec/backend.md       # 后端完整规范（API、Schema、架构决策）
 ├── src/                  # Rust 后端源码
 ├── migrations/           # sqlx 数据库迁移文件
-├── ui/                   # Next.js 前端（稍后实现）
+├── ui/                   # Vite + React + TypeScript 前端（单页应用，无 SSR / 无 SEO）
 ├── Cargo.toml
 └── .env                  # 本地环境变量（git ignore）
 ```
@@ -36,3 +36,9 @@ cloud_home/
 - **认证**: JWT，存放在 HttpOnly Cookie 中；同时支持 `Authorization: Bearer` header
 - **外接硬盘侦测**: macOS 扫描 `/Volumes/`，Linux 扫描 `/media/` 和 `/run/media/`，均使用 `notify` crate 实时监控
 - **错误处理**: `thiserror` 定义 `AppError`，实现 `IntoResponse`
+
+## Agent team
+
+Requirements live in [`SPEC.md`](SPEC.md) (single source of truth). Work is run by a manager (`scripts/run_manager.sh`)
+that delegates to the subagents in `.claude/agents/`: `backend-engineer`, `frontend-engineer`, `designer`, `tester`.
+Progress is tracked in `plan/STATUS.md` and `reports/`. Agents commit locally on `agent/<R-id>-<slug>` branches, never push or tag.
