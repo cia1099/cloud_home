@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en" data-l="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Decisions · Cloud Home Report</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-page="decisions" data-root="../" data-path="/decisions/" data-title-zh="决策 · Cloud Home 报告">
+<main id="main" class="wrap">
+  <header style="padding-block:56px 28px;max-width:720px">
+    <h1 class="display" data-zh="决策">Decisions</h1>
+    <p class="lede" style="margin-top:12px" data-zh="团队需要你点头之后才能继续的事。回答只需两步，手机上也能完成。">Things the team needs your yes or no on before going further. Answering takes two taps, from a phone too.</p>
+  </header>
+
+  <ol class="steps card" style="padding:22px 24px;margin:0 0 40px;list-style:none">
+    <li><b data-zh="点“批准”或“拒绝”">Tap Approve or Deny</b><span data-zh="会在新标签页打开一个预填好的 GitHub 议题。">A pre-filled GitHub issue opens in a new tab.</span></li>
+    <li><b data-zh="按“Submit new issue”">Press Submit new issue</b><span data-zh="标题已写好，内容无需修改；想补充可以加一句备注。">The title is ready; add a note if you like.</span></li>
+    <li><b data-zh="经理在下个周期处理">The manager picks it up</b><span data-zh="回复议题、记录结果并继续工作。">It replies on the issue, records the answer and carries on.</span></li>
+  </ol>
+
+  <section class="only-real" aria-labelledby="clear-h">
+    <div class="sec-h"><h2 class="title" id="clear-h" data-zh="等待回答">Waiting for your answer</h2></div>
+    <div class="card allclear"><span class="k-ic" style="width:48px;height:48px;border-radius:50%;margin:0 auto 12px;display:grid;place-items:center;background:var(--st-done-bg);color:var(--st-done-fg)" data-ic="check"></span><h3 class="h3" data-zh="全部处理完毕">You are all caught up</h3><p class="sub" style="margin:6px 0 0" data-zh="团队目前不需要你的任何回答。需要时，请求会出现在这里，并显示在概览页顶部。">The team does not need anything from you right now. When it does, the request appears here and at the top of the Overview.</p></div>
+    <div class="sec-h" style="margin-top:64px"><h2 class="title" data-zh="历史">History</h2></div>
+    <div class="card allclear"><p class="sub" style="margin:0" data-zh="还没有做过决策。">No decisions have been made yet.</p></div>
+  </section>
+
+  <div class="only-sample">
+  <div class="sec-h"><h2 class="title" data-zh="等待回答">Waiting for your answer</h2><span class="chip warn" data-zh="2 个待处理">2 pending</span></div>
+
+  <article class="card dcard rv" id="A-003">
+    <div class="dh"><span class="hash" style="height:24px">A-003</span><span class="small" data-zh="经理于 2026 年 12 月 2 日提出">Requested by the manager, 2 Dec 2026</span></div>
+    <h3 data-zh="打标签并发布 v0.3.1 稳定版">Tag and publish stable v0.3.1</h3>
+    <dl class="dl">
+      <dt data-zh="内容">What</dt><dd data-zh="推送 agent/R-040 分支，创建 v0.3.1 标签，并在 GitHub 上发布正式版（不再是预发布）。">Push branch agent/R-040, create the v0.3.1 tag and publish a full GitHub release (no longer a pre-release).</dd>
+      <dt data-zh="原因">Why</dt><dd data-zh="R-020、R-021、R-030、R-031、R-060、R-061、R-066 均已完成并通过验证，已满足发布条件。">R-020, R-021, R-030, R-031, R-060, R-061 and R-066 are done and verified, so the release criteria are met.</dd>
+      <dt data-zh="风险">Risk</dt><dd data-zh="已安装的设备会在自动更新窗口内升级；若新版本不健康会自动回滚。">Installed devices will update within their window; an unhealthy version rolls back automatically.</dd>
+      <dt data-zh="批准后">If approved</dt><dd data-zh="经理推送并打标签，发布流水线构建并签名安装包。">The manager pushes and tags; the pipeline builds and signs the packages.</dd>
+      <dt data-zh="拒绝后">If denied</dt><dd data-zh="继续停留在 rc 版本，不推送、不打标签。">Stay on release candidates; nothing is pushed or tagged.</dd>
+    </dl>
+    <div class="dact">
+      <a class="btn btn-pri btn-lg" data-issue-title="[DECISION A-003] approve" data-issue-body="**Decision A-003: Tag and publish stable v0.3.1** — approve\n\nNote (optional):\n" data-ic="check"><span data-zh="批准">Approve</span></a>
+      <a class="btn btn-neutral btn-lg" data-issue-title="[DECISION A-003] deny" data-issue-body="**Decision A-003: Tag and publish stable v0.3.1** — deny\n\nNote (optional):\n" data-ic="xmark"><span data-zh="拒绝">Deny</span></a>
+      <p class="note" data-zh="在 GitHub 上打开预填好的议题。你按下提交之前不会发送任何内容。">Opens a pre-filled issue on GitHub. Nothing is sent until you press Submit there.</p>
+    </div>
+  </article>
+
+  <article class="card dcard rv" id="A-004">
+    <div class="dh"><span class="hash" style="height:24px">A-004</span><span class="small" data-zh="经理于 2026 年 12 月 3 日提出">Requested by the manager, 3 Dec 2026</span></div>
+    <h3 data-zh="加入依赖 minisign-verify（MIT / Apache-2.0）">Add the dependency minisign-verify (MIT / Apache-2.0)</h3>
+    <dl class="dl">
+      <dt data-zh="内容">What</dt><dd data-zh="在后端用一个很小的库验证更新包签名，取代调用外部命令。">Verify update signatures inside the backend with a small library instead of calling an external command.</dd>
+      <dt data-zh="原因">Why</dt><dd data-zh="少一个需要预装的系统工具，设备上的安装更简单。">One less system tool to pre-install, so device setup is simpler.</dd>
+      <dt data-zh="风险">Risk</dt><dd data-zh="新增一个第三方依赖；许可证宽松，体积小。">Adds one third-party crate; permissive licence, small.</dd>
+      <dt data-zh="批准后">If approved</dt><dd data-zh="后端工程师加入并替换现有调用。">The backend engineer adds it and replaces the existing call.</dd>
+      <dt data-zh="拒绝后">If denied</dt><dd data-zh="保留外部命令方式，安装脚本需要先装好该工具。">Keep the external command; the installer must provide the tool.</dd>
+    </dl>
+    <div class="dact">
+      <a class="btn btn-pri btn-lg" data-issue-title="[DECISION A-004] approve" data-issue-body="**Decision A-004: Add minisign-verify** — approve\n\nNote (optional):\n" data-ic="check"><span data-zh="批准">Approve</span></a>
+      <a class="btn btn-neutral btn-lg" data-issue-title="[DECISION A-004] deny" data-issue-body="**Decision A-004: Add minisign-verify** — deny\n\nNote (optional):\n" data-ic="xmark"><span data-zh="拒绝">Deny</span></a>
+    </div>
+  </article>
+
+  <div class="sec-h" style="margin-top:64px"><h2 class="title" data-zh="历史">History</h2></div>
+  <div class="card" style="padding:8px 24px">
+    <ul class="hist">
+      <li><span class="hash">A-002</span><div><b data-zh="使用付费短信服务发送验证码">Use a paid SMS provider for one-time codes</b><div class="small" data-zh="2026 年 11 月 26 日 · 备注：先用邮件。">26 Nov 2026 · Note: email first.</div></div><span class="chip" data-s="blocked" style="--st-fg:var(--st-blocked-fg);--st-bg:var(--st-blocked-bg)" data-ic="xmark" data-zh="已拒绝">Denied</span></li>
+      <li><span class="hash">A-001</span><div><b data-zh="把各代理的分支推送到 GitHub">Push agent branches to GitHub</b><div class="small" data-zh="2026 年 11 月 24 日">24 Nov 2026</div></div><span class="chip ok" data-ic="check" data-zh="已批准">Approved</span></li>
+    </ul>
+  </div>
+
+  </div>
+</main>
+<script src="../assets/site.js" defer></script>
+</body>
+</html>

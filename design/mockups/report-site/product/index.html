@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en" data-l="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Product · Cloud Home Report</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-page="product" data-root="../" data-path="/product/" data-title-zh="产品 · Cloud Home 报告">
+<main id="main" class="wrap">
+  <header style="padding-block:56px 28px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap">
+    <div style="max-width:660px">
+      <h1 class="display" data-zh="产品">Product</h1>
+      <p class="lede" style="margin-top:12px" data-zh="真实 Cloud Home 界面的截图与动画演示，最新的和历史版本。">Screenshots and animated walkthroughs of the real Cloud Home app, latest and history.</p>
+    </div>
+    <!-- design-review control only: the real site has no toggle, it shows the empty state until the first screenshot exists -->
+    <button class="btn btn-neutral" id="popToggle" type="button" aria-pressed="false" data-ic="sliders"><span data-zh="预览已有内容时的样子（示例图片）">Preview the populated state (sample images)</span></button>
+  </header>
+
+  <!-- EMPTY STATE: the honest state today -->
+  <section class="empty-only" aria-labelledby="empty-h">
+    <div class="emptyframe">
+      <div class="eframe" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div>
+        <h2 class="title" id="empty-h" data-zh="网页应用还没有开发。">The web app is not built yet.</h2>
+        <p class="lede" style="margin:10px auto 0;text-align:center" data-zh="截图和演示会出现在这里。">Screenshots and walkthroughs will appear here.</p>
+      </div>
+      <div class="preview-list">
+        <div><b data-zh="截图">Screenshots</b><span data-zh="来自真实运行的界面，浅色与深色、三种语言。">From the running app, in light and dark and three languages.</span></div>
+        <div><b data-zh="动画演示">Walkthroughs</b><span data-zh="几秒钟的短片，演示登录、上传、预览。">Short clips of signing in, uploading and previewing.</span></div>
+        <div><b data-zh="前后对比">Before and after</b><span data-zh="每次改版，可拖动对比。">Drag to compare each redesign.</span></div>
+      </div>
+      <a class="btn btn-sec" href="../requirements/" data-zh="查看网页应用的需求 ›">See the web app requirements ›</a>
+    </div>
+  </section>
+
+  <!-- POPULATED PREVIEW: sample images only, abstract art on purpose -->
+  <div class="pop-only">
+    <div class="samplebar" role="note" style="border-radius:var(--r-m);margin-bottom:32px"><span class="sample" data-zh="示例">Sample</span><span data-zh="预览已有内容时的样子：图片是抽象占位图，不是真实截图。">Preview of the populated state: abstract placeholder images, not real screenshots.</span></div>
+
+    <section aria-labelledby="walk-h" style="margin-bottom:64px">
+      <div class="sec-h"><h2 class="title" id="walk-h" data-zh="动画演示">Walkthrough</h2><span class="small" data-zh="示例版本 v0.4.0（最新）">Sample build v0.4.0 (latest)</span></div>
+      <div class="player" role="group" aria-label="Walkthrough player" data-al-en="Walkthrough player" data-al-zh="演示播放器">
+        <div class="p-stage">
+          <div class="p-scene on"><div class="abs"><i></i><i></i><i></i></div></div>
+          <div class="p-scene"><div class="abs p2"><i></i><i></i><i></i></div></div>
+          <div class="p-scene"><div class="abs p3"><i></i><i></i><i></i></div></div>
+          <div class="p-scene"><div class="abs p4"><i></i><i></i><i></i></div></div>
+          <span class="tag-ph" data-zh="示例图片">Sample image</span>
+        </div>
+        <div class="p-bar"><button class="p-play" type="button" aria-label="Play"></button><div class="p-track" aria-hidden="true"><i></i></div><span class="p-time num" aria-hidden="true">1 / 4</span></div>
+        <p class="p-cap" aria-live="polite"></p>
+        <ol class="p-steps">
+          <li><button type="button" aria-current="true"><span class="n">1</span><span data-zh="登录">Sign in</span><span class="s-cap" data-zh="第 1 步：登录。新账户会看到“等待批准”的说明。">Step 1: sign in. A new account sees a calm “waiting for approval” note.</span></button></li>
+          <li><button type="button"><span class="n">2</span><span data-zh="浏览">Browse</span><span class="s-cap" data-zh="第 2 步：浏览。网格或列表，面包屑指明位置。">Step 2: browse. Grid or list, with a breadcrumb.</span></button></li>
+          <li><button type="button"><span class="n">3</span><span data-zh="上传">Upload</span><span class="s-cap" data-zh="第 3 步：上传。每个文件有自己的进度和取消按钮。">Step 3: upload. Each file has its own progress and cancel.</span></button></li>
+          <li><button type="button"><span class="n">4</span><span data-zh="预览">Preview</span><span class="s-cap" data-zh="第 4 步：预览。图片、音频、视频在浏览器里直接打开。">Step 4: preview. Photos, audio and video open in the browser.</span></button></li>
+        </ol>
+      </div>
+      <p class="small" style="margin-top:10px" data-zh="演示会在进入视野时自动播放；开启“减弱动态效果”时不会自动播放，可用按钮或步骤手动查看。">The walkthrough starts when it scrolls into view. With Reduce Motion on it does not autoplay; use the button or the steps instead.</p>
+    </section>
+
+    <section aria-labelledby="gal-h" style="margin-bottom:64px">
+      <div class="sec-h"><h2 class="title" id="gal-h" data-zh="截图">Screenshots</h2>
+        <span class="small" data-zh="示例版本 v0.4.0（最新）。历史版本按版本号分组，在此之下。">Sample build v0.4.0 (latest). Older builds are grouped by version below.</span></div>
+      <div class="gal">
+        <button class="shot wide" data-lb type="button"><div class="art abs"><i></i><i></i><i></i><span class="tag-ph" data-zh="示例图片">Sample image</span></div><div class="cap"><span data-zh="浏览文件">Browsing files</span><small data-zh="v0.4.0 · 浅色 · English">v0.4.0 · Light · English</small></div></button>
+        <button class="shot" data-lb type="button"><div class="art abs p2"><i></i><i></i><i></i><span class="tag-ph" data-zh="示例图片">Sample image</span></div><div class="cap"><span data-zh="上传进度">Upload progress</span><small data-zh="v0.4.0 · 深色 · 繁體中文">v0.4.0 · Dark · 繁體中文</small></div></button>
+        <button class="shot" data-lb type="button"><div class="art abs p3"><i></i><i></i><i></i><span class="tag-ph" data-zh="示例图片">Sample image</span></div><div class="cap"><span data-zh="图片预览">Photo preview</span><small data-zh="v0.4.0 · 浅色 · 简体中文">v0.4.0 · Light · 简体中文</small></div></button>
+        <button class="shot" data-lb type="button"><div class="art abs p4"><i></i><i></i><i></i><span class="tag-ph" data-zh="示例图片">Sample image</span></div><div class="cap"><span data-zh="回收站">Trash</span><small data-zh="v0.4.0 · 深色 · English">v0.4.0 · Dark · English</small></div></button>
+        <button class="shot wide" data-lb type="button"><div class="art abs dark"><i></i><i></i><i></i><span class="tag-ph" data-zh="示例图片">Sample image</span></div><div class="cap"><span data-zh="分享链接">Sharing</span><small data-zh="v0.4.0 · 深色 · 简体中文">v0.4.0 · Dark · 简体中文</small></div></button>
+      </div>
+    </section>
+
+    <section aria-labelledby="ba-h">
+      <div class="sec-h"><h2 class="title" id="ba-h" data-zh="前后对比">Before and after</h2></div>
+      <div class="ba">
+        <div class="layer before"><div class="art abs wire flat"><i></i><i></i><i></i><span class="cmp-name" data-zh="v0.3">v0.3</span></div></div>
+        <div class="layer after"><div class="art abs p2"><i></i><i></i><i></i><span class="cmp-name" data-zh="v0.4">v0.4</span></div></div>
+        <input type="range" min="0" max="100" step="2" value="50" aria-label="Compare version 0.3 and 0.4" data-al-en="Compare version 0.3 and 0.4" data-al-zh="对比 0.3 与 0.4 版本">
+        <div class="handle" aria-hidden="true"></div>
+        <span class="lab l" aria-hidden="true" data-zh="之前">Before</span><span class="lab r" aria-hidden="true" data-zh="之后">After</span>
+      </div>
+      <p class="cap" data-zh="拖动滑块，或聚焦后用左右方向键。">Drag the handle, or focus it and use the arrow keys.</p>
+    </section>
+  </div>
+</main>
+<script src="../assets/site.js" defer></script>
+</body>
+</html>

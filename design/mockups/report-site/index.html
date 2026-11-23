@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en" data-l="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Overview · Cloud Home Report</title>
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/boot.js"></script>
+</head>
+<body data-page="overview" data-root="./" data-path="/" data-title-zh="概览 · Cloud Home 报告">
+<main id="main">
+
+<!-- 1. Pending decisions: always the first thing on the page (banner when something waits, calm line when not) -->
+<div class="wrap">
+  <aside class="pend only-sample" aria-label="Pending decisions">
+    <span class="dot" aria-hidden="true"></span>
+    <div class="pend-t"><b data-zh="2 个决策在等你">2 decisions are waiting for you</b> · <span data-zh="下一个：“打标签并发布 v0.3.1”">Next: “Tag and publish v0.3.1”</span></div>
+    <a class="btn" href="decisions/" data-zh="去处理">Review</a>
+  </aside>
+  <aside class="pend clear only-real" aria-label="Pending decisions">
+    <span class="dot" aria-hidden="true"></span>
+    <div class="pend-t"><b data-zh="没有需要你决定的事">Nothing is waiting for your decision</b> · <span data-zh="有需要时会出现在这里。">It will appear here when something needs you.</span></div>
+    <a class="btn" href="decisions/" data-zh="决策记录">Decisions</a>
+  </aside>
+</div>
+
+<!-- 2. Hero with overall status -->
+<section class="wrap hero">
+  <div>
+    <span class="chip only-sample ok" data-ic="check" data-zh="进展顺利">On track</span>
+    <span class="chip only-real accent" data-ic="check" data-zh="后端已就绪 · 界面尚未开始">Backend built · UI not started</span>
+    <h1 class="display only-sample" data-zh="Cloud Home 正在成形。">Cloud Home is taking shape.</h1>
+    <h1 class="display only-real" data-zh="后端已经建好，界面是下一步。">The backend is built. The web app is next.</h1>
+    <p class="lede only-sample" data-zh="服务器、账户和自动更新已经可用，网页应用的第一个版本现在能运行了。">The server, accounts and self-updater work, and the first version of the web app now runs.</p>
+    <p class="lede only-real" data-zh="账户、文件、回收站、分享、搜索与带签名的自动更新已经可用。网页界面、报告网站和设备安装脚本还没有开始。">Accounts, files, trash, sharing, search and signed self-updates work. The web app, this report site and the device installer have not started.</p>
+    <div class="meta"><span class="only-real" data-zh="更新于 2026 年 11 月 24 日">Updated 24 Nov 2026</span><span class="only-sample" data-zh="更新于 2026 年 12 月 3 日 14:05">Updated 3 Dec 2026, 14:05</span><a href="latest/" data-zh="阅读最新报告 ›">Read the latest report ›</a></div>
+  </div>
+  <div id="ring" class="rv"></div>
+</section>
+
+<!-- 3. KPI cards (every number is computed from SPEC.md, test output and the release list) -->
+<section class="wrap" aria-label="Key numbers"><div class="grid g4">
+  <article class="card kpi rv"><div class="k-l"><span class="k-ic" data-ic="check"></span><span data-zh="已完成需求">Requirements done</span></div><div class="k-v"><span data-kpi="done"></span><small><span data-zh="共">of</span> <span data-total></span></small></div><div class="k-s delta-up only-sample" data-zh="本周 +2">+2 this week</div><div class="k-s only-real" data-zh="计划从 11 月 24 日开始">The plan started on 24 Nov</div></article>
+  <article class="card kpi rv" style="--rd:1"><div class="k-l"><span class="k-ic" data-ic="swap"></span><span data-zh="进行与审核中">Active or in review</span></div><div class="k-v"><span data-kpi="active"></span></div><div class="k-s only-sample" data-zh="5 项开发中，5 项待审核">5 in progress, 5 in review</div><div class="k-s only-real" data-zh="还没有分配任务">Nothing assigned yet</div></article>
+  <article class="card kpi rv" style="--rd:2"><div class="k-l"><span class="k-ic" data-ic="shield"></span><span data-zh="测试通过">Tests passing</span></div><div class="k-v"><span data-tests data-count="0"></span><small><span data-zh="共">of</span> <span data-tests data-count="0"></span></small></div><div class="k-s delta-up only-sample" data-zh="自上次报告 +149">+149 since the last report</div><div class="k-s only-real" data-zh="单元测试 · 0 失败">unit tests · 0 failing</div></article>
+  <article class="card kpi rv" style="--rd:3"><div class="k-l"><span class="k-ic" data-ic="tag"></span><span data-zh="最新版本">Latest build</span></div><div class="k-v" style="font-size:30px;letter-spacing:-.02em">v0.3.1-rc.2</div><div class="k-s" data-zh="预发布版 · 尚未稳定发布">Pre-release · not yet stable</div></article>
+</div></section>
+
+<!-- 4. Per-area progress + burn-down -->
+<section class="wrap sec">
+  <div class="sec-h"><h2 class="title" data-zh="进度一览">Where things stand</h2><a href="requirements/" data-zh="查看全部需求 ›">All requirements ›</a></div>
+  <div class="grid g2">
+    <article class="card rv"><h3 class="h3" style="margin-bottom:20px" data-zh="按领域看进度">Progress by area</h3><div id="areas" class="bars" data-built="1"></div></article>
+    <article class="card rv io" style="--rd:1"><h3 class="h3" data-zh="需求燃尽图">Requirement burn-down</h3><p class="sub" style="margin:4px 0 12px" data-zh="仍未完成的需求数量，对比到 12 月 31 日的理想进度。">Open requirements over time, against the ideal pace to 31 Dec.</p><div id="burn"></div></article>
+  </div>
+</section>
+
+<!-- 5. Roles -->
+<section class="wrap sec">
+  <div class="sec-h"><h2 class="title" data-zh="每个角色在做什么">What each role is doing</h2></div>
+  <div class="grid g3 roles" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))"></div>
+</section>
+
+<!-- 6. Build and test health -->
+<section class="wrap sec">
+  <div class="sec-h"><h2 class="title" data-zh="构建与测试状况">Build and test health</h2><span class="small only-sample" data-zh="最近一次运行：12 月 3 日 13:41">Last run: 3 Dec, 13:41</span></div>
+  <div class="grid g2">
+    <article class="card rv io">
+      <h3 class="h3" data-zh="测试结果">Test results</h3>
+      <p class="num" style="margin:6px 0 18px;font-size:34px;font-weight:700;letter-spacing:-.03em"><span data-tests data-count="0"></span> <span class="sub" style="font-size:16px;font-weight:500" data-zh="项通过，0 失败，0 跳过">passed · 0 failed · 0 skipped</span></p>
+      <div class="waffle" data-tests data-pass="0"></div>
+    </article>
+    <article class="card rv" style="--rd:1">
+      <h3 class="h3" data-zh="检查项">Checks</h3>
+      <ul class="checks only-real" style="margin-top:6px">
+        <li><span class="dot chip ok" data-ic="check"></span><span data-zh="单元测试">Unit tests</span><span class="r" data-zh="63 项全部通过">63 of 63 passing</span></li>
+        <li><span class="dot chip ok" data-ic="check"></span><span data-zh="发布 v0.3.1-rc.2">Release v0.3.1-rc.2</span><span class="r" data-zh="已作为预发布版发布">Published as a pre-release</span></li>
+        <li><span class="dot chip ok" data-ic="check"></span><span data-zh="带回滚的签名自更新">Signed self-update with rollback</span><span class="r" data-zh="已端到端测试">Tested end to end</span></li>
+        <li><span class="dot chip warn" data-ic="warn"></span><span data-zh="静态检查">Lint</span><span class="r" data-zh="还剩 9 处闲置代码（R-070）">9 idle-code sites left (R-070)</span></li>
+        <li><span class="dot chip neutral" data-ic="more"></span><span data-zh="网页应用">Web app</span><span class="r" data-zh="尚未开始（R-003）">Not started (R-003)</span></li>
+        <li><span class="dot chip neutral" data-ic="more"></span><span data-zh="界面端到端测试">UI end-to-end tests</span><span class="r" data-zh="尚未开始（R-032）">Not started (R-032)</span></li>
+      </ul>
+      <ul class="checks only-sample" style="margin-top:6px">
+        <li><span class="dot chip ok" data-ic="check"></span><span data-zh="构建">Build</span><span class="r" data-zh="已通过">Passing</span></li>
+        <li><span class="dot chip ok" data-ic="check"></span><span data-zh="OTA 端到端">OTA end to end</span><span class="r" data-zh="5/5 个场景">5 of 5 scenarios</span></li>
+        <li><span class="dot chip warn" data-ic="warn"></span><span data-zh="静态检查">Lint</span><span class="r" data-zh="还剩 9 处闲置代码（R-070）">9 idle-code sites left (R-070)</span></li>
+        <li><span class="dot chip ok" data-ic="check"></span><span data-zh="网页应用类型检查">Web app type check</span><span class="r" data-zh="已通过">Passing</span></li>
+        <li><span class="dot chip neutral" data-ic="more"></span><span data-zh="界面端到端测试">UI end-to-end tests</span><span class="r" data-zh="尚未开始（R-032）">Not started (R-032)</span></li>
+      </ul>
+    </article>
+  </div>
+</section>
+
+<!-- 7. Latest report -->
+<section class="wrap sec">
+  <div class="sec-h"><h2 class="title" data-zh="最新报告">Latest report</h2><a href="reports/" data-zh="全部报告 ›">All reports ›</a></div>
+  <a class="card feature rcard rv only-real" href="reports/2026-11-24-backend-foundation/" style="color:inherit">
+    <div class="f-body"><div class="row"><span class="chip ok" data-ic="check" data-zh="周报">Weekly</span><span class="small" data-zh="2026 年 11 月 24 日">24 Nov 2026</span></div><h3 class="display" style="font-size:clamp(28px,3.6vw,40px)" data-zh="后端基础与会自我更新的盒子">Backend foundation and the self-updating box</h3><p class="sub" style="margin:0" data-zh="什么已经建好、更新如何安全地到达设备，以及接下来做什么。还没有网页界面，所以这一期不放截图。">What is built, how an update safely reaches the box, and what comes next. There is no web UI yet, so this report has no screenshots.</p><span class="more" style="color:var(--accent);font-weight:500" data-zh="阅读报告 ›">Read the report ›</span></div>
+    <div class="cover c2"><span class="glyph" data-ic="swap"></span></div>
+  </a>
+  <a class="card feature rcard rv only-sample" href="reports/m1-first-ui/" style="color:inherit">
+    <div class="f-body"><span class="chip accent" data-ic="tag" data-zh="里程碑（示例）">Milestone (sample)</span><h3 class="display" style="font-size:clamp(28px,3.6vw,40px)" data-zh="第一个能用的界面">The first working UI</h3><p class="sub" style="margin:0" data-zh="登录、浏览、上传和预览，浅色与深色，三种语言——第一次在浏览器里打开家庭云盘。">Sign in, browse, upload and preview, in light and dark, in three languages. Cloud Home in a browser for the first time.</p><span class="more" style="color:var(--accent);font-weight:500" data-zh="阅读报告 ›">Read the report ›</span></div>
+    <div class="cover c-ms"><span class="glyph" data-ic="cloud"></span></div>
+  </a>
+</section>
+
+</main>
+<script src="assets/site.js" defer></script>
+</body>
+</html>
