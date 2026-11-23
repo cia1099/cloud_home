@@ -9,6 +9,9 @@
 # wait for your approval instead of running (safe, but unattended runs stall).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# In headless (-p) mode Claude Code kills background subagents ~10 min after the last turn and then
+# exits. Subagent tasks (design, builds) routinely take longer, so wait for them indefinitely.
+export CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS=0
 if [ "$#" -eq 0 ]; then
   set -- "Read SPEC.md and plan/STATUS.md, then run your operating loop."
 fi
