@@ -1,0 +1,174 @@
+{
+  "kind": "weekly",
+  "title": { "en": "Backend foundation and the self-updating box", "zh": "后端基础与会自我更新的盒子" },
+  "summary": {
+    "en": "Accounts, files, trash, sharing, search and signed online updates are in place. There is no web UI yet, so this report shows real architecture and progress only. No stand-in screenshots.",
+    "zh": "账户、文件、回收站、分享、搜索与带签名的在线更新已经就绪。还没有网页界面，所以这一期只展示真实的架构与进度，不放任何示意截图。"
+  },
+  "chip": { "tone": "accent", "icon": "check", "text": { "en": "Backend built · UI not started", "zh": "后端已就绪 · 界面尚未开始" } },
+  "cover": { "style": "c2", "icon": "swap" },
+  "sections": [
+    {
+      "id": "summary",
+      "title": { "en": "Summary", "zh": "概要" },
+      "component": "kpis",
+      "data": {
+        "items": [
+          { "label": { "en": "Unit tests", "zh": "单元测试" }, "value": 63, "sub": { "en": "all passing", "zh": "全部通过" } },
+          { "label": { "en": "Latest build", "zh": "最新版本" }, "value": "v0.3.1-rc.2", "sub": { "en": "published as a pre-release", "zh": "已作为预发布版发布" } },
+          { "label": { "en": "Planned requirements", "zh": "计划内需求" }, "value": 35, "sub": { "en": "0 done · 3 wait for you", "zh": "0 项已完成 · 3 项等你" } },
+          { "label": { "en": "Web UI", "zh": "网页界面" }, "value": { "en": "Not started", "zh": "尚未开始" }, "sub": { "en": "design comes first (R-002)", "zh": "先做设计（R-002）" } }
+        ]
+      }
+    },
+    {
+      "id": "built",
+      "title": { "en": "What is built", "zh": "已经建好的" },
+      "component": "text",
+      "data": {
+        "bullets": [
+          { "en": "Accounts and isolation: register, sign in, profile. Everyone sees only their own files.", "zh": "账户与隔离：注册、登录、资料，每个人只看得到自己的文件。" },
+          { "en": "Files, folders, trash (7-day retention), share links, search, batch download (ZIP or tar.gz) and previews.", "zh": "文件、文件夹、回收站（保留 7 天）、分享链接、搜索、批量下载（ZIP 或 tar.gz）与预览。" },
+          { "en": "Live events (SSE), storage usage, admin endpoints and interactive API documentation (OpenAPI).", "zh": "实时事件（SSE）、存储用量、管理端点，以及交互式接口文档（OpenAPI）。" },
+          { "en": "Signed online self-update with automatic rollback, tested end to end. A release pipeline produced the pre-release `v0.3.1-rc.2`.", "zh": "带签名的在线自更新，失败时自动回滚，已端到端测试。发布流水线已产出预发布版 `v0.3.1-rc.2`。" },
+          { "en": "The team: manager, backend engineer, frontend engineer, designer and tester, plus a design for approving new accounts from a chat app (`spec/admin_chat.md`).", "zh": "团队：经理、后端、前端、设计师与测试工程师，以及通过聊天应用批准新账户的设计（`spec/admin_chat.md`）。" }
+        ]
+      }
+    },
+    {
+      "id": "architecture",
+      "title": { "en": "Architecture", "zh": "架构" },
+      "intro": {
+        "en": "Cloud Home is a single program called `cloud_home`. The API and the web app are meant to be served from the same address, and the database and files live on the external drive. The web app is not built yet, so it is drawn dashed.",
+        "zh": "家庭云盘是一个名为 `cloud_home` 的程序：接口和网页界面计划同源提供，数据库与文件都在外接硬盘上。网页界面这一块还没有建，所以画成虚线。"
+      },
+      "caption": {
+        "en": "Diagram. The moving dots show requests and updates flowing; with Reduce Motion on, they are hidden and the diagram is still. A module is drawn dashed until the requirements it depends on are done in SPEC.md.",
+        "zh": "示意图。小圆点表示请求与更新的流向；开启“减弱动态效果”时，圆点静止隐藏。模块在 SPEC.md 中对应的需求完成之前都画成虚线。"
+      },
+      "component": "diagram",
+      "data": {
+        "kind": "arch",
+        "client": { "icon": "phone", "title": { "en": "Browsers and phones", "zh": "浏览器与手机" }, "text": { "en": "Family members on the home network", "zh": "家庭网络里的家人" } },
+        "binary": {
+          "name": "cloud_home",
+          "subtitle": { "en": "One program, one version", "zh": "一个程序，一个版本" },
+          "modules": [
+            { "icon": "window", "title": { "en": "Web app, embedded", "zh": "网页应用（内嵌）" }, "text": { "en": "Served from the same address as the API (R-003, R-026)", "zh": "与接口同一地址提供（R-003、R-026）" }, "requires": ["R-003", "R-026"] },
+            { "icon": "server", "title": { "en": "API  /api/v1", "zh": "接口 /api/v1" }, "text": { "en": "Accounts, files, trash, sharing, search, live events", "zh": "账户、文件、回收站、分享、搜索、实时事件" } },
+            { "icon": "refresh", "title": { "en": "Updater", "zh": "更新器" }, "text": { "en": "Checks, verifies and installs signed releases", "zh": "检查、验证并安装带签名的版本" } }
+          ]
+        },
+        "drive": {
+          "title": { "en": "External drive", "zh": "外接硬盘" },
+          "text": { "en": "The database travels with the data", "zh": "数据在哪，数据库就在哪" },
+          "modules": [
+            { "icon": "db", "title": { "en": "SQLite database", "zh": "SQLite 数据库" }, "text": { "en": "Accounts, folders, shares", "zh": "账户、文件夹、分享" } },
+            { "icon": "drive", "title": { "en": "Family files", "zh": "家人的文件" }, "text": { "en": "One private folder per account", "zh": "每个账户一个私有文件夹" } }
+          ]
+        },
+        "cloud": { "icon": "cloud", "title": { "en": "GitHub releases", "zh": "GitHub 发布页" }, "text": { "en": "Signed update packages", "zh": "带签名的更新包" } },
+        "links": [{ "en": "pages and calls", "zh": "页面与请求" }, { "en": "reads and writes", "zh": "读写" }, { "en": "fetches updates", "zh": "获取更新" }]
+      }
+    },
+    {
+      "id": "ota",
+      "title": { "en": "How an update safely reaches the box", "zh": "更新如何安全地到达这台盒子" },
+      "intro": {
+        "en": "Every update is checked before anything changes and can be undone. Four of the steps can refuse the update, and a bad start undoes it.",
+        "zh": "每次更新在改动任何东西之前都会先检查，并且可以撤销。其中四步可以拒绝更新，启动不正常则自动撤销。"
+      },
+      "caption": {
+        "en": "Diagram. The animation loops through one successful update; with Reduce Motion on it shows the finished state. The signed self-update and its automatic rollback have been tested end to end; the repeatable script (R-031) is still planned.",
+        "zh": "示意图。动画循环演示一次顺利的更新；开启“减弱动态效果”时静止显示完成状态。带签名的自更新及自动回滚已端到端测试；可重复运行的脚本（R-031）还在计划中。"
+      },
+      "component": "diagram",
+      "data": {
+        "kind": "ota",
+        "rollback": {
+          "en": "**If any step fails:** the old version keeps running. A release that fails to start 3 times is rolled back automatically, database included, and is never retried.",
+          "zh": "**任何一步失败：**保持旧版本运行。连续 3 次启动失败的版本会自动回滚（包括数据库），并且不再重试。"
+        },
+        "steps": [
+          { "icon": "cloud", "title": { "en": "Check", "zh": "检查" }, "text": { "en": "Looks for a newer release on GitHub", "zh": "在 GitHub 上查找新版本" } },
+          { "icon": "shield", "title": { "en": "Verify signature", "zh": "验证签名" }, "text": { "en": "Checks the minisign signature with the key built into the program", "zh": "用程序内置的公钥检查 minisign 签名" }, "fail": { "en": "Bad signature: nothing is installed", "zh": "签名不符：不会安装任何东西" } },
+          { "icon": "down", "title": { "en": "Download", "zh": "下载" }, "text": { "en": "Streams the package for this machine and checks its sha256 and size", "zh": "流式下载适合本机的安装包，并核对 sha256 与大小" }, "fail": { "en": "Checksum mismatch: nothing is installed", "zh": "校验不符：不会安装任何东西" } },
+          { "icon": "check", "title": { "en": "Self-test", "zh": "自检" }, "text": { "en": "The new program must pass its own checks first", "zh": "新程序必须先通过自己的自检" }, "fail": { "en": "Fails: the update is refused", "zh": "未通过：拒绝更新" } },
+          { "icon": "db", "title": { "en": "Back up", "zh": "备份" }, "text": { "en": "Copies the database before anything changes", "zh": "在改动之前先备份数据库" } },
+          { "icon": "swap", "title": { "en": "Switch", "zh": "切换" }, "text": { "en": "The `current` link moves to the new version; the old one stays", "zh": "“current”链接指向新版本，旧版本保留" } },
+          { "icon": "power", "title": { "en": "Restart", "zh": "重启" }, "text": { "en": "Requests in flight get up to 60 seconds to finish", "zh": "正在处理的请求最多有 60 秒收尾" } },
+          { "icon": "heart", "title": { "en": "Health check", "zh": "健康检查" }, "text": { "en": "The new version must stay up; after 2 stable minutes it is kept", "zh": "新版本必须稳定运行；稳定 2 分钟后才算保留" }, "fail": { "en": "Fails to start 3 times: rolls back automatically", "zh": "连续 3 次启动失败：自动回滚" } }
+        ]
+      }
+    },
+    {
+      "id": "progress",
+      "title": { "en": "Progress", "zh": "进度" },
+      "intro": {
+        "en": "The plan started today, so no planned requirement is done yet. Green text counts what was built before the plan began.",
+        "zh": "计划是今天才开始的，所以计划内需求都还没有完成；绿色文字是计划之前就已建成的能力。"
+      },
+      "component": "areas",
+      "data": {}
+    },
+    {
+      "id": "tests",
+      "title": { "en": "Tests", "zh": "测试" },
+      "component": "tests",
+      "data": {
+        "note": {
+          "en": "Result of `cargo test` on 23 Nov 2026 (UTC). Integration tests (R-030) and UI end-to-end tests (R-032) have not started.",
+          "zh": "2026 年 11 月 23 日（UTC）`cargo test` 的结果。集成测试（R-030）与界面端到端测试（R-032）尚未开始。"
+        }
+      }
+    },
+    {
+      "id": "history",
+      "title": { "en": "Git history", "zh": "提交历史" },
+      "intro": { "en": "Real commits and releases from the repository, newest first.", "zh": "仓库里真实的提交与发布，最新的在最上面。" },
+      "component": "timeline",
+      "data": { "limit": 8 }
+    },
+    {
+      "id": "risks",
+      "title": { "en": "Risks and blockers", "zh": "风险与阻塞" },
+      "component": "callouts",
+      "data": {
+        "items": [
+          {
+            "tone": "risk",
+            "title": { "en": "No web UI yet", "zh": "还没有网页界面" },
+            "text": { "en": "Product screenshots and walkthroughs start with the first UI milestone. Until then this site does not show stand-ins.", "zh": "产品截图与演示会从第一个界面里程碑开始出现。在那之前本站不会放示意图冒充。" }
+          },
+          {
+            "tone": "risk",
+            "title": { "en": "The update test is not repeatable yet", "zh": "更新测试还不能重复运行" },
+            "text": { "en": "The self-update and its rollback were tested end to end by hand. The repeatable script (R-031) is still planned.", "zh": "自更新及其回滚已经手动端到端测试过；可重复运行的脚本（R-031）还在计划中。" }
+          },
+          {
+            "tone": "block",
+            "title": { "en": "Waiting on the owner: one-time-code provider (R-022)", "zh": "等待主人：验证码服务商（R-022）" },
+            "text": {
+              "en": "Real email or SMS codes need you to choose a provider and supply credentials. Two more items wait on you: developer-account credentials for Google / Apple sign-in (R-023) and how chat alerts reach the box (R-068).",
+              "zh": "真实的邮件或短信验证码需要你选择服务商并提供凭据。另有两项也在等你：谷歌 / 苹果登录的账号凭据（R-023）、聊天提醒如何接入（R-068）。"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "next",
+      "title": { "en": "What is next", "zh": "下一步" },
+      "intro": { "en": "The top of the backlog in SPEC.md (priority P0):", "zh": "SPEC.md 待办清单里优先级最高（P0）的事项：" },
+      "component": "text",
+      "data": {
+        "bullets": [
+          { "en": "R-002 and R-003: design system and screens for the web app, then the web app foundation.", "zh": "R-002、R-003：网页应用的设计系统与界面，然后是网页应用基础架构。" },
+          { "en": "R-060 and R-061: new accounts need administrator approval (private by default).", "zh": "R-060、R-061：新账户需管理员批准（默认私有）。" },
+          { "en": "R-020 and R-021: expose the updater as an admin API; installer and service files for the device.", "zh": "R-020、R-021：把更新器暴露为管理员接口；设备上的安装与服务脚本。" },
+          { "en": "R-030 and R-031: backend integration tests and the repeatable OTA end-to-end script.", "zh": "R-030、R-031：后端集成测试，以及可重复运行的 OTA 端到端脚本。" }
+        ]
+      }
+    }
+  ]
+}

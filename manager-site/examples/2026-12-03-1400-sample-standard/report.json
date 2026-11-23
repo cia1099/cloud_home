@@ -1,0 +1,24 @@
+{
+  "kind": "weekly",
+  "title": { "en": "Sample: every component", "zh": "示例：全部组件" },
+  "summary": { "en": "Made-up data that exercises each component. Never published.", "zh": "用虚构数据演示每个组件，不会发布。" },
+  "chip": { "tone": "warn", "icon": "warn", "text": { "en": "Sample", "zh": "示例" } },
+  "cover": { "style": "c3", "icon": "product" },
+  "sections": [
+    { "id": "kpis", "title": { "en": "KPI cards", "zh": "关键数字" }, "component": "kpis", "data": { "items": [{ "label": { "en": "Tests", "zh": "测试" }, "value": 212, "of": 215, "sub": { "en": "2 failing", "zh": "2 项失败" } }] } },
+    { "id": "gallery", "title": { "en": "Screenshots", "zh": "截图" }, "component": "gallery", "data": { "shots": [
+      { "src": "media/art-a.svg", "alt": { "en": "Abstract art A", "zh": "抽象图 A" }, "title": { "en": "Browsing files", "zh": "浏览文件" }, "build": "v0.4.0", "theme": "Light", "language": "English", "wide": true },
+      { "src": "media/art-b.svg", "alt": { "en": "Abstract art B", "zh": "抽象图 B" }, "title": { "en": "Upload", "zh": "上传" }, "build": "v0.4.0" },
+      { "src": "media/art-c.svg", "alt": { "en": "Abstract art C", "zh": "抽象图 C" }, "title": { "en": "Trash", "zh": "回收站" }, "build": "v0.4.0" }
+    ] } },
+    { "id": "compare", "title": { "en": "Before and after", "zh": "前后对比" }, "component": "compare", "data": { "before": "media/art-a.svg", "after": "media/art-b.svg", "before_label": { "en": "v0.3", "zh": "v0.3" }, "after_label": { "en": "v0.4", "zh": "v0.4" }, "alt": { "en": "Compare version 0.3 and 0.4", "zh": "对比 0.3 与 0.4 版本" } } },
+    { "id": "walk", "title": { "en": "Walkthrough", "zh": "动画演示" }, "component": "walkthrough", "data": { "steps": [
+      { "title": { "en": "Sign in", "zh": "登录" }, "caption": { "en": "Step 1: sign in.", "zh": "第 1 步：登录。" }, "media": { "src": "media/art-a.svg" } },
+      { "title": { "en": "Browse", "zh": "浏览" }, "caption": { "en": "Step 2: browse.", "zh": "第 2 步：浏览。" }, "media": { "src": "media/art-b.svg" } },
+      { "title": { "en": "Upload", "zh": "上传" }, "caption": { "en": "Step 3: upload.", "zh": "第 3 步：上传。" }, "media": { "src": "media/art-c.svg" } }
+    ] } },
+    { "id": "burn", "title": { "en": "Burn-down", "zh": "燃尽图" }, "component": "burndown", "data": {} },
+    { "id": "tests", "title": { "en": "Tests", "zh": "测试" }, "component": "tests", "data": {} },
+    { "id": "areas", "title": { "en": "Areas", "zh": "领域" }, "component": "areas", "data": {} }
+  ]
+}
