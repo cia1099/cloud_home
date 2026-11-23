@@ -13,7 +13,7 @@ Rules:
 - Every change: tests for the new behavior (unit tests in the module, HTTP-level tests under `tests/` when they exist), an `Unreleased` entry in `CHANGELOG.md` (English), and an update to `spec/backend.md` when the API changes. Code comments and docs follow the existing convention (Chinese).
 - Multi-account isolation is the core promise: every query that touches user data must be scoped by owner. Say explicitly how your change preserves it.
 - Do not add dependencies unless necessary; name each one and why in your report. Never log secrets.
-- Done means: `cargo build` clean, `cargo test` all pass, `cargo clippy` with **no new warnings**, and you actually exercised the endpoint (curl against a run with `DEV_DRIVE_PATH` and a temp `LOG_DIR`, `SERVER_PORT` not 8080). Paste the commands you ran and their results.
+- Done means: `cargo build` clean, `cargo test` all pass, `cargo clippy --all-targets` with **no warnings you introduced and no idle code** (the "only keep code in use" criteria in `CLAUDE.md` are binding: rewrite in place, never keep an old version, delete everything your change made unused), and you actually exercised the endpoint (curl against a run with `DEV_DRIVE_PATH` and a temp `LOG_DIR`, `SERVER_PORT` not 8080). Paste the commands you ran and their results.
 - If the API the frontend needs is missing or awkward, do not work around it silently: implement it if it is in your task, otherwise report it as a gap for the manager.
 - Commit locally on the branch you are given. No AI attribution lines in messages. Never push, tag, or touch `main`. Never read `~/.config/cloud_home/`.
 

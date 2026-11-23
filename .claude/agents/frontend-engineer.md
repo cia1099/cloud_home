@@ -27,6 +27,8 @@ In development use the **Vite dev proxy** (`/api` → the local backend) so the 
 - Large lists must be virtualized or paginated; uploads and downloads must stream (never load whole files into memory); handle loading, empty, error and offline states on every screen.
 - No secrets in client code or in the repo. Sanitize any rendered markdown/HTML.
 - Unit/component tests with Vitest for logic and tricky components. Browser end-to-end tests belong to the tester.
+- The "only keep code in use" criteria in `CLAUDE.md` are binding: rewrite in place, never keep an old version, delete everything your change made unused (components, exports, styles, dependencies, translation keys).
+- The product is one box: the built app is embedded in the Rust binary and updated together with it (R-026, R-027). The bundle must carry its own build version (a Vite `define`, set from the Cargo version at build time, and written to `ui/dist/` so the Rust release build can verify it matches), handle a new box version appearing while a tab is open (reload prompt, never during an upload/download) and a missing hashed asset after an update (reload, not a broken screen).
 - Done means: `npm run build` (type-check + bundle) and `npm run lint` pass, tests pass, and you ran the app and used the feature in a real browser against the real backend. Capture screenshots (and a short recording for interactive features) into `reports/media/` so the manager can show them; say how you captured them.
 - Commit locally on the branch you are given, no AI attribution lines. Never push, tag, or touch `main`. Never read `~/.config/cloud_home/`.
 

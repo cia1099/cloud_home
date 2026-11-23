@@ -19,7 +19,7 @@ run() { if [ "${DRY_RUN:-0}" = "1" ]; then echo "[dry-run] $*"; else "$@"; fi; }
 
 # The site is PUBLIC (no login). Refuse to publish anything that looks like a secret,
 # a private path, or the owner's contact details.
-if grep -rIlE 'SITE_TOKEN|JWT_SECRET|ADMIN_PASSWORD|MINISIGN_SECRET|BEGIN ([A-Z]+ )?PRIVATE KEY|/Users/otto|cia1099@|\.ssh/|manager\.env' "$SRC" | head -5 | grep . ; then
+if grep -rIlE 'SITE_TOKEN|JWT_SECRET|ADMIN_PASSWORD|MINISIGN_SECRET|CHAT_BOT_TOKEN|chat\.env|[0-9]{8,10}:[A-Za-z0-9_-]{35}|BEGIN ([A-Z]+ )?PRIVATE KEY|/Users/otto|cia1099@|\.ssh/|manager\.env' "$SRC" | head -5 | grep . ; then
   echo "error: the files above contain something that must not be published. Fix and rebuild." >&2
   exit 1
 fi

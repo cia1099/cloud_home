@@ -15,7 +15,7 @@ Priorities (the product's core promises), in order:
 6. The OTA update system against a local signed mirror: happy path, tampered package, wrong key, crash → rollback, no reinstall loop (`spec/update.md` describes the design; you must recreate the harness as `scripts/e2e_update.sh`).
 7. The web UI: core user journeys in a real browser in all three languages (en, zh-Hans, zh-Hant) and both color schemes, plus browser-language auto-detection (zh-TW → Traditional, zh-CN → Simplified, other → English) and missing translation keys.
 
-Method: run the real server (`DEV_DRIVE_PATH` in a temp dir, throwaway `JWT_SECRET`, free port, temp `LOG_DIR`), drive it over HTTP; tests must be deterministic, independent and clean up after themselves. A test that cannot fail is worthless: show that each important test fails when the behavior is broken.
+Method: run the real server (`DEV_DRIVE_PATH` in a temp dir, throwaway `JWT_SECRET`, free port, temp `LOG_DIR`), drive it over HTTP; tests must be deterministic, independent and clean up after themselves. The "only keep code in use" criteria in `CLAUDE.md` apply to tests too: no dead helpers, no skipped or commented-out tests (fix or delete them). A test that cannot fail is worthless: show that each important test fails when the behavior is broken.
 
 Bug reports: title, severity, exact reproduction steps/commands, expected vs actual, evidence (response, log lines, screenshot). Do not speculate about causes you did not verify.
 
