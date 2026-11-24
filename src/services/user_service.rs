@@ -6,10 +6,12 @@
 //! 先用邮箱注册、之后绑定 Google 的用户，其邮箱仍归自己编辑。
 
 use crate::auth::password;
+use crate::config::{RegistrationMode, RegistrationPolicy};
 use crate::db::Db;
 use crate::error::{AppError, AppResult};
 use crate::models::user::{
-    PROVIDER_EMAIL, PROVIDER_PASSWORD, PROVIDER_PHONE, USER_OWNED_PROVIDERS, User, UserIdentity,
+    APPROVAL_APPROVED, APPROVAL_PENDING, PROVIDER_EMAIL, PROVIDER_PASSWORD, PROVIDER_PHONE,
+    USER_OWNED_PROVIDERS, User, UserIdentity,
 };
 use crate::services::trash_service;
 use crate::util::now_rfc3339;
@@ -34,13 +36,17 @@ pub async fn identities(db: &Db, user_id: &str) -> AppResult<Vec<UserIdentity>> 
     Ok(rows)
 }
 
-/// 登录用查找：只认 email / phone，且账户必须启用。
+/// 登录用查找：只认 email / phone。账户须启用，或处于 pending / rejected 且未被软删除——
+/// 后两者要找出来，是为了在密码正确时给出 `ACCOUNT_PENDING` / `ACCOUNT_REJECTED`
+/// 而不是笼统的 401；它们仍是 `is_active = 0`，拿不到令牌。
 /// 刻意不含第三方 subject——没人会手动输入一串不透明 id 来登录。
 pub async fn find_for_login(db: &Db, identifier: &str) -> AppResult<Option<User>> {
     let user = sqlx::query_as::<_, User>(
         "SELECT u.* FROM users u \
          JOIN user_identities i ON i.user_id = u.id \
-         WHERE i.identifier = ? AND i.provider IN (?, ?) AND u.is_active = 1",
+         WHERE i.identifier = ? AND i.provider IN (?, ?) \
+           AND (u.is_active = 1 \
+                OR (u.approval_status IN ('pending', 'rejected') AND u.deleted_at IS NULL))",
     )
     .bind(identifier)
     .bind(PROVIDER_EMAIL)
@@ -131,51 +137,236 @@ pub async fn any_user_owned_identity(db: &Db, user_id: &str) -> AppResult<UserId
 
 // ---- 写入 ----
 
+/// 注册请求的账户资料（已校验、已规范化）。
+pub struct NewAccount<'a> {
+    pub username: &'a str,
+    pub password: &'a str,
+    pub email: Option<&'a str>,
+    pub phone: Option<&'a str>,
+}
+
+/// 注册请求的来源信息。
+pub struct RegisterSource {
+    /// 客户端 IP（`registered_ip` 与按 IP 限流用）；取不到则为 None。
+    pub ip: Option<String>,
+    /// 来源是否回环 / 内网（引导规则要求）。
+    pub is_local: bool,
+}
+
+/// 注册结果：决定 handler 是签发令牌还是只回 202。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegisterOutcome {
+    /// `open` 模式：直接启用。
+    Open,
+    /// 引导：users 表原本完全为空且来源为本机 / 内网，自动批准。
+    Bootstrap,
+    /// 等待管理员批准。
+    Pending,
+}
+
+impl RegisterOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Open => "open",
+            Self::Bootstrap => "bootstrap",
+            Self::Pending => "pending",
+        }
+    }
+}
+
 /// 建立账户：users 行 + password 凭证 + email/phone 标识，全在一个事务里。
-pub async fn create(
+///
+/// 流程：模式检查 → 限流 / 队列上限（仅 approval）→ 拒绝冷却 → 事务。
+/// 事务的第一条语句就是 INSERT（拿到 SQLite 写锁），所以「users 表是否原本为空」
+/// 的判定与插入串行化——两个并发的首次注册不可能都被引导批准。
+pub async fn register(
     db: &Db,
-    username: &str,
-    password_plain: &str,
-    email: Option<&str>,
-    phone: Option<&str>,
-) -> AppResult<User> {
+    policy: &RegistrationPolicy,
+    acct: NewAccount<'_>,
+    source: RegisterSource,
+) -> AppResult<(User, RegisterOutcome)> {
+    if policy.mode == RegistrationMode::Closed {
+        return Err(AppError::RegistrationClosed);
+    }
+    if policy.mode == RegistrationMode::Approval {
+        check_registration_load(db, policy, source.ip.as_deref()).await?;
+    }
+    let stale_rejected = rejected_blockers(db, policy, acct.email, acct.phone).await?;
+
     let id = uuid::Uuid::new_v4().to_string();
     let now = now_rfc3339();
-    let hash = password::hash(password_plain)?;
+    let hash = password::hash(acct.password)?;
+    let open = policy.mode == RegistrationMode::Open;
+    let (status, active, decided_by) = if open {
+        (APPROVAL_APPROVED, 1, Some("open"))
+    } else {
+        (APPROVAL_PENDING, 0, None)
+    };
 
     let mut tx = db.begin().await?;
 
     sqlx::query(
-        "INSERT INTO users (id, username, created_at, updated_at, is_active) VALUES (?, ?, ?, ?, 1)",
+        "INSERT INTO users (id, username, created_at, updated_at, is_active, \
+         approval_status, approval_decided_at, approval_decided_by, registered_ip) \
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(&id)
-    .bind(username)
+    .bind(acct.username)
     .bind(&now)
     .bind(&now)
+    .bind(active)
+    .bind(status)
+    .bind(decided_by.map(|_| now.as_str()))
+    .bind(decided_by)
+    .bind(source.ip.as_deref())
     .execute(&mut *tx)
     .await?;
+
+    let mut outcome = if open {
+        RegisterOutcome::Open
+    } else {
+        RegisterOutcome::Pending
+    };
+    if !open && source.is_local {
+        // 刚插入的这一行是表里唯一一行 ⇒ 之前（含软删除行）完全为空。
+        let promoted = sqlx::query(
+            "UPDATE users SET approval_status = 'approved', is_active = 1, \
+             approval_decided_at = ?, approval_decided_by = 'bootstrap' \
+             WHERE id = ? AND (SELECT COUNT(*) FROM users) = 1",
+        )
+        .bind(&now)
+        .bind(&id)
+        .execute(&mut *tx)
+        .await?;
+        if promoted.rows_affected() == 1 {
+            outcome = RegisterOutcome::Bootstrap;
+        }
+    }
+
+    // 冷却期已过的 rejected 旧申请：删掉旧行，标识才能让给新申请（拒绝账户从未有过数据）。
+    for old in &stale_rejected {
+        sqlx::query("DELETE FROM users WHERE id = ? AND approval_status = 'rejected'")
+            .bind(old)
+            .execute(&mut *tx)
+            .await?;
+    }
 
     // password 凭证的 identifier 仅作留痕，查找一律走 email/phone 标识行。
     insert_identity(
         &mut tx,
         &id,
         PROVIDER_PASSWORD,
-        email.or(phone).unwrap_or(&id),
+        acct.email.or(acct.phone).unwrap_or(&id),
         Some(&hash),
         None,
         &now,
     )
     .await?;
 
-    if let Some(e) = email {
+    if let Some(e) = acct.email {
         insert_identity(&mut tx, &id, PROVIDER_EMAIL, e, None, None, &now).await?;
     }
-    if let Some(p) = phone {
+    if let Some(p) = acct.phone {
         insert_identity(&mut tx, &id, PROVIDER_PHONE, p, None, None, &now).await?;
     }
 
     tx.commit().await?;
-    get(db, &id).await
+    Ok((get(db, &id).await?, outcome))
+}
+
+/// approval 模式的滥用限制：待批准队列上限与按来源 IP 的小时限流，超限返回 429。
+async fn check_registration_load(
+    db: &Db,
+    policy: &RegistrationPolicy,
+    ip: Option<&str>,
+) -> AppResult<()> {
+    let (pending,): (i64,) =
+        sqlx::query_as("SELECT COUNT(*) FROM users WHERE approval_status = 'pending'")
+            .fetch_one(db)
+            .await?;
+    if pending >= policy.pending_max {
+        crate::audit!(
+            warn,
+            "user.register",
+            "failure",
+            reason = "pending_max",
+            pending = pending,
+            "注册被拒：待批准账户已达上限"
+        );
+        return Err(AppError::RegistrationBusy(
+            "待批准的申请过多，请稍后再试".into(),
+        ));
+    }
+
+    if let Some(ip) = ip {
+        let since = (chrono::Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+        let (recent,): (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM users WHERE registered_ip = ? AND created_at > ?")
+                .bind(ip)
+                .bind(&since)
+                .fetch_one(db)
+                .await?;
+        if recent >= policy.rate_per_ip_per_hour {
+            crate::audit!(
+                warn,
+                "user.register",
+                "failure",
+                reason = "rate_limited",
+                client_ip = %ip,
+                "注册被拒：同一来源注册过于频繁"
+            );
+            return Err(AppError::RegistrationBusy(
+                "该来源注册过于频繁，请稍后再试".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// 占着这些标识的 rejected 旧账户：冷却期内直接 409；已过期的返回 id，由事务删除后复用标识。
+async fn rejected_blockers(
+    db: &Db,
+    policy: &RegistrationPolicy,
+    email: Option<&str>,
+    phone: Option<&str>,
+) -> AppResult<Vec<String>> {
+    let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+        "SELECT DISTINCT u.id, u.approval_decided_at FROM users u \
+         JOIN user_identities i ON i.user_id = u.id \
+         WHERE u.approval_status = 'rejected' AND u.deleted_at IS NULL \
+           AND i.provider IN (?, ?) AND i.identifier IN (?, ?)",
+    )
+    .bind(PROVIDER_EMAIL)
+    .bind(PROVIDER_PHONE)
+    .bind(email.unwrap_or(""))
+    .bind(phone.unwrap_or(""))
+    .fetch_all(db)
+    .await?;
+
+    let cooldown = chrono::Duration::days(policy.reject_cooldown_days);
+    let mut stale = Vec::new();
+    for (id, decided_at) in rows {
+        let decided = decided_at
+            .as_deref()
+            .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok());
+        match decided {
+            Some(at) if chrono::Utc::now() < at + cooldown => {
+                crate::audit!(
+                    warn,
+                    "user.register",
+                    "failure",
+                    reason = "reject_cooldown",
+                    "注册被拒：该标识的申请近期被拒绝，冷却期未过"
+                );
+                return Err(AppError::Conflict(format!(
+                    "该邮箱或手机号的申请近期被拒绝，{} 天内不能再次注册",
+                    policy.reject_cooldown_days
+                )));
+            }
+            _ => stale.push(id),
+        }
+    }
+    Ok(stale)
 }
 
 async fn insert_identity(
@@ -315,10 +506,18 @@ pub async fn remove_identifier(db: &Db, user_id: &str, provider: &str) -> AppRes
 
 // ---- 管理操作 ----
 
-pub async fn list_all(db: &Db) -> AppResult<Vec<(User, Vec<UserIdentity>)>> {
-    let users = sqlx::query_as::<_, User>("SELECT * FROM users ORDER BY created_at")
-        .fetch_all(db)
-        .await?;
+/// 列出账户；`status` 为 None 表示不按审批状态过滤。
+pub async fn list_all(
+    db: &Db,
+    status: Option<&str>,
+) -> AppResult<Vec<(User, Vec<UserIdentity>)>> {
+    let users = sqlx::query_as::<_, User>(
+        "SELECT * FROM users WHERE (? IS NULL OR approval_status = ?) ORDER BY created_at",
+    )
+    .bind(status)
+    .bind(status)
+    .fetch_all(db)
+    .await?;
 
     let mut out = Vec::with_capacity(users.len());
     for u in users {
@@ -360,6 +559,10 @@ pub async fn restore(db: &Db, user_id: &str) -> AppResult<(User, u64)> {
     let Some(deleted_at) = user.deleted_at.clone() else {
         return Err(AppError::Conflict("该账户未被停用，无需还原".into()));
     };
+    // 还原只撤销软删除，绝不能顺带放行没通过审批的账户。
+    if user.approval_status != APPROVAL_APPROVED {
+        return Err(AppError::Conflict("该账户未通过审批，不能还原".into()));
+    }
 
     let rows: Vec<(String,)> =
         sqlx::query_as("SELECT id FROM trash WHERE owner_id = ? AND deleted_at = ?")
@@ -379,7 +582,10 @@ pub async fn restore(db: &Db, user_id: &str) -> AppResult<(User, u64)> {
     }
 
     let now = now_rfc3339();
-    sqlx::query("UPDATE users SET is_active = 1, deleted_at = NULL, updated_at = ? WHERE id = ?")
+    sqlx::query(
+        "UPDATE users SET is_active = 1, deleted_at = NULL, updated_at = ? \
+         WHERE id = ? AND approval_status = 'approved'",
+    )
         .bind(&now)
         .bind(user_id)
         .execute(db)
@@ -461,5 +667,233 @@ mod tests {
     #[test]
     fn normalize_for_rejects_unknown_provider() {
         assert!(normalize_for("google", "x").is_err());
+    }
+
+    // ---- 注册 / 审批 ----
+
+    use crate::db::test_pool;
+
+    fn policy(mode: RegistrationMode) -> RegistrationPolicy {
+        RegistrationPolicy {
+            mode,
+            rate_per_ip_per_hour: 100,
+            pending_max: 100,
+            reject_cooldown_days: 7,
+            pending_expire_days: 14,
+        }
+    }
+
+    async fn reg(
+        db: &Db,
+        p: &RegistrationPolicy,
+        email: &str,
+        ip: &str,
+        is_local: bool,
+    ) -> AppResult<(User, RegisterOutcome)> {
+        register(
+            db,
+            p,
+            NewAccount {
+                username: "n",
+                password: "password123",
+                email: Some(email),
+                phone: None,
+            },
+            RegisterSource {
+                ip: Some(ip.into()),
+                is_local,
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn first_local_account_is_bootstrapped_and_second_is_pending() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+
+        let (a, out) = reg(&db, &p, "a@x.com", "127.0.0.1", true).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Bootstrap);
+        assert_eq!((a.is_active, a.approval_status.as_str()), (1, "approved"));
+        assert_eq!(a.approval_decided_by.as_deref(), Some("bootstrap"));
+
+        let (b, out) = reg(&db, &p, "b@x.com", "127.0.0.1", true).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Pending);
+        assert_eq!((b.is_active, b.approval_status.as_str()), (0, "pending"));
+        assert_eq!(b.registered_ip.as_deref(), Some("127.0.0.1"));
+    }
+
+    #[tokio::test]
+    async fn remote_first_account_is_pending() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (u, out) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Pending);
+        assert_eq!(u.is_active, 0);
+        // 之后即使本机来的也不再是引导（表非空）。
+        let (_, out) = reg(&db, &p, "b@x.com", "127.0.0.1", true).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Pending);
+    }
+
+    #[tokio::test]
+    async fn soft_deleted_rows_count_as_non_empty_for_bootstrap() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (a, _) = reg(&db, &p, "a@x.com", "127.0.0.1", true).await.unwrap();
+        sqlx::query("UPDATE users SET is_active = 0, deleted_at = ? WHERE id = ?")
+            .bind(now_rfc3339())
+            .bind(&a.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        let (_, out) = reg(&db, &p, "b@x.com", "127.0.0.1", true).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Pending);
+    }
+
+    #[tokio::test]
+    async fn concurrent_first_registrations_bootstrap_at_most_one() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (r1, r2) = tokio::join!(
+            reg(&db, &p, "a@x.com", "127.0.0.1", true),
+            reg(&db, &p, "b@x.com", "127.0.0.1", true),
+        );
+        let boots = [r1, r2]
+            .into_iter()
+            .filter(|r| matches!(r, Ok((_, RegisterOutcome::Bootstrap))))
+            .count();
+        assert_eq!(boots, 1);
+    }
+
+    #[tokio::test]
+    async fn open_mode_activates_immediately() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Open);
+        let (u, out) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Open);
+        assert_eq!((u.is_active, u.approval_status.as_str()), (1, "approved"));
+    }
+
+    #[tokio::test]
+    async fn closed_mode_refuses_registration() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Closed);
+        let err = reg(&db, &p, "a@x.com", "127.0.0.1", true).await.unwrap_err();
+        assert!(matches!(err, AppError::RegistrationClosed));
+    }
+
+    #[tokio::test]
+    async fn pending_max_returns_busy() {
+        let db = test_pool().await;
+        let p = RegistrationPolicy {
+            pending_max: 1,
+            ..policy(RegistrationMode::Approval)
+        };
+        reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        let err = reg(&db, &p, "b@x.com", "9.9.9.9", false).await.unwrap_err();
+        assert!(matches!(err, AppError::RegistrationBusy(_)));
+    }
+
+    #[tokio::test]
+    async fn per_ip_rate_limit_returns_busy_only_for_that_ip() {
+        let db = test_pool().await;
+        let p = RegistrationPolicy {
+            rate_per_ip_per_hour: 2,
+            ..policy(RegistrationMode::Approval)
+        };
+        reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        reg(&db, &p, "b@x.com", "8.8.8.8", false).await.unwrap();
+        let err = reg(&db, &p, "c@x.com", "8.8.8.8", false).await.unwrap_err();
+        assert!(matches!(err, AppError::RegistrationBusy(_)));
+        reg(&db, &p, "c@x.com", "9.9.9.9", false).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejected_identifier_is_blocked_during_cooldown_then_reusable() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (u, _) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        crate::services::approval_service::decide(
+            &db,
+            &u.id,
+            crate::services::approval_service::Decision::Reject,
+            "admin-endpoint",
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap_err();
+        assert!(matches!(err, AppError::Conflict(_)));
+
+        // 把决定时间拨到冷却期之前：旧行被替换，新申请进入 pending。
+        let old = (chrono::Utc::now() - chrono::Duration::days(8)).to_rfc3339();
+        sqlx::query("UPDATE users SET approval_decided_at = ? WHERE id = ?")
+            .bind(old)
+            .bind(&u.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        let (n, out) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Pending);
+        assert_ne!(n.id, u.id);
+        assert!(get(&db, &u.id).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn login_lookup_finds_pending_and_rejected_but_not_soft_deleted() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (pending, _) = reg(&db, &p, "p@x.com", "8.8.8.8", false).await.unwrap();
+        let (gone, _) = reg(&db, &p, "g@x.com", "8.8.8.8", false).await.unwrap();
+
+        let found = find_for_login(&db, "p@x.com").await.unwrap().unwrap();
+        assert_eq!(found.id, pending.id);
+        assert_eq!(found.is_active, 0);
+
+        sqlx::query("UPDATE users SET approval_status = 'approved', deleted_at = ? WHERE id = ?")
+            .bind(now_rfc3339())
+            .bind(&gone.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        assert!(find_for_login(&db, "g@x.com").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn restore_never_reactivates_a_non_approved_account() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (u, _) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+
+        // 未软删除的 pending：本就无从还原。
+        assert!(restore(&db, &u.id).await.is_err());
+
+        // 即便人为造出「pending 且带 deleted_at」，还原也必须拒绝并保持停用。
+        sqlx::query("UPDATE users SET deleted_at = ? WHERE id = ?")
+            .bind(now_rfc3339())
+            .bind(&u.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        assert!(matches!(
+            restore(&db, &u.id).await.unwrap_err(),
+            AppError::Conflict(_)
+        ));
+        assert_eq!(get(&db, &u.id).await.unwrap().is_active, 0);
+    }
+
+    #[tokio::test]
+    async fn list_all_filters_by_approval_status() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        reg(&db, &p, "a@x.com", "127.0.0.1", true).await.unwrap(); // bootstrap → approved
+        reg(&db, &p, "b@x.com", "8.8.8.8", false).await.unwrap(); // pending
+
+        assert_eq!(list_all(&db, None).await.unwrap().len(), 2);
+        let pending = list_all(&db, Some("pending")).await.unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].0.approval_status, "pending");
+        assert_eq!(list_all(&db, Some("rejected")).await.unwrap().len(), 0);
     }
 }

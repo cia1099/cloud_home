@@ -52,6 +52,8 @@ pub fn build_router(state: AppState) -> Router {
         .routes(routes!(me::verify_identifier))
         // 运维（共享口令 + 内网限制保护）
         .routes(routes!(admin::list_users))
+        .routes(routes!(admin::approve_user))
+        .routes(routes!(admin::reject_user))
         .routes(routes!(admin::delete_user))
         .routes(routes!(admin::restore_user))
         .routes(routes!(admin::purge_trash))

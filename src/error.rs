@@ -19,6 +19,21 @@ pub enum AppError {
     #[error("{0}")]
     ForbiddenReason(String),
 
+    /// 密码正确但账户尚待管理员批准。
+    #[error("账户正在等待管理员批准")]
+    AccountPending,
+
+    /// 密码正确但账户申请已被拒绝。
+    #[error("账户申请已被拒绝")]
+    AccountRejected,
+
+    #[error("当前不开放注册")]
+    RegistrationClosed,
+
+    /// 429：待批准队列已满，或同一来源注册过于频繁。
+    #[error("{0}")]
+    RegistrationBusy(String),
+
     #[error("资源不存在")]
     NotFound,
 
@@ -65,7 +80,12 @@ impl AppError {
             AppError::DriveUnavailable => {
                 tracing::warn!(reason = "drive_unavailable", "外接硬盘不可用");
             }
-            AppError::Conflict(_) | AppError::Gone => {
+            AppError::Conflict(_)
+            | AppError::Gone
+            | AppError::AccountPending
+            | AppError::AccountRejected
+            | AppError::RegistrationClosed
+            | AppError::RegistrationBusy(_) => {
                 tracing::debug!(error = %self, "请求冲突/已过期");
             }
             AppError::NotFound | AppError::BadRequest(_) | AppError::PayloadTooLarge => {
@@ -80,6 +100,12 @@ impl AppError {
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "UNAUTHORIZED"),
             AppError::Forbidden | AppError::ForbiddenReason(_) => {
                 (StatusCode::FORBIDDEN, "FORBIDDEN")
+            }
+            AppError::AccountPending => (StatusCode::FORBIDDEN, "ACCOUNT_PENDING"),
+            AppError::AccountRejected => (StatusCode::FORBIDDEN, "ACCOUNT_REJECTED"),
+            AppError::RegistrationClosed => (StatusCode::FORBIDDEN, "REGISTRATION_CLOSED"),
+            AppError::RegistrationBusy(_) => {
+                (StatusCode::TOO_MANY_REQUESTS, "REGISTRATION_BUSY")
             }
             AppError::NotFound => (StatusCode::NOT_FOUND, "NOT_FOUND"),
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, "BAD_REQUEST"),
@@ -118,6 +144,24 @@ impl IntoResponse for AppError {
 }
 
 pub type AppResult<T> = Result<T, AppError>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn approval_errors_have_stable_codes() {
+        for (err, status, code) in [
+            (AppError::AccountPending, 403, "ACCOUNT_PENDING"),
+            (AppError::AccountRejected, 403, "ACCOUNT_REJECTED"),
+            (AppError::RegistrationClosed, 403, "REGISTRATION_CLOSED"),
+            (AppError::RegistrationBusy("x".into()), 429, "REGISTRATION_BUSY"),
+        ] {
+            let (s, c) = err.parts();
+            assert_eq!((s.as_u16(), c), (status, code));
+        }
+    }
+}
 
 /// 错误响应体中 `error` 字段的内容。
 #[derive(Debug, Serialize, ToSchema)]

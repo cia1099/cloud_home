@@ -278,10 +278,39 @@ Base URL: `http://localhost:8080/api/v1`
 
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
-| POST | /auth/register | 无 | 注册账户（`email` 与 `phone` 至少给一个），设置 auth_token Cookie，同时返回 token 字段 |
-| POST | /auth/login    | 无 | 登录，`identifier` 可为邮箱或手机号，设置 auth_token Cookie，同时返回 token + expires_at |
+| POST | /auth/register | 无 | 注册账户（`email` 与 `phone` 至少给一个）。结果取决于 `REGISTRATION_MODE`，见下方「账户审批」 |
+| POST | /auth/login    | 无 | 登录，`identifier` 可为邮箱或手机号，设置 auth_token Cookie，同时返回 token + expires_at；密码正确但账户未获批准 → `403 ACCOUNT_PENDING` / `ACCOUNT_REJECTED` |
 | POST | /auth/logout   | JWT | 清除 auth_token Cookie（`Set-Cookie: auth_token=; Max-Age=0`） |
 | GET  | /auth/me       | JWT | 获取当前用户信息（含各标识的 verified / managed_by 与 has_password） |
+
+#### 账户审批（`users.approval_status`，迁移 `…0008_add_user_approval.sql`）
+
+新账户须经管理员批准才能登录。状态 `pending → approved | rejected`，与软删除（`deleted_at`）互不相干；
+迁移把所有已有账户置为 `approved`。**fail closed**：`pending` / `rejected` 恒为 `is_active = 0`，
+`AuthUser` 与登录路径本就拒绝 `is_active = 0`，批准才置 1。附带列：`approval_decided_at`、
+`approval_decided_by`（`open` | `bootstrap` | `admin-endpoint` | `expiry` | 之后的 `chat:<provider>:<id>`）、
+`approval_note`、`registered_ip`（个人数据，仅管理端可见）。
+
+| `REGISTRATION_MODE` | `POST /auth/register` |
+|---|---|
+| `open` | `201`，已启用，返回 token + Cookie（旧行为） |
+| `approval`（默认） | `202 {"data":{"status":"pending_approval"}}`，**无 token、无 Cookie** |
+| `closed` | `403 REGISTRATION_CLOSED` |
+
+- **引导规则**（approval 模式）：仅当 `users` 表**完全为空**（软删除行也算）且调用方为回环 / 内网
+  （与 `AdminGuard` 同一判定 `is_local`）时，首个账户自动批准（`approval_decided_by = bootstrap`），
+  响应同 `open`（`201` + token）。判定与插入在同一事务内：事务首条语句即 INSERT（取得写锁），
+  随后 `UPDATE … WHERE (SELECT COUNT(*) FROM users) = 1`，并发的两个首次注册不会都胜出。
+  远程调用方首注册 → `pending`。
+- **登录**：错误凭证一律 `401`，不泄露状态；**密码正确**时 `pending` → `403 ACCOUNT_PENDING`，
+  `rejected` → `403 ACCOUNT_REJECTED`。已软删除的账户仍是 `401`。
+- **限制**（仅 approval 模式，超限 `429 REGISTRATION_BUSY`）：`REGISTER_RATE_PER_IP_PER_HOUR`=5
+  （按 `registered_ip`，计过去 1 小时内创建的账户数）、`PENDING_MAX`=20（pending 总数）。
+  被拒绝的标识在 `REJECT_COOLDOWN_DAYS`=7 天内再注册 → `409`；冷却期过后旧的 rejected 行被删除，标识让给新申请。
+  `PENDING_EXPIRE_DAYS`=14 天仍 pending 的申请由 `tasks/pending_expirer.rs`（每小时）自动拒绝（`decided_by = expiry`）。
+- **还原**：`user_service::restore` 要求账户 `approved`，且 UPDATE 带 `approval_status = 'approved'`，
+  绝不会借还原放行未通过审批的账户。
+- **管理端审批**见下方运维端点；决策逻辑在 `services/approval_service.rs`，之后的聊天机器人直接调同一组函数。
 
 **用户名不唯一**，它只是可随时修改的显示名；登录一律靠邮箱或手机号。
 JWT 的 Claims 里**不带用户名**——`AuthUser` 提取时本就要查库确认账户仍启用，
@@ -538,7 +567,9 @@ LIMIT ? OFFSET ?
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET  | /admin/users         | 列出所有账户（含已停用）及其标识 |
+| GET  | /admin/users         | 列出账户（含已停用）及其标识；`?status=pending\|approved\|rejected\|all`（默认 all）；含 `approval_status`、`approval_decided_at/by`、`approval_note`、`registered_ip`、`created_at` |
+| POST | /admin/users/approve | 批准账户：`{identifier, provider?, note?}` |
+| POST | /admin/users/reject  | 拒绝账户：`{identifier, provider?, reason?}` |
 | POST | /admin/users/delete  | 软删除账户 |
 | POST | /admin/users/restore | 还原账户 |
 | POST | /admin/trash/purge   | 立即清空某账户的回收站（物理删除，**不可逆**） |
@@ -555,6 +586,12 @@ LIMIT ? OFFSET ?
 > 来源限制的局限要正视：反向代理在前时，对端 IP 就是网关自己的回环地址，内网判定会
 > 形同虚设，除非开启 `TRUST_PROXY_HEADERS` 并信任 `X-Forwarded-For`。它是给局域网机器
 > 加的一层防护，不能替代口令本身。
+
+**审批语义**（`approval_service::decide`，一条带条件的 UPDATE，两人同时操作恰好一个生效）：
+`pending` → 批准 / 拒绝；`rejected` → 批准（允许改判）；与当前状态相同 → `200` 且 `changed=false`
+（幂等，不覆盖先前的决定者，响应里带 `decided_by` / `decided_at`）；拒绝一个已批准的账户 → `409`，
+消息写明先前的决定时间与决定者（已批准账户可能已有数据，要停用请用 `/admin/users/delete`）。
+批准不会复活已软删除账户。审计事件 `user.approve` / `user.reject`（`target_user_id`、`decided_by`）。
 
 **定位账户**用请求体里的 `identifier`（匹配**任意** provider：邮箱、手机号，
 或 Google/Apple subject——纯第三方账户既无邮箱也无手机号，必须够得着），
@@ -641,10 +678,13 @@ JWT 的 `Claims` 因此新增 `username` 字段（`#[serde(default)]` 兼容改�
 
 | event | 位置 | 关键字段 |
 |---|---|---|
-| `auth.register` success | `handlers/auth.rs` | `user_id`, `username` |
-| `auth.register` failure | 同上（Conflict 分支） | `reason="duplicate_username_or_email"`, `username` |
+| `user.register` | `handlers/auth.rs` | `result` = `open` \| `bootstrap` \| `pending`；`user_id`, `username` |
+| `user.register` failure | 同上（Conflict 分支）、`user_service.rs` | `reason` = `duplicate_identifier` \| `reject_cooldown` \| `rate_limited`（含 `client_ip`）\| `pending_max` |
+| `user.approve` / `user.reject` | `services/approval_service.rs` | `target_user_id`, `target_username`, `decided_by` |
+| `user.expire` | 同上（`tasks/pending_expirer.rs` 调用） | `target_user_id`, `target_username`, `expire_days` |
 | `auth.login` failure（用户不存在） | 同上 | `reason="unknown_user"`, `identifier` |
 | `auth.login` failure（密码错误） | 同上 | `reason="bad_password"`, `user_id`, `username` |
+| `auth.login` failure（未获批准） | 同上 | `reason="pending_approval"` \| `"rejected"`, `user_id` |
 | `auth.login` success | 同上 | `user_id`, `username` |
 | `auth.logout` | 同上 | `user_id` |
 | `auth.token_rejected` | `auth/extractor.rs`（`token_missing`）、`auth/jwt.rs`（`token_invalid`） | warn, `reason` |
@@ -700,6 +740,13 @@ TRUST_PROXY_HEADERS=false
 # 运维端点（/admin/users）的共享口令；留空 = 这些端点一律 404（功能关闭）。
 # 另有一层「调用方须来自回环或内网」的限制，注意其在反向代理之后会失效。
 ADMIN_PASSWORD=
+
+# 注册模式：open（注册即启用）| approval（默认，须管理员批准）| closed（关闭注册）
+REGISTRATION_MODE=approval
+REGISTER_RATE_PER_IP_PER_HOUR=5
+PENDING_MAX=20
+REJECT_COOLDOWN_DAYS=7
+PENDING_EXPIRE_DAYS=14
 ```
 
 > `DATABASE_URL` 由程序在运行时根据侦测到的硬盘路径自动构造，无需在 .env 中写死。

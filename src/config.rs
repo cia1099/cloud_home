@@ -1,5 +1,43 @@
 use std::path::PathBuf;
 
+/// 注册模式（`REGISTRATION_MODE`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationMode {
+    /// 注册即启用，签发令牌。
+    Open,
+    /// 注册后处于 pending，须管理员批准；不签发令牌。
+    Approval,
+    /// 关闭注册。
+    Closed,
+}
+
+impl std::str::FromStr for RegistrationMode {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "open" => Ok(Self::Open),
+            "approval" => Ok(Self::Approval),
+            "closed" => Ok(Self::Closed),
+            other => anyhow::bail!("REGISTRATION_MODE 只能是 open|approval|closed，收到 {other:?}"),
+        }
+    }
+}
+
+/// 注册策略与滥用限制。
+#[derive(Debug, Clone, Copy)]
+pub struct RegistrationPolicy {
+    pub mode: RegistrationMode,
+    /// 同一来源 IP 每小时最多提交的注册数（仅 approval 模式）。
+    pub rate_per_ip_per_hour: i64,
+    /// pending 账户总数上限，超出返回 429（仅 approval 模式）。
+    pub pending_max: i64,
+    /// 被拒绝的标识在此天数内不得重新注册。
+    pub reject_cooldown_days: i64,
+    /// pending 超过此天数自动拒绝。
+    pub pending_expire_days: i64,
+}
+
 /// 全局配置，从 .env / 环境变量加载。
 ///
 /// 注意：`DATABASE_URL` 不在此处，它由程序在运行时根据侦测到的硬盘路径构造。
@@ -44,6 +82,8 @@ pub struct Config {
     pub update_root: PathBuf,
     /// 覆盖清单所在 URL 前缀——仅供测试用本地镜像，生产不要设置。
     pub update_base_url: Option<String>,
+    /// 注册模式与限流。
+    pub registration: RegistrationPolicy,
 }
 
 impl std::fmt::Debug for Config {
@@ -75,6 +115,7 @@ impl std::fmt::Debug for Config {
             .field("update_check_interval_hours", &self.update_check_interval_hours)
             .field("update_root", &self.update_root)
             .field("update_base_url", &self.update_base_url)
+            .field("registration", &self.registration)
             .finish()
     }
 }
@@ -123,6 +164,13 @@ impl Config {
             update_base_url: std::env::var("UPDATE_BASE_URL")
                 .ok()
                 .filter(|s| !s.trim().is_empty()),
+            registration: RegistrationPolicy {
+                mode: env_or("REGISTRATION_MODE", "approval").parse()?,
+                rate_per_ip_per_hour: env_parse("REGISTER_RATE_PER_IP_PER_HOUR", 5)?,
+                pending_max: env_parse("PENDING_MAX", 20)?,
+                reject_cooldown_days: env_parse("REJECT_COOLDOWN_DAYS", 7)?,
+                pending_expire_days: env_parse("PENDING_EXPIRE_DAYS", 14)?,
+            },
         })
     }
 
