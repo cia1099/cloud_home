@@ -7,7 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** new accounts now need administrator approval. With the new
+  default `REGISTRATION_MODE=approval`, `POST /auth/register` answers
+  `202 {"data":{"status":"pending_approval"}}` and issues **no token and no
+  cookie**; the account stays inactive until approved. `REGISTRATION_MODE=open`
+  keeps the old behaviour (`201` + token), `closed` answers
+  `403 REGISTRATION_CLOSED`. The very first account is approved automatically
+  (and gets `201` + token) only when the `users` table is completely empty and
+  the caller is on loopback / a private network; the check and the insert run in
+  one transaction. Logging in with the correct password on a pending or rejected
+  account returns `403 ACCOUNT_PENDING` / `403 ACCOUNT_REJECTED` (a wrong
+  password is still `401`). Existing accounts are migrated to `approved` and
+  keep working. The web app is updated separately (R-062).
+
 ### Added
+- Account approval via the private admin endpoints: `GET /admin/users` gains
+  `?status=pending|approved|rejected|all` and returns `approval_status`,
+  `approval_decided_*`, `approval_note`, `registered_ip` and `created_at`;
+  new `POST /admin/users/approve` and `POST /admin/users/reject` (idempotent;
+  reject-then-approve is allowed; rejecting an approved account is `409` naming
+  the earlier decider). Audit events `user.register`, `user.approve`,
+  `user.reject`, `user.expire` (the registration audit event `auth.register`
+  is renamed `user.register`).
+- Registration abuse limits: `REGISTER_RATE_PER_IP_PER_HOUR` (5) and
+  `PENDING_MAX` (20) answer `429 REGISTRATION_BUSY`; a rejected identifier
+  cannot register again for `REJECT_COOLDOWN_DAYS` (7, `409`); pending requests
+  older than `PENDING_EXPIRE_DAYS` (14) are rejected automatically by an hourly
+  background task. Restoring a soft-deleted account never reactivates one that
+  is not approved.
 - `POST /admin/trash/purge` empties a single account's trash immediately,
   reclaiming the disk space without waiting out the retention window. This is
   the only way to clear a removed account's files: deactivating an account

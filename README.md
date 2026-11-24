@@ -72,10 +72,18 @@ BASE=http://127.0.0.1:8080/api/v1
 # 健康检查
 curl $BASE/health
 
-# 注册（返回 token，并设置 auth_token Cookie）
+# 注册。默认 REGISTRATION_MODE=approval：
+#   - 全新数据库里，来自本机/内网的第一个账户自动批准，返回 token 并设置 auth_token Cookie；
+#   - 之后的账户返回 202 {"data":{"status":"pending_approval"}}，没有 token，须管理员批准。
+#   REGISTRATION_MODE=open 则注册即启用并返回 token。
 curl -X POST $BASE/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"username":"alice","email":"alice@example.com","password":"password123"}'
+
+# 管理员批准（需设置 ADMIN_PASSWORD，且从本机/内网调用）
+curl "$BASE/admin/users?status=pending" -H 'X-Admin-Password: <ADMIN_PASSWORD>'
+curl -X POST $BASE/admin/users/approve -H 'X-Admin-Password: <ADMIN_PASSWORD>' \
+  -H 'Content-Type: application/json' -d '{"identifier":"bob@example.com"}'
 
 # 用返回的 token 访问当前用户信息
 curl $BASE/auth/me -H "Authorization: Bearer <token>"
