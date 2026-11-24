@@ -2,12 +2,17 @@
 
 use axum::Json;
 use axum::extract::State;
+use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode, header::SET_COOKIE};
+use axum::response::{IntoResponse, Response};
 
 use crate::auth::{AuthUser, jwt, password};
 use crate::error::{AppError, AppResult, ErrorResponse};
 use crate::models::common::OkResponse;
-use crate::models::user::{AuthResponse, CreateUserDto, LoginDto, User, UserResponse};
+use crate::models::user::{
+    APPROVAL_PENDING, AuthResponse, CreateUserDto, LoginDto, RegisterPendingResponse, User,
+    UserResponse,
+};
 use crate::openapi::ApiResponse;
 use crate::services::user_service;
 use crate::state::AppState;
@@ -19,15 +24,19 @@ use crate::state::AppState;
     tag = "auth",
     request_body = CreateUserDto,
     responses(
-        (status = 201, description = "注册成功", body = ApiResponse<AuthResponse>),
+        (status = 201, description = "已启用并登录（`REGISTRATION_MODE=open`，或首个账户由本机 / 内网引导批准）；返回 token 并设置 Cookie", body = ApiResponse<AuthResponse>),
+        (status = 202, description = "申请已提交，等待管理员批准（`REGISTRATION_MODE=approval`）；不签发 token、不设 Cookie", body = ApiResponse<RegisterPendingResponse>),
         (status = 400, description = "参数校验失败，或未提供邮箱与手机号", body = ErrorResponse),
-        (status = 409, description = "邮箱或手机号已被注册", body = ErrorResponse),
+        (status = 403, description = "REGISTRATION_CLOSED：当前不开放注册", body = ErrorResponse),
+        (status = 409, description = "邮箱或手机号已被注册，或其申请近期被拒绝（冷却期内）", body = ErrorResponse),
+        (status = 429, description = "REGISTRATION_BUSY：待批准队列已满或同一来源注册过于频繁", body = ErrorResponse),
     )
 )]
 pub async fn register(
     State(state): State<AppState>,
+    parts: Parts,
     Json(dto): Json<CreateUserDto>,
-) -> AppResult<(StatusCode, HeaderMap, ApiResponse<AuthResponse>)> {
+) -> AppResult<Response> {
     let username = dto.username.trim();
     if username.chars().count() < 3 {
         return Err(AppError::BadRequest("用户名至少 3 个字符".into()));
@@ -53,37 +62,60 @@ pub async fn register(
         return Err(AppError::BadRequest("请至少提供邮箱或手机号".into()));
     }
 
+    let ip = crate::logging::client_ip(
+        &parts.headers,
+        &parts.extensions,
+        state.config.trust_proxy_headers,
+    );
+
     // 用户名不再要求唯一；重复的邮箱/手机号由唯一索引在 service 层转成 409。
-    let user = user_service::create(
+    let (user, outcome) = user_service::register(
         &state.db,
-        username,
-        &dto.password,
-        email.as_deref(),
-        phone.as_deref(),
+        &state.config.registration,
+        user_service::NewAccount {
+            username,
+            password: &dto.password,
+            email: email.as_deref(),
+            phone: phone.as_deref(),
+        },
+        user_service::RegisterSource {
+            ip: ip.map(|i| i.to_string()),
+            is_local: ip.is_some_and(super::admin::is_local),
+        },
     )
     .await
     .inspect_err(|e| {
         if matches!(e, AppError::Conflict(_)) {
             crate::audit!(
                 warn,
-                "auth.register",
+                "user.register",
                 "failure",
                 reason = "duplicate_identifier",
                 username = %username,
-                "注册失败：邮箱或手机号已被使用"
+                "注册失败：邮箱或手机号已被使用，或冷却期未过"
             );
         }
     })?;
 
     crate::audit!(
         info,
-        "auth.register",
-        "success",
+        "user.register",
+        outcome.as_str(),
         user_id = %user.id,
         username = %user.username,
         "注册成功"
     );
-    issue_auth_response(&state, user, StatusCode::CREATED).await
+
+    if outcome == user_service::RegisterOutcome::Pending {
+        // 待批准：不签发令牌、不设 Cookie。
+        let body = ApiResponse::new(RegisterPendingResponse {
+            status: "pending_approval",
+        });
+        return Ok((StatusCode::ACCEPTED, body).into_response());
+    }
+    Ok(issue_auth_response(&state, user, StatusCode::CREATED)
+        .await?
+        .into_response())
 }
 
 /// POST /auth/login
@@ -94,7 +126,8 @@ pub async fn register(
     request_body = LoginDto,
     responses(
         (status = 200, description = "登录成功", body = ApiResponse<AuthResponse>),
-        (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 401, description = "认证失败（账户不存在或密码错误）", body = ErrorResponse),
+        (status = 403, description = "密码正确但账户未获批准：ACCOUNT_PENDING（等待批准）/ ACCOUNT_REJECTED（已被拒绝）", body = ErrorResponse),
     )
 )]
 pub async fn login(
@@ -139,6 +172,24 @@ pub async fn login(
             "登录失败：密码错误"
         );
         return Err(AppError::Unauthorized);
+    }
+
+    // 密码正确才揭示审批状态（错误密码一律 401，不泄露账户是否存在 / 处于何态）。
+    if user.is_active == 0 {
+        let (reason, err) = if user.approval_status == APPROVAL_PENDING {
+            ("pending_approval", AppError::AccountPending)
+        } else {
+            ("rejected", AppError::AccountRejected)
+        };
+        crate::audit!(
+            warn,
+            "auth.login",
+            "failure",
+            reason = reason,
+            user_id = %user.id,
+            "登录失败：账户未获批准"
+        );
+        return Err(err);
     }
 
     crate::audit!(

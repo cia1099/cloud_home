@@ -12,6 +12,11 @@ pub const PROVIDER_PHONE: &str = "phone";
 /// 用户可自行增删改的标识（与第三方托管的相对）。
 pub const USER_OWNED_PROVIDERS: [&str; 2] = [PROVIDER_EMAIL, PROVIDER_PHONE];
 
+/// 账户审批状态（`users.approval_status`）。与软删除（`deleted_at`）是两回事。
+pub const APPROVAL_PENDING: &str = "pending";
+pub const APPROVAL_APPROVED: &str = "approved";
+pub const APPROVAL_REJECTED: &str = "rejected";
+
 /// 数据库中的用户行——仅剩个人资料，凭证与标识都在 `user_identities`。
 #[derive(Debug, Clone, FromRow)]
 #[allow(dead_code)]
@@ -22,6 +27,12 @@ pub struct User {
     pub updated_at: String,
     pub is_active: i64,
     pub deleted_at: Option<String>,
+    /// `pending` | `approved` | `rejected`；非 approved 时 `is_active` 必为 0。
+    pub approval_status: String,
+    pub approval_decided_at: Option<String>,
+    pub approval_decided_by: Option<String>,
+    pub approval_note: Option<String>,
+    pub registered_ip: Option<String>,
 }
 
 /// 一条身份记录：凭证（password）或标识（email/phone/google/apple）。
@@ -55,6 +66,13 @@ pub struct CreateUserDto {
     pub email: Option<String>,
     #[serde(default)]
     pub phone: Option<String>,
+}
+
+/// 审批模式下注册成功（待批准）的响应体：不含令牌。
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RegisterPendingResponse {
+    /// 恒为 `pending_approval`。
+    pub status: &'static str,
 }
 
 /// 登录请求体：`identifier` 可为 email 或手机号。
@@ -120,6 +138,33 @@ pub struct AdminTargetDto {
     pub identifier: String,
     #[serde(default)]
     pub provider: Option<String>,
+}
+
+/// 管理端批准账户：标识 + 可选 provider 消歧 + 可选备注。
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminApproveDto {
+    pub identifier: String,
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub note: Option<String>,
+}
+
+/// 管理端拒绝账户：标识 + 可选 provider 消歧 + 可选原因。
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct AdminRejectDto {
+    pub identifier: String,
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// `GET /admin/users` 的查询参数。
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+pub struct AdminUserListQuery {
+    /// `pending` | `approved` | `rejected` | `all`（默认 `all`）。
+    pub status: Option<String>,
 }
 
 /// 对外返回的单条标识信息。
@@ -195,6 +240,13 @@ pub struct AdminUserItem {
     pub username: String,
     pub is_active: bool,
     pub deleted_at: Option<String>,
+    pub created_at: String,
+    /// `pending` | `approved` | `rejected`。
+    pub approval_status: String,
+    pub approval_decided_at: Option<String>,
+    pub approval_decided_by: Option<String>,
+    pub approval_note: Option<String>,
+    pub registered_ip: Option<String>,
     pub identities: Vec<IdentityResponse>,
 }
 
@@ -220,4 +272,17 @@ pub struct AdminPurgeResponse {
     pub username: String,
     pub deleted_count: i64,
     pub freed_bytes: i64,
+}
+
+/// 管理端批准 / 拒绝的结果。
+#[derive(Debug, Serialize, ToSchema)]
+pub struct AdminDecisionResponse {
+    pub user_id: String,
+    pub username: String,
+    pub approval_status: String,
+    /// false 表示账户本来就是该状态（幂等重复调用），未做任何改动。
+    pub changed: bool,
+    pub decided_at: Option<String>,
+    /// 做出当前决定的人（`bootstrap` | `admin-endpoint` | `expiry` | …）。
+    pub decided_by: Option<String>,
 }

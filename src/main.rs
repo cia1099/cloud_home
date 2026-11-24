@@ -118,6 +118,7 @@ async fn main() -> anyhow::Result<()> {
         config.trash_cleanup_interval_hours,
         events.clone(),
     );
+    tasks::pending_expirer::spawn(pool.clone(), config.registration.pending_expire_days);
     tasks::drive_monitor::spawn(config.clone(), drive_manager.clone(), mount.clone());
     update::start(&updater);
 
