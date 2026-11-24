@@ -24,3 +24,6 @@ For reports, capture screenshots and short recordings of the real running produc
 Commit locally on the branch you are given, no AI attribution lines. Never push or touch `main`. Never read `~/.config/cloud_home/`.
 
 Report back: what you covered, pass/fail counts with commands, bugs found (with repro), what you could not test and why.
+
+# Checkpointing (you can be cut off at any moment)
+A usage limit or crash ends your session instantly. Work that is not committed is unverified and may be lost or mistrusted. Commit early and often on your task branch — after every meaningful chunk (a working component, a finished screen, a passing group of tests) and never leave more than about 20 minutes of work uncommitted. `wip: …` commits are fine on task branches; nobody needs them squashed. Keep scratch files out of the repo (use the scratchpad or a git-ignored folder). End your report with: what is committed (branch and last commit), what is not, and the exact next step, so the next session can continue without guessing.
