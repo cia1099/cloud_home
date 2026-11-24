@@ -145,6 +145,24 @@ impl IntoResponse for AppError {
 
 pub type AppResult<T> = Result<T, AppError>;
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn approval_errors_have_stable_codes() {
+        for (err, status, code) in [
+            (AppError::AccountPending, 403, "ACCOUNT_PENDING"),
+            (AppError::AccountRejected, 403, "ACCOUNT_REJECTED"),
+            (AppError::RegistrationClosed, 403, "REGISTRATION_CLOSED"),
+            (AppError::RegistrationBusy("x".into()), 429, "REGISTRATION_BUSY"),
+        ] {
+            let (s, c) = err.parts();
+            assert_eq!((s.as_u16(), c), (status, code));
+        }
+    }
+}
+
 /// 错误响应体中 `error` 字段的内容。
 #[derive(Debug, Serialize, ToSchema)]
 pub struct ErrorDetail {

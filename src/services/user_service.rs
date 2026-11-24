@@ -668,4 +668,232 @@ mod tests {
     fn normalize_for_rejects_unknown_provider() {
         assert!(normalize_for("google", "x").is_err());
     }
+
+    // ---- 注册 / 审批 ----
+
+    use crate::db::test_pool;
+
+    fn policy(mode: RegistrationMode) -> RegistrationPolicy {
+        RegistrationPolicy {
+            mode,
+            rate_per_ip_per_hour: 100,
+            pending_max: 100,
+            reject_cooldown_days: 7,
+            pending_expire_days: 14,
+        }
+    }
+
+    async fn reg(
+        db: &Db,
+        p: &RegistrationPolicy,
+        email: &str,
+        ip: &str,
+        is_local: bool,
+    ) -> AppResult<(User, RegisterOutcome)> {
+        register(
+            db,
+            p,
+            NewAccount {
+                username: "n",
+                password: "password123",
+                email: Some(email),
+                phone: None,
+            },
+            RegisterSource {
+                ip: Some(ip.into()),
+                is_local,
+            },
+        )
+        .await
+    }
+
+    #[tokio::test]
+    async fn first_local_account_is_bootstrapped_and_second_is_pending() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+
+        let (a, out) = reg(&db, &p, "a@x.com", "127.0.0.1", true).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Bootstrap);
+        assert_eq!((a.is_active, a.approval_status.as_str()), (1, "approved"));
+        assert_eq!(a.approval_decided_by.as_deref(), Some("bootstrap"));
+
+        let (b, out) = reg(&db, &p, "b@x.com", "127.0.0.1", true).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Pending);
+        assert_eq!((b.is_active, b.approval_status.as_str()), (0, "pending"));
+        assert_eq!(b.registered_ip.as_deref(), Some("127.0.0.1"));
+    }
+
+    #[tokio::test]
+    async fn remote_first_account_is_pending() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (u, out) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Pending);
+        assert_eq!(u.is_active, 0);
+        // 之后即使本机来的也不再是引导（表非空）。
+        let (_, out) = reg(&db, &p, "b@x.com", "127.0.0.1", true).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Pending);
+    }
+
+    #[tokio::test]
+    async fn soft_deleted_rows_count_as_non_empty_for_bootstrap() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (a, _) = reg(&db, &p, "a@x.com", "127.0.0.1", true).await.unwrap();
+        sqlx::query("UPDATE users SET is_active = 0, deleted_at = ? WHERE id = ?")
+            .bind(now_rfc3339())
+            .bind(&a.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        let (_, out) = reg(&db, &p, "b@x.com", "127.0.0.1", true).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Pending);
+    }
+
+    #[tokio::test]
+    async fn concurrent_first_registrations_bootstrap_at_most_one() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (r1, r2) = tokio::join!(
+            reg(&db, &p, "a@x.com", "127.0.0.1", true),
+            reg(&db, &p, "b@x.com", "127.0.0.1", true),
+        );
+        let boots = [r1, r2]
+            .into_iter()
+            .filter(|r| matches!(r, Ok((_, RegisterOutcome::Bootstrap))))
+            .count();
+        assert_eq!(boots, 1);
+    }
+
+    #[tokio::test]
+    async fn open_mode_activates_immediately() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Open);
+        let (u, out) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Open);
+        assert_eq!((u.is_active, u.approval_status.as_str()), (1, "approved"));
+    }
+
+    #[tokio::test]
+    async fn closed_mode_refuses_registration() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Closed);
+        let err = reg(&db, &p, "a@x.com", "127.0.0.1", true).await.unwrap_err();
+        assert!(matches!(err, AppError::RegistrationClosed));
+    }
+
+    #[tokio::test]
+    async fn pending_max_returns_busy() {
+        let db = test_pool().await;
+        let p = RegistrationPolicy {
+            pending_max: 1,
+            ..policy(RegistrationMode::Approval)
+        };
+        reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        let err = reg(&db, &p, "b@x.com", "9.9.9.9", false).await.unwrap_err();
+        assert!(matches!(err, AppError::RegistrationBusy(_)));
+    }
+
+    #[tokio::test]
+    async fn per_ip_rate_limit_returns_busy_only_for_that_ip() {
+        let db = test_pool().await;
+        let p = RegistrationPolicy {
+            rate_per_ip_per_hour: 2,
+            ..policy(RegistrationMode::Approval)
+        };
+        reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        reg(&db, &p, "b@x.com", "8.8.8.8", false).await.unwrap();
+        let err = reg(&db, &p, "c@x.com", "8.8.8.8", false).await.unwrap_err();
+        assert!(matches!(err, AppError::RegistrationBusy(_)));
+        reg(&db, &p, "c@x.com", "9.9.9.9", false).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn rejected_identifier_is_blocked_during_cooldown_then_reusable() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (u, _) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        crate::services::approval_service::decide(
+            &db,
+            &u.id,
+            crate::services::approval_service::Decision::Reject,
+            "admin-endpoint",
+            None,
+        )
+        .await
+        .unwrap();
+
+        let err = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap_err();
+        assert!(matches!(err, AppError::Conflict(_)));
+
+        // 把决定时间拨到冷却期之前：旧行被替换，新申请进入 pending。
+        let old = (chrono::Utc::now() - chrono::Duration::days(8)).to_rfc3339();
+        sqlx::query("UPDATE users SET approval_decided_at = ? WHERE id = ?")
+            .bind(old)
+            .bind(&u.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        let (n, out) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+        assert_eq!(out, RegisterOutcome::Pending);
+        assert_ne!(n.id, u.id);
+        assert!(get(&db, &u.id).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn login_lookup_finds_pending_and_rejected_but_not_soft_deleted() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (pending, _) = reg(&db, &p, "p@x.com", "8.8.8.8", false).await.unwrap();
+        let (gone, _) = reg(&db, &p, "g@x.com", "8.8.8.8", false).await.unwrap();
+
+        let found = find_for_login(&db, "p@x.com").await.unwrap().unwrap();
+        assert_eq!(found.id, pending.id);
+        assert_eq!(found.is_active, 0);
+
+        sqlx::query("UPDATE users SET approval_status = 'approved', deleted_at = ? WHERE id = ?")
+            .bind(now_rfc3339())
+            .bind(&gone.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        assert!(find_for_login(&db, "g@x.com").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn restore_never_reactivates_a_non_approved_account() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        let (u, _) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
+
+        // 未软删除的 pending：本就无从还原。
+        assert!(restore(&db, &u.id).await.is_err());
+
+        // 即便人为造出「pending 且带 deleted_at」，还原也必须拒绝并保持停用。
+        sqlx::query("UPDATE users SET deleted_at = ? WHERE id = ?")
+            .bind(now_rfc3339())
+            .bind(&u.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        assert!(matches!(
+            restore(&db, &u.id).await.unwrap_err(),
+            AppError::Conflict(_)
+        ));
+        assert_eq!(get(&db, &u.id).await.unwrap().is_active, 0);
+    }
+
+    #[tokio::test]
+    async fn list_all_filters_by_approval_status() {
+        let db = test_pool().await;
+        let p = policy(RegistrationMode::Approval);
+        reg(&db, &p, "a@x.com", "127.0.0.1", true).await.unwrap(); // bootstrap → approved
+        reg(&db, &p, "b@x.com", "8.8.8.8", false).await.unwrap(); // pending
+
+        assert_eq!(list_all(&db, None).await.unwrap().len(), 2);
+        let pending = list_all(&db, Some("pending")).await.unwrap();
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].0.approval_status, "pending");
+        assert_eq!(list_all(&db, Some("rejected")).await.unwrap().len(), 0);
+    }
 }

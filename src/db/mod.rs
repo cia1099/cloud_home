@@ -29,3 +29,18 @@ pub async fn run_migrations(pool: &Db) -> anyhow::Result<()> {
     sqlx::migrate!("./migrations").run(pool).await?;
     Ok(())
 }
+
+/// 测试用：独立的内存数据库，已跑完全部迁移。
+#[cfg(test)]
+pub async fn test_pool() -> Db {
+    let options = SqliteConnectOptions::from_str("sqlite::memory:")
+        .unwrap()
+        .foreign_keys(true);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(4)
+        .connect_with(options)
+        .await
+        .unwrap();
+    run_migrations(&pool).await.unwrap();
+    pool
+}

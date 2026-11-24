@@ -99,7 +99,10 @@ pub async fn decide(
             "账户审批：{}",
             decision.target_status()
         );
-        return Ok(Decided { user, changed: true });
+        return Ok(Decided {
+            user,
+            changed: true,
+        });
     }
 
     if user.approval_status == decision.target_status() {
@@ -146,4 +149,213 @@ pub async fn expire_pending(db: &Db, expire_days: i64) -> AppResult<Vec<(String,
         );
     }
     Ok(expired)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{RegistrationMode, RegistrationPolicy};
+    use crate::db::test_pool;
+    use crate::services::user_service::{NewAccount, RegisterSource, register};
+
+    async fn pending(db: &Db, email: &str) -> User {
+        let policy = RegistrationPolicy {
+            mode: RegistrationMode::Approval,
+            rate_per_ip_per_hour: 100,
+            pending_max: 100,
+            reject_cooldown_days: 7,
+            pending_expire_days: 14,
+        };
+        register(
+            db,
+            &policy,
+            NewAccount {
+                username: "n",
+                password: "password123",
+                email: Some(email),
+                phone: None,
+            },
+            RegisterSource {
+                ip: Some("8.8.8.8".into()),
+                is_local: false,
+            },
+        )
+        .await
+        .unwrap()
+        .0
+    }
+
+    #[tokio::test]
+    async fn approve_activates_and_is_idempotent() {
+        let db = test_pool().await;
+        let u = pending(&db, "a@x.com").await;
+
+        let d = decide(
+            &db,
+            &u.id,
+            Decision::Approve,
+            "admin-endpoint",
+            Some(" ok "),
+        )
+        .await
+        .unwrap();
+        assert!(d.changed);
+        assert_eq!(
+            (d.user.is_active, d.user.approval_status.as_str()),
+            (1, "approved")
+        );
+        assert_eq!(
+            d.user.approval_decided_by.as_deref(),
+            Some("admin-endpoint")
+        );
+        assert_eq!(d.user.approval_note.as_deref(), Some("ok"));
+
+        // 重复批准：幂等，不改动，且不覆盖先前的决定者。
+        let again = decide(&db, &u.id, Decision::Approve, "chat:telegram:1", None)
+            .await
+            .unwrap();
+        assert!(!again.changed);
+        assert_eq!(
+            again.user.approval_decided_by.as_deref(),
+            Some("admin-endpoint")
+        );
+    }
+
+    #[tokio::test]
+    async fn reject_keeps_inactive_and_reject_is_idempotent() {
+        let db = test_pool().await;
+        let u = pending(&db, "a@x.com").await;
+        let d = decide(&db, &u.id, Decision::Reject, "admin-endpoint", Some("spam"))
+            .await
+            .unwrap();
+        assert!(d.changed);
+        assert_eq!(
+            (d.user.is_active, d.user.approval_status.as_str()),
+            (0, "rejected")
+        );
+        assert!(
+            !decide(&db, &u.id, Decision::Reject, "admin-endpoint", None)
+                .await
+                .unwrap()
+                .changed
+        );
+    }
+
+    #[tokio::test]
+    async fn reject_then_approve_is_allowed() {
+        let db = test_pool().await;
+        let u = pending(&db, "a@x.com").await;
+        decide(&db, &u.id, Decision::Reject, "admin-endpoint", None)
+            .await
+            .unwrap();
+        let d = decide(&db, &u.id, Decision::Approve, "admin-endpoint", None)
+            .await
+            .unwrap();
+        assert!(d.changed);
+        assert_eq!(
+            (d.user.is_active, d.user.approval_status.as_str()),
+            (1, "approved")
+        );
+    }
+
+    #[tokio::test]
+    async fn rejecting_an_approved_account_conflicts_and_names_the_decider() {
+        let db = test_pool().await;
+        let u = pending(&db, "a@x.com").await;
+        decide(&db, &u.id, Decision::Approve, "chat:telegram:42", None)
+            .await
+            .unwrap();
+        let Err(AppError::Conflict(msg)) =
+            decide(&db, &u.id, Decision::Reject, "admin-endpoint", None).await
+        else {
+            panic!("expected conflict");
+        };
+        assert!(msg.contains("chat:telegram:42"), "{msg}");
+        assert_eq!(user_service::get(&db, &u.id).await.unwrap().is_active, 1);
+    }
+
+    #[tokio::test]
+    async fn approve_never_reactivates_a_soft_deleted_account() {
+        let db = test_pool().await;
+        let u = pending(&db, "a@x.com").await;
+        sqlx::query("UPDATE users SET deleted_at = ? WHERE id = ?")
+            .bind(now_rfc3339())
+            .bind(&u.id)
+            .execute(&db)
+            .await
+            .unwrap();
+        assert!(
+            decide(&db, &u.id, Decision::Approve, "admin-endpoint", None)
+                .await
+                .is_err()
+        );
+        assert_eq!(user_service::get(&db, &u.id).await.unwrap().is_active, 0);
+    }
+
+    #[tokio::test]
+    async fn unknown_account_is_not_found() {
+        let db = test_pool().await;
+        assert!(matches!(
+            decide(&db, "nope", Decision::Approve, "admin-endpoint", None).await,
+            Err(AppError::NotFound)
+        ));
+    }
+
+    #[tokio::test]
+    async fn simultaneous_decisions_have_exactly_one_winner() {
+        let db = test_pool().await;
+        let u = pending(&db, "a@x.com").await;
+        let (a, b) = tokio::join!(
+            decide(&db, &u.id, Decision::Approve, "chat:telegram:1", None),
+            decide(&db, &u.id, Decision::Approve, "chat:telegram:2", None),
+        );
+        let changed = [a.unwrap(), b.unwrap()]
+            .iter()
+            .filter(|d| d.changed)
+            .count();
+        assert_eq!(changed, 1);
+    }
+
+    #[tokio::test]
+    async fn expiry_rejects_only_old_pending_accounts() {
+        let db = test_pool().await;
+        let old = pending(&db, "old@x.com").await;
+        let fresh = pending(&db, "new@x.com").await;
+        let approved = pending(&db, "ok@x.com").await;
+        decide(&db, &approved.id, Decision::Approve, "admin-endpoint", None)
+            .await
+            .unwrap();
+
+        let backdated = (chrono::Utc::now() - chrono::Duration::days(15)).to_rfc3339();
+        for id in [&old.id, &approved.id] {
+            sqlx::query("UPDATE users SET created_at = ? WHERE id = ?")
+                .bind(&backdated)
+                .bind(id)
+                .execute(&db)
+                .await
+                .unwrap();
+        }
+
+        let expired = expire_pending(&db, 14).await.unwrap();
+        assert_eq!(expired.len(), 1);
+        assert_eq!(expired[0].0, old.id);
+
+        let o = user_service::get(&db, &old.id).await.unwrap();
+        assert_eq!((o.is_active, o.approval_status.as_str()), (0, "rejected"));
+        assert_eq!(o.approval_decided_by.as_deref(), Some("expiry"));
+        assert_eq!(
+            user_service::get(&db, &fresh.id)
+                .await
+                .unwrap()
+                .approval_status,
+            "pending"
+        );
+        assert_eq!(
+            user_service::get(&db, &approved.id)
+                .await
+                .unwrap()
+                .approval_status,
+            "approved"
+        );
+    }
 }
