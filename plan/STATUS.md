@@ -12,18 +12,18 @@ The report site (R-001) has its first edition built and published; it is in revi
 | Backend | core API, auth/profile, files, trash, shares, search, SSE, usage, admin, OTA updater + release pipeline | R-060/R-061 (approval), R-020, R-021 |
 | Frontend | report site (manager-site/), first edition | R-003 (after R-002) |
 | Design | report-site design system, glossary, mockups, apple-design review | R-002 (web app screens), R-004 |
-| Tests | 63 unit tests | R-030, R-031 |
+| Tests | 84 unit tests | R-030, R-031 |
 | Report site | first edition built, checked and published (R-001, in review) | owner review; next report after the next milestone |
 
 ## Active tasks
-- R-060+R-061 · backend-engineer · branch agent/R-060-approval · worktree (isolated, created by Agent tool) · state: delegated · next: verify build/test/clippy, merge into agent/manager
-<!-- one line per task: R-id · role · branch · worktree · state · next -->
+_none_  <!-- one line per task: R-id · role · branch · worktree · state · next -->
 
 ## Waiting on the owner
 See SPEC.md section 6 and the site's approvals queue.
 
 ## Log
 - 2026-11-19 — team and SPEC.md created.
+- 2026-11-25 — R-060/R-061 approval flow merged into agent/manager (84 tests, no new clippy warnings); live curl check outstanding.
 - 2026-11-24 — report site design committed; report site first edition built (8 pages, English + 简体中文, light/dark, phone width), first report written from the repo, published.
 
 ## Site data (read by manager-site, keep it valid JSON)
@@ -53,7 +53,7 @@ The report site renders the Overview from this block. Every field is optional; w
     }
   },
   "checks": [
-    { "name": { "en": "Unit tests", "zh": "单元测试" }, "state": "ok", "detail": { "en": "63 of 63 passing", "zh": "63 项全部通过" } },
+    { "name": { "en": "Unit tests", "zh": "单元测试" }, "state": "ok", "detail": { "en": "84 of 84 passing", "zh": "84 项全部通过" } },
     { "name": { "en": "Release v0.3.1-rc.2", "zh": "发布 v0.3.1-rc.2" }, "state": "ok", "detail": { "en": "Published as a pre-release", "zh": "已作为预发布版发布" } },
     { "name": { "en": "Signed self-update with rollback", "zh": "带回滚的签名自更新" }, "state": "ok", "detail": { "en": "Tested end to end by hand", "zh": "已手动端到端测试" } },
     { "name": { "en": "Report site", "zh": "报告网站" }, "state": "ok", "detail": { "en": "First edition published (R-001, in review)", "zh": "第一版已发布（R-001，待审阅）" } },
