@@ -38,6 +38,18 @@ for (const lang of ['en', 'zh-Hans', 'zh-Hant']) {
     if (/undefined|NaN|\[object/.test(h)) { fails++; console.log('BAD TEXT', lang, r, (h.match(/.{0,30}(undefined|NaN|\[object).{0,30}/) || [''])[0]); }
   }
 }
+// click-driven dialogs that have no preset route
+function click(act, v, id) { els.stage.listeners.click[0]({ target: { closest: () => ({ getBoundingClientRect: () => ({ left: 0, top: 0, right: 100, bottom: 40 }), getAttribute: k => ({ 'data-act': act, 'data-v': v, 'data-id': id })[k] || null }) }, stopPropagation() {}, preventDefault() {} }); }
+location.hash = '#/trash'; winL.hashchange();
+[['dlg', 'emptytrash'], ['dlg', 'delforever', 't1'], ['dodel', null, 't1'], ['restore', null, 't2']].forEach(a => { try { click(...a); if (/undefined|NaN/.test(els.stage._html)) { fails++; console.log('BAD', a); } } catch (e) { fails++; console.log('FAIL click', a, e.message); } });
+location.hash = '#/shared'; winL.hashchange();
+[['dlg', 'revoke', 's1'], ['dorevoke', null, 's1']].forEach(a => { try { click(...a); } catch (e) { fails++; console.log('FAIL click', a, e.message); } });
+location.hash = '#/files?state=share'; winL.hashchange();
+[['exp', 'never'], ['dltoggle'], ['mklink'], ['closedlg']].forEach(a => { try { click(...a); } catch (e) { fails++; console.log('FAIL click', a, e.message); } });
+location.hash = '#/files?state=selection'; winL.hashchange();
+[['dlg', 'download'], ['startdl'], ['closedlg'], ['trash'], ['uploadmenu'], ['startup'], ['upmin'], ['sortmenu'], ['view', 'list'], ['sort', 'size']].forEach(a => { try { click(...a); } catch (e) { fails++; console.log('FAIL click', a, e.message); } });
+location.hash = '#/admin?u=available'; winL.hashchange();
+[['admin', 'checking'], ['mode', 'auto'], ['approve']].forEach(a => { try { click(...a); } catch (e) { fails++; console.log('FAIL click', a, e.message); } });
 const missing = [...used].filter(k => !(k in rawS) && !/^(then|toJSON|Symbol.*)$/.test(k));
 console.log('rendered', n, 'fails', fails, 'missing keys', missing);
 for (const k in rawS) if (rawS[k].length !== 3 || rawS[k].some(s => !s)) { fails++; console.log('BAD ENTRY', k); }

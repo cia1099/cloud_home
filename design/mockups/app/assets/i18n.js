@@ -56,6 +56,8 @@ window.S = {
   'error_load_text': ['The drive did not answer. Check that it is plugged in, then try again.', '硬盘没有响应。请确认已接好，然后重试。', '硬碟沒有回應。請確認已接好，然後再試一次。'],
   'error_drive_title': ['The drive is not connected', '硬盘未连接', '硬碟未連接'],
   'error_drive_text': ['Your files are safe. Plug the drive back in and Cloud Home will pick up where it left off.', '你的文件是安全的。重新接上硬盘后，Cloud Home 会自动继续。', '你的檔案很安全。重新接上硬碟後，Cloud Home 會自動繼續。'],
+  'name_taken': ['An item with this name already exists here. Choose another name.', '此处已有同名项目，请换一个名称。', '這裡已有同名項目，請換一個名稱。'],
+  'session_expired': ['Please sign in again', '请重新登录', '請重新登入'],
   'retry': ['Try Again', '重试', '重試'],
   'offline_title': ['You are offline', '当前无网络连接', '目前沒有網路連線'],
   'offline_text': ['You can keep browsing what is already loaded. Uploads wait and resume when you are back online.', '已载入的内容仍可浏览。上传会暂停，恢复连接后自动继续。', '已載入的內容仍可瀏覽。上傳會暫停，恢復連線後自動繼續。'],
