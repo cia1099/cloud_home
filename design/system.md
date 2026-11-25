@@ -1,6 +1,6 @@
 # Cloud Home design system
 
-Status: **Part 1 (report site, R-001) is complete.** Part 2 (the web app, R-002) is delivered with the R-002 screens and will be added to this file as a second part; the report site and the web app share the colour, type, radius and motion tokens below so they feel like one product.
+Status: **Part 1 (report site, R-001) is complete. Part 2 (the web app, R-002) is at the end of this file** (section "Part 2. Web app"); the report site and the web app share the colour, type, radius and motion tokens of Part 1 so they feel like one product. The app mockups are in `design/mockups/app/` and the implementation notes for the frontend engineer in `design/app-spec.md`.
 
 Visual direction (R-004): Apple web style, like iCloud. Calm, spacious, content-first, one accent colour, restrained motion, system fonts only, original icons. The mockups in `design/mockups/report-site/` are the reference implementation: `assets/site.css` holds every token below as a CSS custom property, `assets/site.js` renders every component from plain data. Copy token names and component markup from there.
 
@@ -280,3 +280,143 @@ The site is generated at build time from files in the repository; no runtime API
 - Git history: `git log` at build time (hash, date, subject). Commit subjects are shown verbatim, so they must not contain private data; zh titles for commits are optional (fall back to the English subject).
 - Real-state facts used by the mockups: 63 unit tests passing, v0.3.1-rc.2 published as a pre-release, signed OTA self-update with rollback tested end to end, no web UI. If any of these changes, the report must change; do not copy the mockup text.
 - Assets: every file <= 10 MB, each report <= 25 MB; filenames carry a content hash; video needs `Range` support.
+
+---
+
+# Part 2. Web app (R-002)
+
+Reference implementation: `design/mockups/app/` (`assets/app.css` = every token and component class below; `assets/i18n.js` = every string in three languages; `assets/app.js` = hand-rolled renderer of all screens and states, **not** the product code). Open it with any static server or straight from disk: `cd design/mockups/app && python3 -m http.server 8090`, then http://localhost:8090/ . A **Review** tab on the right edge opens the review panel: language (English / 简体中文 / 繁體中文), appearance (Auto / Light / Dark), device frame (Window / Phone 390 / Tablet 834), and a link to every screen and state. URL switches: `?lang=en|zh-Hans|zh-Hant`, `?theme=auto|light|dark`, `?dev=auto|phone|tablet`; the route and state live in the hash, for example `#/files?state=empty`. Smoke test: `bun design/mockups/app/tools/smoke.js` renders all 59 routes in all three languages.
+
+The product look is the report site's look, turned into an app: same blue (`--accent`, `--btn-fill`), same neutrals and hairlines, same radii and motion. What is specific to the app:
+
+- **Content is the colour.** Chrome is neutral glass and one blue; the colour on screen comes from the family's own photos (original generated thumbnails in the mockup) and from the file-kind tiles.
+- **Folders are a two-tone blue folder** (original shape, `--folder` / `--folder-2`), the signature object of the product; file kinds have a rounded tile with a glyph and a soft gradient.
+- **Floating layers are glass, everything you read is solid.** Sidebar, toolbar and tab bar are translucent (`--glass`, `--glass-side`, 20 px blur). Menus, dialogs, banners and the upload panel use the denser `--glass-pop` (88 to 90 % opaque) so text contrast is computed on a near-solid surface. File content is never blurred.
+
+## 14. Tokens added or specialised for the app
+
+All Part 1 tokens apply unchanged (`--bg`, `--surface`, `--surface-2`, `--text`, `--text-2`, `--line`, `--accent`, `--btn-fill`, `--accent-tint`, status colours, radii, motion). New:
+
+| Token | Light | Dark | Use / contrast |
+|---|---|---|---|
+| `--surface-3` | #ececf0 | #3a3a3c | skeleton highlight |
+| `--glass-pop` | rgba(255,255,255,.88) | rgba(44,44,46,.90) | menus, dialogs, banners, upload panel (text >= 7:1 on the blended surface) |
+| `--glass-side` | rgba(245,245,247,.78) | rgba(28,28,30,.78) | sidebar |
+| `--scrim` | rgba(0,0,0,.32) | rgba(0,0,0,.55) | behind dialogs |
+| `--accent-tint-2` | rgba(0,113,227,.16) | rgba(41,151,255,.24) | selected tile/row, current sidebar item (accent text on it 4.57:1 light) |
+| `--folder`, `--folder-2` | #3d8ff0, #6fb1ff | #4a9bff, #7cb8ff | folder icon (graphic >= 3:1) |
+| `--k-photo` `--k-video` `--k-audio` `--k-doc` `--k-other` | #f2994a #8e4fc4 #e0527a #3d8ff0 #8e8e93 | #ff9f4a #bf5af2 #ff6b8e #4a9bff #98989d | storage bar segments only; always paired with a text legend with sizes |
+| `--ph` | #636366 (5.1:1 on the search field) | #a1a1a6 | placeholder text |
+| `--ok` / `--warn` / `--err` + `-bg` | #1b7339 / #8a4b00 / #bf2f1a on #e0f3e6 / #fff3df / #fce8e4 | #4cd77a / #ffc971 / #ff8a7a on #203d28 / #33260f / #452323 | chips and inline messages, 4.89 to 6.2:1 |
+| destructive fill | #d93a22 in both themes (white text 4.59:1; the dark `--err-fill` #ff453a would only give 3.4:1) | | `Delete Forever`, `Install Anyway`, `Empty Trash` confirm |
+
+Rules: selected rows and tiles switch their secondary text to `--text` (secondary grey on the blue tint is only 3.99:1). One colour means one thing: blue is interactive or selected, green is healthy/finished, amber is attention or waiting, red is failure or destructive, purple only identifies video files. Status is always icon + word + colour.
+
+## 15. Type scale (app)
+
+Same stack as Part 1 (`--font`, `--font-hans`, `--font-hant`); the app sets `<html lang>` to `en`, `zh-Hans` or `zh-Hant`, and `:lang(zh-Hant)` selects PingFang TC / PingFang HK / Microsoft JhengHei / Noto Sans CJK TC. Sizes in px; the body default is 15 px because this is a dense desktop-class app (Apple's macOS default is 13 pt, iOS 17 pt: phone body rises to 16 px in inputs to avoid zoom).
+
+| Role | Size / line | Weight | Tracking | Used for |
+|---|---|---|---|---|
+| Page title (`.h1`) | 32 / 1.12 (28 phone) | 700 | -0.025em | Settings, Trash, Storage, Admin large title; fades into the toolbar when scrolled |
+| Auth title | 28 / 1.15 (26 phone) | 700 | -0.025em | sign in, register, status screens |
+| State title | 24 (22 phone) | 700 | -0.02em | empty/error/updating |
+| Section title (`.h2`) | 21 | 600 | -0.018em | cards, dialogs |
+| Toolbar title / breadcrumb | 17 | 600 | -0.02em | breadcrumb current folder |
+| Body, row title | 15 to 16 | 500 | | file names, cell labels (16) |
+| Input | 17 | 400 | | text fields (48 px high) |
+| Secondary | 13 to 13.5 | 400 | | dates, sizes, hints, `--text-2` |
+| Caption, chip, tab label | 12.5 / 11 (tab) | 500 | | chips 12.5; phone tab labels 11 (minimum) |
+| Mono | 13 | 500 to 600 | | versions, links, one-time code (24 px, 0.5em tracking) |
+
+Numbers that change or align use `font-variant-numeric: tabular-nums` (`.num`). Chinese body line-height is 1.6, headings are not letter-spaced tighter than -0.01em. File names wrap with `overflow-wrap: anywhere` and clamp to two lines in grid, single line with ellipsis in list; the full name is the `title`.
+
+## 16. Spacing, layout, elevation
+
+- Base unit 4 px (8, 12, 16, 20, 24, 32, 40, 56). Page padding 24 px (16 phone). Reading pages (`.page`) are 760 px wide (980 `.wide`), centred, 28 px between groups, 20 px card padding, 20 px radius (`--r-l`), 12 px (`--r-m`) for rows and tiles, 10 px for thumbnails, 28 px for state icons tiles, pill for buttons and chips.
+- Shell: sidebar 248 px (desktop) / 76 px icon rail with 10.5 px labels (tablet) / bottom tab bar 56 px + safe area (phone); toolbar 56 px (52 phone). Grid tile min 168 px (104 px phone, 2 columns under 380 px); list row 52 px (60 px phone); settings cell 56 px; share/trash row 68 px.
+- Elevation: `--sh-1` ring for cards at rest; `--sh-2` for menus, banners, hover; `--sh-3` for dialogs and the upload panel. Dark theme keeps the 1 px ring and deepens shadows.
+- Breakpoints (viewport, same numbers as the mockup's container queries): **phone < 700**, **tablet 700 to 1099**, **desktop >= 1100**. Layout follows available width, not device.
+
+## 17. Motion
+
+Same curves and durations as section 6 (`--ease`, `--ease-io`, `--ease-spring`, `--d1` .18 s, `--d2` .35 s, `--d3` .7 s). App specifics: tile hover lifts 2 px (`--d2`); selection tick fades (`--d1`); dialog scales from .94 with `--ease-spring`; phone sheets rise 40 px; menu pops from .985 (.16 s); toast and banner slide 10 px; upload progress width eases linearly (.3 s per tick); storage segments grow from the left once (`--d3`); the drop overlay's icon bobs 6 px (1.6 s alternate); skeletons shimmer 1.4 s; the indeterminate bar loops 1.5 s. Nothing animates on every list update. With `prefers-reduced-motion` all durations collapse to ~0, shimmer stops (flat `--surface-2`), the indeterminate bar becomes a static partial bar, spinners are replaced by the static icon, and progress still updates (information, not decoration). `prefers-reduced-transparency` makes every glass surface opaque `--surface`. `prefers-contrast: more` darkens `--text-2` and the hairlines.
+
+## 18. Iconography
+
+Same rules as section 7: original 24 px line icons, 1.75 px stroke, round caps, `currentColor`, drawn in `assets/icons.js` (about 60 glyphs: folder, file kinds, grid, list, search, upload, download, trash, share, link, sliders, user, cloud, check, x, plus, chevrons, more, restore, clock, shield, alert, wifi-off, refresh, play, pause, volume, info, lock, mail, phone, drive, sun, moon, globe, sort, move, copy, edit, expand, up, key). Sizes: 16 inside buttons, 18 in menus and action buttons, 20 in toolbars, 22 in the sidebar, 24 in the tab bar. Settings is a three-slider glyph, not a gear. No SF Symbols and no Apple glyphs. Thumbnails for images and videos are the file's own pixels (server thumbnail, see backend gaps); the mockup draws original hills-and-sun artwork (`ART()` in `icons.js`) in six palettes.
+
+## 19. Components
+
+Class names are those in `app.css`; states are all shown in the mockup (Review panel). Every control has a visible focus ring (3 px `--focus`, 2 px offset), a hover state on pointer devices, a pressed state (scale .97 for buttons), and min target 44 px on phone / coarse pointers (36 px on desktop).
+
+| Component | Anatomy and variants | States |
+|---|---|---|
+| **App shell** `.app` | Sidebar / rail / tab bar + main (toolbar `.bar` + scrolling `.content`). Skip link first. Large title scrolls into the toolbar (`.bar.scrolled`). | normal, with banner, with offline/reconnect strip |
+| **Sidebar** `.side`, `.navi` | Brand, items Files, Shared, Trash, Storage, Settings, Administration (admin only, amber count badge of pending accounts), storage mini card, account button (opens menu: language, Settings, Sign Out). Icons use accent blue. Max one level. | current (`aria-current=page`), hover, focus, badge |
+| **Tab bar** `.tabs` (phone) | Files, Shared, Trash, Settings; 24 px icon + 11 px label; Settings holds Storage and Administration. Tabs navigate, never act. | current, badge |
+| **Toolbar** `.bar` | Breadcrumb (`.crumbs`; phone: back chevron + current folder only), search, view segmented control, sort menu, Upload (menu: Upload Files, Upload Folder, New Folder). Phone: view toggle and a `+` icon button; search field is a row at the top of the list. | default, selection (`.bar.sel`, accent tint: count, Download, Share, Move, Rename (1 item), Move to Trash, Deselect; on phone the actions move to a floating bar above the tab bar), scrolled |
+| **Breadcrumb** | Files > folder > folder; each ancestor is a link; current is `aria-current=page` and truncates; long paths collapse on phone to back + current. | link, hover, current |
+| **File tile** `.tile` | 4:3 thumbnail (image/video: real pixels, video has a play badge; folder icon; other kinds: tile glyph), name (2 lines), meta (size or item count). Selection tick top-start. | rest, hover (lift, tick appears), focus, selected (accent ring 3 px + tint), drop target (blue ring), loading skeleton |
+| **File row** `.lrow` | Checkbox circle, 32 px icon/thumbnail, name (+ date and size under it on phone), Date Modified, Size, more button. Sortable headers (`aria-sort`). | rest, hover, selected, focus, skeleton |
+| **Menu** `.menu` | Open, Download, Share, divider, Rename, Move, divider, Move to Trash (red). Opened by the more button, right-click or long-press; also the Upload and Sort menus and the account menu. Arrow keys, Esc. | item hover = accent fill, destructive, checked (radio) |
+| **Segmented control** `.seg` | View (grid/list), appearance, language, expiry, mode, channel. | selected, hover, focus, disabled |
+| **Buttons** `.btn` | primary (blue fill), tint, plain, danger (tint), danger-fill, text; sizes 36 (44 phone) and `lg` 48. `.ibtn` icon button 36 (44 phone), `.abtn` toolbar action. | rest, hover, pressed, focus, disabled (.45), busy (spinner replaces the icon) |
+| **Text field** `.input` | 48 px, label above, 12 px radius, inline error with icon and `role=alert`, show/hide password button. | rest, focus (2 px ring + halo), error (`aria-invalid`), disabled |
+| **Switch** `.switch` | 51 x 31, spring knob. `role=switch`. | on, off, focus |
+| **Cell list** `.cell-list`, `.cell` | Settings-style grouped rows: icon tile, title, subtitle, trailing control or chevron; 56 px. | rest, link, with chip |
+| **Chips** `.chip` | neutral, ok, warn, err, accent; icon + word. Expiry, verified, approval, download permission, days left. | |
+| **Dialog / sheet** `.dialog` | Centred 440 px dialog on tablet and desktop, bottom sheet with grabber on phone. Alert variant `.alert` (320 px, stacked full-width buttons, destructive first) only for irreversible actions: Delete Forever, Empty Trash, Stop Sharing, Install Anyway. Esc and scrim close; focus moves in and returns. | enter (spring), phase 1/2 content |
+| **Toast** `.toast` | One line, optional Undo, 4.5 s, `role=status`, above the tab bar on phone. Used for Moved to Trash (with Undo), Restored, Link copied, Saved. | |
+| **Banner** `.banner` | Glass pill under the toolbar: new version available (Reload, Later) / will reload after the upload. Non-blocking. | |
+| **Updating overlay** `.updating` | Full-stage blur with logo, "Updating, reconnecting…", calm copy, indeterminate bar, retry countdown. Not red, not an alert. | |
+| **Offline / reconnect strip** `.offline-strip` | Amber "Offline. Changes will wait." or blue "Reconnecting…" under the toolbar; content stays visible. | |
+| **Upload panel** `.up` | Floating glass card bottom-end (full-width above the tab bar on phone): progress ring + "Uploading 3 items" + "2 min left to {folder}"; minimise, close; rows with file tile, name (final name if the server renamed it, with the renamed note), linear progress with percent and bytes, cancel. | uploading, waiting, paused (offline), done (check, renamed note), failed (red text + retry), cancelled, minimised (header only), all done (green ring) |
+| **Drop overlay** `.drop` | Dashed blue 24 px frame over the whole content, big upload glyph, "Drop files here to upload", "They will be added to {folder}". Hovered folder tile gets the blue ring. | |
+| **Empty / error state** `.state` | 96 px icon tile (blue empty, amber warning, red error, grey neutral), title, one sentence, one action. | empty folder, no results, load error, drive missing, offline, trash empty, nothing shared |
+| **Skeleton** `.sk` | Same footprint as tiles or rows, shimmer. | |
+| **Preview** `.pv` | Full-stage dark dialog: close, title and "n of m", share, download; image gallery with thumbnail strip, arrows and keys, swipe on touch; audio (cover, scrubber, transport, volume); video (16:9, big play, scrubber with buffered range, volume, full screen); unsupported-format state with Download. | image, audio paused/playing, video paused/playing, cannot play |
+| **Storage bar** `.meter` | Segmented bar by kind + legend rows with sizes + drive row; warning banner under 10 % free. | normal, low |
+| **Share row** `.srow` | Icon, name, chips (expiry, download on / view only, opened n times), Copy Link, Stop Sharing. | active, expired (red chip, copy disabled) |
+| **Trash row** `.srow` | Icon, name, chip "n days left" (amber with clock icon at 1 day or less), origin folder, size, Restore, Delete Forever. | |
+| **Update card** | Hero (logo, current version, state line, action) + release notes + progress steps (download / verify and install / restart); phases idle, checking, available, downloading, installing, restarting, waiting, done, failed (rolled back), busy (transfers running). | all phases |
+| **Auth card** `.auth-card` | Logo, title, sub, form or status mark (72 px tile: clock = waiting, lock = rejected/closed, mail = submitted), 3-step list for "request submitted", language switch top-end. | |
+
+## 20. Screens and states (inventory)
+
+| Route | Screen | States designed |
+|---|---|---|
+| `#/signin` | Sign in | default, wrong credentials (inline, field-level `aria-invalid`), show password |
+| `#/register` | Create account | default |
+| `#/pending` | Request submitted (R-062, 202 with no token) | default (3-step list) |
+| `#/account-pending`, `#/rejected` | `ACCOUNT_PENDING`, `ACCOUNT_REJECTED` | default |
+| `#/closed`, `#/busy` | `REGISTRATION_CLOSED`, `REGISTRATION_BUSY` | default |
+| `#/files[/id]` | File browser | grid, list, loading, empty folder, load error, drive missing, offline (strip, uploads paused), offline with nothing loaded, multi-select, search results, no results, row menu, new folder dialog, drag over, uploading, minimised, failed item, finished, batch download (choose, preparing), nested folder breadcrumb |
+| `#/preview/id` | Preview | image gallery, audio, video, playing, cannot play |
+| `#/trash` | Trash | list, empty, loading, delete-forever and empty-trash alerts, restore with undo |
+| `#/shared` | Shared by you | list (active, expired), empty, create-link dialog (two phases), stop-sharing alert |
+| `#/public` | Public share page (no account) | default, view only, link gone |
+| `#/storage` | Storage usage | normal, low space |
+| `#/settings` | Account settings | default, one-time-code dialog (send, enter), change password |
+| `#/admin` | Administration / Software Update | idle, checking, available, downloading, installing, restarting, waiting, done, failed, busy, plus accounts waiting for approval |
+| any | R-027 | new version banner, banner while uploading, updating overlay, live-link-lost strip |
+
+## 21. Language, theme and device handling
+
+`<html lang>` follows the choice (`en`, `zh-Hans`, `zh-Hant`). Default from the browser per R-005 (`zh-TW/HK/MO/Hant` Traditional; `zh-CN/SG/Hans`, bare `zh` Simplified; else English), switchable on the auth screens, in the account menu and in Settings; remembered. Theme: Automatic (follows `prefers-color-scheme`, default), Light, Dark; remembered. The three-state appearance control is a web-app necessity (browser chrome cannot be switched); the default is Automatic. Strings come from `design/glossary.md` (tables B to F) and `assets/i18n.js` is the same data in code form.
+
+Longest-string checks done in the mockup: English `Annual family travel plan 2027, itinerary, bookings and insurance documents (final, reviewed by everyone).pdf` (clamped to 2 lines in grid, ellipsis in list), `The administrator did not approve this account. If you think this is a mistake, contact them directly.` and its Chinese equivalents at 390 px, `Pre-release builds arrive sooner and may have rough edges.`, `Waiting for the new version to come back…`, Traditional `因名稱已存在，已儲存為「…」`, Settings cell titles, the phone upload panel, and the segmented controls (language switch wraps rather than clips). Chinese is as long as or longer than English in buttons and sentences (for example 取消上傳, 清除已完成項目, 目前不開放註冊), so no control has a fixed width tied to English.
+
+## 22. Accessibility
+
+- Contrast values are in section 14 (tokens) and Part 1 section 2. Every text token is >= 4.5:1 on the surface it sits on; large text and graphics >= 3:1. Secondary text on the selection tint switches to `--text`.
+- Focus: 3 px ring on every interactive element; `:focus-visible` only; the large-title content area takes programmatic focus from the skip link without a ring. Tab order follows reading order (skip link, sidebar, toolbar, files). Dialogs trap focus, move it to the first field or the safe button, and restore it. Esc closes dialogs, menus, then clears selection, then closes the preview.
+- Keyboard: arrow keys move through tiles and rows, Enter opens, Space toggles selection, Cmd/Ctrl+A selects all, Shift/Cmd-click extends selection (desktop); preview: left/right, Space play/pause, Esc close. Suggested shortcuts for the frontend: `/` focus search, `Backspace` or `Delete` move to Trash, `U` upload.
+- Screen readers: lists are `listbox` with `aria-multiselectable` and `aria-selected`; the tick is a button named "Select {file name}"; icon-only buttons have `aria-label`; progress uses `role=progressbar` with value; the upload panel is a labelled region and its summary is `role=status`; banners, toasts, the updating overlay and inline errors are live regions; storage meter has a text alternative; status chips are icon + word.
+- Targets: 44 px on phone and coarse pointers (ticks and checkboxes extend their hit area 11 px beyond the glyph), 36 px on desktop.
+- Reduced motion, reduced transparency, increased contrast: section 17.
+- Touch: swipe left/right in the gallery, swipe-free alternatives always exist (arrow buttons on tablet/desktop, the thumbnail strip on phone).
+
+## 23. Data and backend assumptions (app)
+
+See `design/app-spec.md` "Backend gaps" for the actionable list. Summary: thumbnails for images and videos, storage by kind, a count of items in a folder, audio metadata and cover art, a share-link public URL (`/s/<token>`), SSE event types for transfers and trash, and approval counts for the admin badge are not in the API today.
