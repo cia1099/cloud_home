@@ -26,13 +26,32 @@ fi
 
 claude_args=(--agent manager --settings .claude/manager.settings.json --permission-mode acceptEdits)
 
+# Single instance: two managers on one repo would fight over plan/STATUS.md, branches and worktrees.
+# mkdir is atomic, so it works as a lock on macOS (no flock). The lock lives in .git (untracked).
+# A lock whose owner is gone (crash, SIGKILL, reboot) is detected by its PID and taken over.
+lock="$(git rev-parse --git-common-dir)/manager.lock"
+if ! mkdir "$lock" 2>/dev/null; then
+  owner="$(cat "$lock/pid" 2>/dev/null || true)"
+  if [ -n "$owner" ] && kill -0 "$owner" 2>/dev/null && ps -p "$owner" -o command= | grep -q run_manager; then
+    echo "[run_manager] already running (pid $owner); refusing to start a second manager." >&2
+    echo "[run_manager] stop it first: pkill -f run_manager.sh; pkill -f 'claude.*--agent manager'" >&2
+    exit 73
+  fi
+  echo "[run_manager] removing stale lock (pid ${owner:-unknown} is not running)" >&2
+  rm -rf "$lock"
+  mkdir "$lock"
+fi
+echo "$$" >"$lock/pid"
+trap 'rm -rf "$lock"' EXIT
+
 headless=0
 for arg in "$@"; do
   case "$arg" in -p | --print) headless=1 ;; esac
 done
-# Interactive: you are watching, nothing to wrap.
+# Interactive: you are watching, nothing to wrap. Not exec: the shell must stay alive to release the lock.
 if [ "$headless" = 0 ]; then
-  exec claude "${claude_args[@]}" "$@"
+  claude "${claude_args[@]}" "$@"
+  exit $?
 fi
 
 # Seconds from now until the reset time named in a limit message, plus a margin.
@@ -72,7 +91,7 @@ PY
 margin="${LIMIT_RESUME_MARGIN_SECONDS:-120}"
 max_waits="${LIMIT_MAX_WAITS:-8}"
 log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
+trap 'rm -f "$log"; rm -rf "$lock"' EXIT
 
 original=("$@")
 last=$(($# - 1))
