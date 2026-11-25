@@ -281,5 +281,37 @@ window.S = {
   'updating': ['Updating, reconnecting…', '正在更新，正在重新连接…', '正在更新，重新連線中…'],
   'updating_text': ['Cloud Home is restarting with the new version. This usually takes under a minute.', 'Cloud Home 正在以新版本重新启动，通常不到一分钟。', 'Cloud Home 正以新版本重新啟動，通常不到一分鐘。'],
   'updating_retry': ['Trying again in {s} s', '{s} 秒后重试', '{s} 秒後重試'],
-  'sse_reconnecting': ['Reconnecting…', '正在重新连接…', '重新連線中…']
+  'sse_reconnecting': ['Reconnecting…', '正在重新连接…', '重新連線中…'],
+
+  /* shared with you (owner decision 3) */
+  'shared_with_title': ['Shared with You', '分享给你的内容', '與你分享的內容'],
+  'shared_with_lede': ['Files and folders other people on this Cloud Home shared with you.', '这台 Cloud Home 上其他人分享给你的文件和文件夹。', '這台 Cloud Home 上其他人與你分享的檔案與資料夾。'],
+  'shared_with_empty_title': ['Nothing has been shared with you', '还没有人分享内容给你', '目前沒有人與你分享內容'],
+  'shared_with_empty_text': ['When someone shares a file or folder with you, it appears here.', '有人把文件或文件夹分享给你时，会显示在这里。', '有人與你分享檔案或資料夾時，會顯示在這裡。'],
+  'shared_from': ['From {name}', '来自 {name}', '來自 {name}'],
+  'shared_on': ['Shared {date}', '{date} 分享', '{date} 分享'],
+  'shared_new': ['New', '新', '新'],
+  'shared_tabs': ['Shared items', '分享的内容', '分享的內容'],
+  'aud_label': ['Who can open it', '谁可以打开', '誰可以打開'],
+  'aud_link': ['Anyone with the link', '任何拥有链接的人', '任何擁有連結的人'],
+  'aud_people': ['Specific people', '指定的人', '指定的對象'],
+  'aud_people_hint': ['They see it under Shared with You. No link is created.', '他们会在“分享给你的内容”中看到，不会生成链接。', '他們會在「與你分享的內容」中看到，不會產生連結。'],
+  'shared_with_names': ['Shared with {names}.', '已分享给 {names}。', '已與 {names} 分享。'],
+  'aud_none_chosen': ['Choose at least one person', '请至少选择一个人', '請至少選擇一位'],
+
+  /* phone number and country or region picker (owner decision 5) */
+  'phone_change_title': ['Change Phone Number', '更改手机号', '變更手機號碼'],
+  'country_region': ['Country or Region', '国家或地区', '國家或地區'],
+  'country_search': ['Search countries and regions', '搜索国家和地区', '搜尋國家與地區'],
+  'country_suggested': ['Suggested', '推荐', '建議'],
+  'country_all': ['All Countries and Regions', '所有国家和地区', '所有國家與地區'],
+  'country_none': ['No matching country or region', '没有匹配的国家或地区', '沒有符合的國家或地區'],
+  'phone_hint': ['We’ll send a code by text message to confirm it.', '我们会发送短信验证码来确认。', '我們會傳送簡訊驗證碼來確認。'],
+  'phone_bad': ['This number doesn’t look right for {country}. Check the digits.', '这个号码与{country}的格式不符，请检查数字。', '這個號碼與{country}的格式不符，請檢查數字。'],
+  'phone_exists': ['This number is already used by another account.', '这个号码已被其他账户使用。', '這個號碼已被其他帳號使用。'],
+  'id_placeholder': ['name@example.com or +1 555 0134', 'name@example.com 或 +86 138 0013 8000', 'name@example.com 或 +886 912 345 678'],
+  'c.US': ['United States', '美国', '美國'], 'c.CA': ['Canada', '加拿大', '加拿大'], 'c.GB': ['United Kingdom', '英国', '英國'], 'c.AU': ['Australia', '澳大利亚', '澳洲'],
+  'c.CN': ['Mainland China', '中国大陆', '中國大陸'], 'c.HK': ['Hong Kong', '中国香港', '香港'], 'c.MO': ['Macao', '中国澳门', '澳門'], 'c.TW': ['Taiwan', '中国台湾', '臺灣'],
+  'c.JP': ['Japan', '日本', '日本'], 'c.KR': ['South Korea', '韩国', '南韓'], 'c.SG': ['Singapore', '新加坡', '新加坡'], 'c.MY': ['Malaysia', '马来西亚', '馬來西亞'],
+  'c.DE': ['Germany', '德国', '德國'], 'c.FR': ['France', '法国', '法國']
 };

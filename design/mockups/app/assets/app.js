@@ -39,8 +39,14 @@
   var TRASH0 = [{ id: 't1', t: 'image', n: 'Old screenshot.png', f: 'Family Photos', left: 7, s: 800e3, a: 2 }, { id: 't2', t: 'doc', n: 'Draft letter.docx', f: 'Documents', left: 5, s: 52e3 }, { id: 't3', t: 'folder', n: 'Unused exports', f: 'Files', left: 3, s: 2.4 * GB }, { id: 't4', t: 'video', n: 'Clip 0042.mov', f: 'Files', left: 1, s: 410 * MB, a: 1 }, { id: 't5', t: 'audio', n: 'Voice memo.m4a', f: 'Music', left: 0, s: 3.2 * MB }];
   var SHARES0 = [{ id: 's1', t: 'image', n: 'Kyoto autumn.jpg', a: 0, exp: 6, dl: true, hits: 14 }, { id: 's2', t: 'folder', n: 'Family Photos', exp: null, dl: true, hits: 3 }, { id: 's3', t: 'pdf', n: 'Tax summary 2026.pdf', exp: -2, dl: false, hits: 1 }];
 
+  var RECV0 = [{ id: 'r1', t: 'folder', n: 'Grandpa’s Stories', c: 12, from: 'Ming Li', ago: 0, dl: true, exp: null, fresh: true }, { id: 'r2', t: 'image', n: 'Reunion 2025.jpg', a: 2, s: 6.1 * MB, from: 'Aunt Rose', ago: 4, dl: true, exp: 12 }, { id: 'r3', t: 'pdf', n: 'Flight itinerary.pdf', s: 420e3, from: 'Ming Li', ago: 9, dl: false, exp: 3 }];
+  var PEOPLE = [['Ming Li', '#ffb35e,#ee7d1a'], ['Aunt Rose', '#7bd88f,#2fa84f'], ['Grandpa Wen', '#8fb8ff,#3478f6']];
+  var CTRY = { US: '1', CA: '1', GB: '44', AU: '61', CN: '86', HK: '852', MO: '853', TW: '886', JP: '81', KR: '82', SG: '65', MY: '60', DE: '49', FR: '33' };
+  var CEX = { US: '555 0134', CA: '416 555 0134', GB: '7400 123456', AU: '412 345 678', CN: '138 0013 8000', HK: '5123 4567', MO: '6612 3456', TW: '912 345 678', JP: '90 1234 5678', KR: '10 1234 5678', SG: '8123 4567', MY: '12 345 6789', DE: '1512 3456789', FR: '6 12 34 56 78' };
+  var SUG = { en: ['US', 'CA', 'GB'], 'zh-Hans': ['CN', 'SG', 'MY'], 'zh-Hant': ['TW', 'HK', 'MO'] };
+
   /* ---------- state ---------- */
-  var ST = { view: store.get('view') || 'grid', sort: { k: 'name', dir: 1 }, sel: [], menu: null, dlg: null, toast: null, up: null, drag: false, form: {}, pw: false, trash: null, shares: null, upd: { phase: 'idle', pct: 0 }, pv: { playing: false, pos: 0 }, q: '' };
+  var ST = { view: store.get('view') || 'grid', sort: { k: 'name', dir: 1 }, sel: [], menu: null, dlg: null, toast: null, up: null, drag: false, form: {}, pw: false, trash: null, shares: null, recv: null, cp: { code: null, open: false, q: '', n: '', err: '' }, reg: 'email', aud: 'link', who: [0], upd: { phase: 'idle', pct: 0 }, pv: { playing: false, pos: 0 }, q: '' };
   var R = null, timers = {};
 
   function parse() {
@@ -56,6 +62,7 @@
     if (R.name === 'files' && 'state' in q) { ST.sel = []; ST.menu = null; ST.dlg = null; ST.up = null; ST.drag = false; ST.q = ''; ST.toast = null; }
     if (R.name === 'trash' && !ST.trash) ST.trash = TRASH0.slice();
     if (R.name === 'shared' && !ST.shares) ST.shares = SHARES0.slice();
+    if (!ST.recv) ST.recv = RECV0.slice();
     if (!ST.trash) ST.trash = TRASH0.slice();
     if (!ST.shares) ST.shares = SHARES0.slice();
     if (R.name === 'files') {
@@ -72,6 +79,11 @@
       if (s === 'upload-done') ST.up = mkUp('done');
       if (s === 'upload-min') { ST.up = mkUp('run'); ST.up.min = true; }
     }
+    ST.cp = { code: null, open: false, q: '', n: '', err: '' };
+    if (R.name === 'register') { ST.reg = q.mode === 'phone' ? 'phone' : 'email'; ST.cp.open = q.picker === 'open'; ST.cp.q = q.search || ''; }
+    if (R.name === 'settings' && (s.indexOf('phone') === 0)) { ST.dlg = { type: 'phone', phase: 0 }; ST.cp.open = s === 'phone-picker' || s === 'phone-nomatch'; if (s === 'phone-nomatch') ST.cp.q = 'zzz'; if (s === 'phone-dup') { ST.cp.code = 'US'; ST.cp.n = '555 0188'; ST.cp.err = 'dup'; } if (s === 'phone-error') { ST.cp.code = 'TW'; ST.cp.n = '12 34'; ST.cp.err = 'bad'; } if (s === 'phone-picker') ST.cp.code = 'JP'; }
+    if (R.name === 'files' && s === 'share-people') { ST.sel = [5]; ST.dlg = { type: 'share', phase: 0, exp: '7d', dl: true, id: 5 }; ST.aud = 'people'; }
+    else if (R.name === 'files' && s === 'share') ST.aud = 'link';
     if (R.name === 'settings' && s === 'otp') ST.dlg = { type: 'otp', phase: 0, which: 'phone' };
     if (R.name === 'settings' && s === 'password') ST.dlg = { type: 'password' };
     if (R.name === 'admin') { ST.upd = { phase: q.u || 'idle', pct: q.u === 'downloading' ? 62 : 0 }; if (q.u === 'busy') ST.upd.phase = 'available'; if (q.u === 'busy') ST.dlg = { type: 'busy' }; }
@@ -139,6 +151,24 @@
   function stateBlock(ico, tone, title, text, btn) { return '<div class="state" role="status"><div class="big ' + (tone || '') + '">' + I(ico, 44) + '</div><h2>' + esc(title) + '</h2><p>' + esc(text) + '</p>' + (btn || '') + '</div>'; }
   function langSeg() { return '<div class="langseg"><div class="seg" role="group" aria-label="' + t('language') + '">' + LANGS.map(function (l) { return '<button data-act="lang" data-v="' + l[0] + '" lang="' + l[0] + '" aria-pressed="' + (set.lang === l[0]) + '">' + l[1] + '</button>'; }).join('') + '</div></div>'; }
 
+  function cname(c) { return t('c.' + c); }
+  function cc() { return ST.cp.code || SUG[set.lang][0]; }
+  function phoneField() {
+    var c = ST.cp, cur = cc(), name = cname(cur), bad = c.err === 'bad', dup = c.err === 'dup';
+    var ctl = '<button type="button" class="cc" data-act="cpopen" aria-haspopup="listbox" aria-expanded="' + c.open + '" aria-label="' + esc(t('country_region') + ': ' + name + ' +' + CTRY[cur]) + '"><span class="code">' + cur + '</span><span class="dial">+' + CTRY[cur] + '</span>' + I('chevD', 14) + '</button>';
+    var inp = '<input class="input" id="pn" data-pn type="tel" inputmode="tel" autocomplete="tel-national" placeholder="' + esc(CEX[cur]) + '" value="' + esc(c.n) + '"' + (bad || dup ? ' aria-invalid="true" aria-describedby="pe"' : ' aria-describedby="ph2"') + '>';
+    return '<div class="field"><label for="pn">' + t('phone') + '</label><div class="phonerow">' + ctl + inp + '</div>' + (c.open ? countryPanel() : '') +
+      (bad ? '<p class="hint err" id="pe" role="alert">' + I('alert', 16) + t('phone_bad', { country: name }) + '</p>' : dup ? '<p class="hint err" id="pe" role="alert">' + I('alert', 16) + t('phone_exists') + '</p>' : '<span class="hint" id="ph2">' + t('phone_hint') + '</span>') + '</div>';
+  }
+  function countryPanel() {
+    var c = ST.cp, cur = cc(), q = c.q.trim().toLowerCase().replace(/^\+/, '');
+    var match = function (k) { return !q || cname(k).toLowerCase().indexOf(q) >= 0 || CTRY[k].indexOf(q) === 0 || k.toLowerCase() === q; };
+    var row = function (k) { return '<button type="button" class="opt-c" role="option" aria-selected="' + (k === cur) + '" data-act="cppick" data-v="' + k + '"><span class="nm trunc">' + esc(cname(k)) + '</span><span class="dial">+' + CTRY[k] + '</span><span class="ck">' + (k === cur ? I('check', 16) : '') + '</span></button>'; };
+    var all = Object.keys(CTRY).sort(function (a, b) { return cname(a).localeCompare(cname(b), loc()); }).filter(match), sug = SUG[set.lang].filter(match);
+    var body = !all.length ? '<div class="none" role="status">' + t('country_none') + '</div>' : (!q && sug.length ? '<div class="gl" role="presentation">' + t('country_suggested') + '</div>' + sug.map(row).join('') : '') + '<div class="gl" role="presentation">' + t('country_all') + '</div>' + all.map(row).join('');
+    return '<div class="cpanel"><div class="search" role="search">' + I('search', 16) + '<input type="search" data-cpq aria-label="' + t('country_search') + '" placeholder="' + t('country_search') + '" value="' + esc(c.q) + '" autofocus></div><div class="lst" role="listbox" aria-label="' + t('country_region') + '">' + body + '</div></div>';
+  }
+
   /* ---------- auth ---------- */
   function authPage(k) {
     var f = ST.form, err = R.q.state === 'error';
@@ -147,14 +177,15 @@
     function status(tone, ico, title, text, extra) { return '<div class="statusmark ' + tone + (tone === 'warn' ? ' pulse' : '') + '">' + I(ico, 36) + '</div><h1>' + esc(title) + '</h1><p class="sub">' + esc(text) + '</p>' + (extra || '') + back; }
     if (k === 'signin') {
       body = logo + '<h1>' + t('sign_in_title') + '</h1><p class="sub">' + t('sign_in_sub') + '</p><form data-form="signin" novalidate>' +
-        '<div class="field"><label for="id">' + t('email_or_phone') + '</label><input class="input" id="id" name="id" autocomplete="username" inputmode="email" autocapitalize="off" value="' + esc(f.id || '') + '"' + (err ? ' aria-invalid="true" aria-describedby="e1"' : '') + '></div>' +
+        '<div class="field"><label for="id">' + t('email_or_phone') + '</label><input class="input" id="id" name="id" autocomplete="username" inputmode="email" autocapitalize="off" placeholder="' + esc(t('id_placeholder')) + '" value="' + esc(f.id || '') + '"' + (err ? ' aria-invalid="true" aria-describedby="e1"' : '') + '></div>' +
         '<div class="field"><label for="pw">' + t('password') + '</label><div class="pw"><input class="input" id="pw" name="pw" type="' + (ST.pw ? 'text' : 'password') + '" autocomplete="current-password"' + (err ? ' aria-invalid="true" aria-describedby="e1"' : '') + ' value="' + esc(f.pw || '') + '"><button type="button" class="ibtn" data-act="pw" aria-label="' + (ST.pw ? t('hide_password') : t('show_password')) + '">' + I(ST.pw ? 'lock' : 'key', 20) + '</button></div>' +
         (err ? '<p class="hint err" id="e1" role="alert">' + I('alert', 16) + t('wrong_credentials') + '</p>' : '') + '</div>' +
         '<button class="btn primary lg block" type="submit">' + t('sign_in') + '</button></form><p class="auth-foot">' + t('no_account') + ' <a href="' + H('register') + '">' + t('register') + '</a></p>';
     } else if (k === 'register') {
       body = logo + '<h1>' + t('register_title') + '</h1><p class="sub">' + t('register_sub') + '</p><form data-form="register" novalidate>' +
         '<div class="field"><label for="dn">' + t('display_name') + '</label><input class="input" id="dn" autocomplete="name" value="' + esc(f.dn || '') + '"></div>' +
-        '<div class="field"><label for="id">' + t('email_or_phone') + '</label><input class="input" id="id" autocomplete="username" inputmode="email" value="' + esc(f.id || '') + '"></div>' +
+        seg([['email', t('email')], ['phone', t('phone')]], ST.reg, 'regmode', 'lg') +
+        (ST.reg === 'phone' ? phoneField() : '<div class="field"><label for="id">' + t('email') + '</label><input class="input" id="id" type="email" autocomplete="username" inputmode="email" autocapitalize="off" value="' + esc(f.id || '') + '"></div>') +
         '<div class="field"><label for="pw">' + t('password') + '</label><input class="input" id="pw" type="password" autocomplete="new-password" aria-describedby="ph"><span class="hint" id="ph">' + t('password_hint') + '</span></div>' +
         '<button class="btn primary lg block" type="submit">' + t('register') + '</button></form><p class="auth-foot">' + t('have_account') + ' <a href="' + H('signin') + '">' + t('sign_in') + '</a></p>';
     } else if (k === 'pending') {
@@ -244,9 +275,19 @@
     return shell('trash', bar, body);
   }
   function sharesPage() {
-    var s = R.q.state, list = s === 'empty' ? [] : ST.shares;
-    var body = !list.length ? stateBlock('share', '', t('shared_empty_title'), t('shared_empty_text'), '<a class="btn primary" href="' + H('files', { state: 'populated' }) + '">' + t('nav.files') + '</a>') :
-      '<div class="page"><div><h1 class="h1">' + t('shared_title') + '</h1><p class="lede" style="margin-top:6px">' + t('anyone_with_link') + '</p></div><div class="cell-list" role="list">' + list.map(function (x) {
+    var s = R.q.state, withMe = R.q.tab === 'with', list = s === 'empty' ? [] : ST.shares;
+    var tabs = '<h1 class="h1">' + t('nav.shared') + '</h1><div class="sharetabs"><div class="seg lg" role="group" aria-label="' + t('shared_tabs') + '"><button data-act="sharetab" data-v="by" aria-pressed="' + !withMe + '">' + t('shared_title') + '</button><button data-act="sharetab" data-v="with" aria-pressed="' + withMe + '">' + t('shared_with_title') + (ST.recv.length && s !== 'empty' ? '<span class="newdot" aria-hidden="true"></span>' : '') + '</button></div></div>';
+    if (withMe) {
+      var rl = s === 'empty' ? [] : ST.recv;
+      var rbody = !rl.length ? '<div class="page">' + tabs + '</div>' + stateBlock('users', '', t('shared_with_empty_title'), t('shared_with_empty_text')) :
+        '<div class="page">' + tabs + '<p class="lede">' + t('shared_with_lede') + '</p><div class="cell-list" role="list">' + rl.map(function (x) {
+          var meta2 = x.t === 'folder' ? t('items_n', { n: x.c }) : size(x.s);
+          return '<div class="srow" role="listitem">' + mini(x, 'ico') + '<div style="min-width:0"><div class="nm trunc">' + (x.fresh ? '<span class="newdot" style="display:inline-block;margin-inline-end:8px" aria-hidden="true"></span><span class="sr">' + t('shared_new') + ' </span>' : '') + esc(x.n) + '</div><div class="sub"><span>' + t('shared_from', { name: esc(x.from) }) + '</span><span>' + t('shared_on', { date: dfmt(x.ago) }) + '</span><span class="num">' + meta2 + '</span>' + (x.dl ? '' : '<span class="chip">' + I('lock', 12) + t('download_off') + '</span>') + (x.exp !== null && x.exp <= 3 ? '<span class="chip warn">' + I('clock', 12) + t('expires_on', { date: dlong(x.exp) }) + '</span>' : '') + '</div></div><div class="acts"><button class="btn tint" data-act="toast" data-v="open">' + I('expand', 16) + '<span class="hide-phone">' + t('open') + '</span><span class="sr hide-wide">' + t('open') + '</span></button>' + (x.dl ? '<button class="ibtn" data-act="toast" data-v="downloading" aria-label="' + t('download') + ': ' + esc(x.n) + '">' + I('download', 20) + '</button>' : '') + '</div></div>';
+        }).join('') + '</div></div>';
+      return shell('shared', titleBar(t('nav.shared')), rbody);
+    }
+    var body = !list.length ? '<div class="page">' + tabs + '</div>' + stateBlock('share', '', t('shared_empty_title'), t('shared_empty_text'), '<a class="btn primary" href="' + H('files', { state: 'populated' }) + '">' + t('nav.files') + '</a>') :
+      '<div class="page">' + tabs + '<p class="lede">' + t('anyone_with_link') + '</p><div class="cell-list" role="list">' + list.map(function (x) {
         var expd = x.exp !== null && x.exp < 0;
         return '<div class="srow" role="listitem">' + mini(x, 'ico') + '<div style="min-width:0"><div class="nm trunc">' + esc(x.n) + '</div><div class="sub">' + (expd ? '<span class="chip err">' + I('clock', 12) + t('expired') + '</span>' : '<span class="chip">' + (x.exp === null ? t('never_expires') : t('expires_on', { date: dlong(x.exp) })) + '</span>') + '<span class="chip ' + (x.dl ? 'acc' : '') + '">' + (x.dl ? I('download', 12) + t('download_on') : I('lock', 12) + t('download_off')) + '</span><span class="num">' + t('opened_n', { n: nf(x.hits) }) + '</span></div></div><div class="acts"><button class="btn tint" data-act="copylink"' + (expd ? ' disabled' : '') + '>' + I('link', 16) + '<span class="hide-phone">' + t('copy_link') + '</span><span class="sr hide-wide">' + t('copy_link') + '</span></button><button class="ibtn" data-act="dlg" data-v="revoke" data-id="' + x.id + '" aria-label="' + t('revoke_link') + ': ' + esc(x.n) + '">' + I('x', 20) + '</button></div></div>';
       }).join('') + '</div></div>';
@@ -268,7 +309,7 @@
     var body = '<div class="page"><div style="display:flex;gap:18px;align-items:center"><span class="avatar lg" aria-hidden="true">' + USER.initial + '</span><div style="min-width:0"><h1 class="h1 trunc">' + USER.name + '</h1><p class="small">' + t('profile') + '</p></div></div>' +
       '<div><div class="group-label">' + t('profile') + '</div><div class="cell-list"><div class="cell"><label class="lbl" for="dn2" style="width:130px;flex:none">' + t('display_name') + '</label><input class="input" id="dn2" style="height:40px;font-size:16px" value="' + USER.name + '"><button class="btn tint" data-act="toast" data-v="saved">' + t('save') + '</button></div></div></div>' +
       '<div><div class="group-label">' + t('sign_in_methods') + '</div><div class="cell-list"><div class="cell"><span class="tile-ic blue">' + I('mail', 18) + '</span><div class="grow"><div class="lbl">' + t('email') + '</div><div class="sub trunc">mei.chen@example.com</div></div><span class="chip ok">' + I('check', 12) + t('verified') + '</span><button class="btn text" data-act="noop">' + t('change') + '</button></div>' +
-      '<div class="cell"><span class="tile-ic green">' + I('phone', 18) + '</span><div class="grow"><div class="lbl">' + t('phone') + '</div><div class="sub num">+1 555 0134</div></div><span class="chip warn">' + I('alert', 12) + t('not_verified') + '</span><button class="btn tint" data-act="dlg" data-v="otp">' + t('verify') + '</button></div></div><p class="hint" style="padding:8px 16px 0">' + t('keep_one') + '</p></div>' +
+      '<div class="cell" style="flex-wrap:wrap"><span class="tile-ic green">' + I('phone', 18) + '</span><div class="grow"><div class="lbl">' + t('phone') + '</div><div class="sub num">+1 555 0134</div></div><span class="chip warn">' + I('alert', 12) + t('not_verified') + '</span><button class="btn text" data-act="dlg" data-v="phone">' + t('change') + '</button><button class="btn tint" data-act="dlg" data-v="otp">' + t('verify') + '</button></div></div><p class="hint" style="padding:8px 16px 0">' + t('keep_one') + '</p></div>' +
       '<div><div class="cell-list"><button class="cell" style="width:100%" data-act="dlg" data-v="password"><span class="tile-ic orange">' + I('key', 18) + '</span><span class="grow lbl">' + t('change_password') + '</span>' + I('chevR', 18) + '</button></div></div>' +
       '<div><div class="group-label">' + t('language') + '</div>' + langs + '</div><div><div class="group-label">' + t('appearance') + '</div>' + ap + '</div>' +
       '<div class="cell-list"><a class="cell" href="' + H('storage') + '" style="color:inherit"><span class="tile-ic purple">' + I('drive', 18) + '</span><span class="grow"><span class="lbl" style="display:block">' + t('nav.storage') + '</span><span class="sub num">' + t('storage_used', { used: size(USED), total: size(TOTAL) }) + '</span></span>' + I('chevR', 18) + '</a>' +
@@ -340,7 +381,11 @@
     if (d.type === 'share') {
       var f = F[d.id] || F[5], opts = [['1d', 'exp_1d'], ['7d', 'exp_7d'], ['30d', 'exp_30d'], ['never', 'exp_never']];
       var head = '<div class="cell" style="padding:0;min-height:0">' + mini(f, 'ico') + '<div class="grow"><div class="lbl trunc">' + esc(f.n) + '</div><div class="sub">' + t('anyone_with_link') + '</div></div></div>';
-      if (d.phase === 0) return wrap(t('share_link'), head + '<div class="field"><label>' + t('link_expires') + '</label><div class="seg lg" role="group" style="width:100%;flex-wrap:wrap">' + opts.map(function (o) { return '<button style="flex:1" data-act="exp" data-v="' + o[0] + '" aria-pressed="' + (d.exp === o[0]) + '">' + t(o[1]) + '</button>'; }).join('') + '</div></div><div class="cell" style="padding:0"><span class="grow"><span class="lbl" style="display:block">' + t('allow_download') + '</span><span class="sub">' + t('allow_download_hint') + '</span></span><button class="switch" role="switch" aria-checked="' + d.dl + '" data-act="dltoggle" aria-label="' + t('allow_download') + '"></button></div>', '<button class="btn plain" data-act="closedlg">' + t('cancel') + '</button><button class="btn primary" data-act="mklink">' + I('link', 16) + t('share_create') + '</button>');
+      var ppl = ST.aud === 'people', names = ST.who.map(function (i) { return PEOPLE[i][0]; }).join(', ');
+      var aud = '<div class="field"><label>' + t('aud_label') + '</label><div class="seg lg" role="group" style="width:100%;flex-wrap:wrap"><button style="flex:1" data-act="aud" data-v="link" aria-pressed="' + !ppl + '">' + t('aud_link') + '</button><button style="flex:1" data-act="aud" data-v="people" aria-pressed="' + ppl + '">' + t('aud_people') + '</button></div></div>';
+      var who = ppl ? '<div class="people" role="group" aria-label="' + t('aud_people') + '">' + PEOPLE.map(function (p, i) { var on = ST.who.indexOf(i) >= 0; return '<button role="checkbox" aria-checked="' + on + '" data-act="who" data-v="' + i + '"><span class="avatar" aria-hidden="true" style="background:linear-gradient(160deg,' + p[1] + ')">' + p[0][0] + '</span><span>' + p[0] + '</span><span class="tk">' + I('check', 13) + '</span></button>'; }).join('') + '</div><p class="small">' + (ST.who.length ? t('aud_people_hint') : t('aud_none_chosen')) + '</p>' : '';
+      if (d.phase === 1 && ppl) return wrap(t('share'), head + '<p>' + t('shared_with_names', { names: esc(names) }) + '</p>', '<button class="btn primary" data-act="closedlg">' + t('done') + '</button>');
+      if (d.phase === 0) return wrap(ppl ? t('share') : t('share_link'), head + aud + who + '<div class="field"><label>' + t('link_expires') + '</label><div class="seg lg" role="group" style="width:100%;flex-wrap:wrap">' + opts.map(function (o) { return '<button style="flex:1" data-act="exp" data-v="' + o[0] + '" aria-pressed="' + (d.exp === o[0]) + '">' + t(o[1]) + '</button>'; }).join('') + '</div></div><div class="cell" style="padding:0"><span class="grow"><span class="lbl" style="display:block">' + t('allow_download') + '</span><span class="sub">' + t('allow_download_hint') + '</span></span><button class="switch" role="switch" aria-checked="' + d.dl + '" data-act="dltoggle" aria-label="' + t('allow_download') + '"></button></div>', '<button class="btn plain" data-act="closedlg">' + t('cancel') + '</button><button class="btn primary" data-act="mklink"' + (ppl && !ST.who.length ? ' disabled' : '') + '>' + I(ppl ? 'share' : 'link', 16) + (ppl ? t('share') : t('share_create')) + '</button>');
       return wrap(t('share_link'), head + '<div class="linkbox"><span class="grow trunc">home.example/s/8fK2QxLm</span><button class="btn primary" data-act="copylink" style="height:32px">' + t('copy_link') + '</button></div><p class="small">' + t('anyone_with_link') + ' · ' + (d.exp === 'never' ? t('never_expires') : t('link_expires') + ': ' + t('exp_' + d.exp)) + '</p>', '<button class="btn primary" data-act="closedlg">' + t('done') + '</button>');
     }
     if (d.type === 'newfolder') return wrap(t('new_folder'), '<div class="field"><label for="nf">' + t('folder_name') + '</label><input class="input" id="nf" autofocus value="' + t('untitled_folder') + '"></div>', '<button class="btn plain" data-act="closedlg">' + t('cancel') + '</button><button class="btn primary" data-act="closedlg">' + t('create') + '</button>');
@@ -349,6 +394,11 @@
     if (d.type === 'revoke') { var y = ST.shares.filter(function (q) { return q.id === d.id; })[0] || ST.shares[0]; return wrap(t('revoke_title', { name: esc(y.n) }), '<p>' + t('revoke_text') + '</p>', '<button class="btn danger-fill" data-act="dorevoke" data-id="' + y.id + '">' + t('revoke_link') + '</button><button class="btn plain" data-act="closedlg">' + t('cancel') + '</button>', 'alert'); }
     if (d.type === 'busy') return wrap(t('install_update'), '<div class="phase" style="background:var(--warn-bg);color:var(--warn);padding:14px">' + I('alert', 22) + '<span>' + t('busy_transfers', { n: 2 }) + '</span></div>', '<button class="btn plain" data-act="closedlg">' + t('cancel') + '</button><button class="btn danger-fill" data-act="forceinstall">' + t('install_anyway') + '</button>');
     if (d.type === 'password') return wrap(t('change_password'), '<div class="field"><label for="p1">' + t('current_password') + '</label><input class="input" id="p1" type="password" autofocus></div><div class="field"><label for="p2">' + t('new_password') + '</label><input class="input" id="p2" type="password"><span class="hint">' + t('password_hint') + '</span></div>', '<button class="btn plain" data-act="closedlg">' + t('cancel') + '</button><button class="btn primary" data-act="savedlg">' + t('save') + '</button>');
+    if (d.type === 'phone') {
+      var pc = ST.cp, full = '+' + CTRY[cc()] + ' ' + (pc.n || CEX[cc()]);
+      if (d.phase === 1) return wrap(t('one_time_code'), '<p>' + t('code_sent_to', { to: '<span class="num">' + esc(full) + '</span>' }) + '</p><input class="input otp num" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="' + t('one_time_code') + '" autofocus placeholder="······"><p class="hint num">' + t('code_resend_in', { s: 42 }) + '</p>', '<button class="btn plain" data-act="closedlg">' + t('cancel') + '</button><button class="btn primary" data-act="savedlg">' + t('verify') + '</button>');
+      return wrap(t('phone_change_title'), phoneField(), '<button class="btn plain" data-act="closedlg">' + t('cancel') + '</button><button class="btn primary" data-act="sendphone">' + t('send_code') + '</button>');
+    }
     if (d.type === 'otp') {
       if (d.phase === 0) return wrap(t('verify') + ' · ' + t('phone'), '<p>+1 555 0134</p>', '<button class="btn plain" data-act="closedlg">' + t('cancel') + '</button><button class="btn primary" data-act="sendcode">' + t('send_code') + '</button>');
       return wrap(t('one_time_code'), '<p>' + t('code_sent_to', { to: '+1 555 0134' }) + '</p><input class="input otp num" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="' + t('one_time_code') + '" autofocus placeholder="······"><p class="hint num">' + t('code_resend_in', { s: 42 }) + '</p>', '<button class="btn plain" data-act="closedlg">' + t('cancel') + '</button><button class="btn primary" data-act="savedlg">' + t('verify') + '</button>');
@@ -487,6 +537,13 @@
       case 'dodel': ST.trash = ST.trash.filter(function (x) { return x.id !== el.getAttribute('data-id'); }); ST.dlg = null; break;
       case 'dorevoke': ST.shares = ST.shares.filter(function (x) { return x.id !== el.getAttribute('data-id'); }); ST.dlg = null; break;
       case 'sendcode': ST.dlg.phase = 1; break;
+      case 'sharetab': location.hash = v === 'with' ? H('shared', { tab: 'with' }) : H('shared'); return;
+      case 'regmode': ST.reg = v; ST.cp.open = false; break;
+      case 'cpopen': ST.cp.open = !ST.cp.open; ST.cp.q = ''; break;
+      case 'cppick': ST.cp.code = v; ST.cp.open = false; ST.cp.q = ''; ST.cp.err = ''; break;
+      case 'aud': ST.aud = v; break;
+      case 'who': { var wi = +v, wp = ST.who.indexOf(wi); if (wp >= 0) ST.who.splice(wp, 1); else ST.who.push(wi); break; }
+      case 'sendphone': if (ST.cp.n.replace(/\D/g, '').length < 6) ST.cp.err = 'bad'; else { ST.cp.err = ''; ST.dlg.phase = 1; } break;
       case 'mode': ST.mode = v; break;
       case 'chan': ST.ch = v; break;
       case 'approve': ST.pend = (ST.pend === undefined ? 2 : ST.pend) - 1; toast(t('saved')); break;
@@ -494,7 +551,7 @@
       case 'forceinstall': ST.dlg = null; return runUpdate();
       case 'reload': delete R.q.banner; toast(t('done')); break;
       case 'dismissbanner': delete R.q.banner; break;
-      case 'toast': toast(v === 'saved' ? t('saved') : t('download') + '…'); break;
+      case 'toast': toast(v === 'saved' ? t('saved') : v === 'open' ? t('open') + '…' : t('download') + '…'); break;
       case 'play': ST.pv.playing = !ST.pv.playing; break;
       case 'seek': ST.pv.pos = Math.max(0, ST.pv.pos + (+v)); break;
       case 'go': location.hash = H('preview/' + v); return;
@@ -509,7 +566,9 @@
   stage.addEventListener('contextmenu', function (e) { var el = e.target.closest('[data-act=item]'); if (!el) return; e.preventDefault(); var r = stage.getBoundingClientRect(); ST.menu = { type: 'file', id: +el.getAttribute('data-id'), x: Math.min(e.clientX - r.left, stage.clientWidth - 250), y: Math.min(e.clientY - r.top, stage.clientHeight - 260) }; render(); });
   stage.addEventListener('input', function (e) {
     var el = e.target;
-    if (el.hasAttribute('data-search')) { ST.q = el.value; var pos = el.selectionStart; render(); var n = stage.querySelectorAll('[data-search]'); for (var i = 0; i < n.length; i++) if (n[i].offsetParent) { n[i].focus(); n[i].setSelectionRange(pos, pos); } }
+    if (el.hasAttribute('data-pn')) { ST.cp.n = el.value; if (ST.cp.err) { ST.cp.err = ''; var pe = document.getElementById('pe'); if (pe) pe.remove(); } }
+    else if (el.hasAttribute('data-cpq')) { ST.cp.q = el.value; var cp = el.selectionStart; render(); var cq = stage.querySelector('[data-cpq]'); if (cq) { cq.focus(); cq.setSelectionRange(cp, cp); } }
+    else if (el.hasAttribute('data-search')) { ST.q = el.value; var pos = el.selectionStart; render(); var n = stage.querySelectorAll('[data-search]'); for (var i = 0; i < n.length; i++) if (n[i].offsetParent) { n[i].focus(); n[i].setSelectionRange(pos, pos); } }
     else if (el.id && (el.closest('[data-form]'))) ST.form[el.id] = el.value;
     else if (el.hasAttribute('data-scrub')) { ST.pv.pos = +el.value; }
   });
@@ -522,7 +581,7 @@
     } else location.hash = id.indexOf('closed') >= 0 ? H('closed') : id.indexOf('busy') >= 0 ? H('busy') : H('pending');
   });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { if (ST.dlg) ST.dlg = null; else if (ST.menu) ST.menu = null; else if (ST.sel.length) ST.sel = []; else if (R.name === 'preview') return (location.hash = H('files', { state: 'populated' })); else return; render(); return; }
+    if (e.key === 'Escape') { if (ST.cp.open) ST.cp.open = false; else if (ST.dlg) ST.dlg = null; else if (ST.menu) ST.menu = null; else if (ST.sel.length) ST.sel = []; else if (R.name === 'preview') return (location.hash = H('files', { state: 'populated' })); else return; render(); return; }
     if (R.name === 'preview') { var id = +R.parts[0], i = GAL.indexOf(id); if (i >= 0 && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) location.hash = H('preview/' + GAL[(i + (e.key === 'ArrowRight' ? 1 : GAL.length - 1)) % GAL.length]); if (e.key === ' ' && F[id].t !== 'image' && e.target.tagName !== 'BUTTON') { e.preventDefault(); ST.pv.playing = !ST.pv.playing; render(); } return; }
     var el = document.activeElement;
     if (el && el.getAttribute && el.getAttribute('data-act') === 'item') {
@@ -550,12 +609,12 @@
 
   /* ---------- review dock (mockup chrome, not product) ---------- */
   var DOCK = [
-    ['Sign in and approval (R-006, R-062)', [['Sign in', 'signin'], ['Wrong password', 'signin?state=error'], ['Register', 'register'], ['Request submitted', 'pending'], ['Account pending', 'account-pending'], ['Rejected', 'rejected'], ['Registration closed', 'closed'], ['Too busy', 'busy']]],
+    ['Sign in and approval (R-006, R-062)', [['Sign in', 'signin'], ['Wrong password', 'signin?state=error'], ['Register', 'register'], ['Register with phone', 'register?mode=phone'], ['Country picker', 'register?mode=phone&picker=open'], ['Country picker, filtered', 'register?mode=phone&picker=open&search=8'], ['Request submitted', 'pending'], ['Account pending', 'account-pending'], ['Rejected', 'rejected'], ['Registration closed', 'closed'], ['Too busy', 'busy']]],
     ['File browser (R-007)', [['Grid', 'files?state=populated'], ['List', 'files?state=populated&view=list'], ['Loading', 'files?state=loading'], ['Empty folder', 'files/4?state=populated'], ['Load error', 'files?state=error'], ['Drive missing', 'files?state=drive'], ['Offline', 'files?state=offline'], ['Offline, nothing loaded', 'files?state=offline-empty'], ['Multi-select', 'files?state=selection'], ['Search', 'files?state=search&q=kyoto'], ['No results', 'files?state=search&q=zzz'], ['Row menu', 'files?state=menu'], ['New folder', 'files?state=newfolder'], ['Nested folder', 'files/17?state=populated']]],
     ['Upload and download (R-008, R-010)', [['Drag over', 'files?state=drop'], ['Uploading', 'files?state=upload'], ['Minimized', 'files?state=upload-min'], ['Failed item', 'files?state=upload-fail'], ['Finished', 'files?state=upload-done'], ['Batch download', 'files?state=download']]],
     ['Preview (R-009)', [['Image gallery', 'preview/5'], ['Audio', 'preview/8?state=playing'], ['Video', 'preview/9'], ['Video playing', 'preview/9?state=playing'], ['Cannot play', 'preview/9?state=error']]],
-    ['Trash, sharing, storage (R-011)', [['Trash', 'trash'], ['Trash empty', 'trash?state=empty'], ['Trash loading', 'trash?state=loading'], ['Shared', 'shared'], ['Shared empty', 'shared?state=empty'], ['Create link', 'files?state=share'], ['Public page', 'public'], ['Public: view only', 'public?state=viewonly'], ['Public: link gone', 'public?state=gone'], ['Storage', 'storage'], ['Storage low', 'storage?state=low']]],
-    ['Account and admin (R-012, R-013)', [['Settings', 'settings'], ['Verify with code', 'settings?state=otp'], ['Change password', 'settings?state=password'], ['Update: current', 'admin'], ['available', 'admin?u=available'], ['checking', 'admin?u=checking'], ['downloading', 'admin?u=downloading'], ['installing', 'admin?u=installing'], ['restarting', 'admin?u=restarting'], ['failed', 'admin?u=failed'], ['transfers running', 'admin?u=busy']]],
+    ['Trash, sharing, storage (R-011)', [['Trash', 'trash'], ['Trash empty', 'trash?state=empty'], ['Trash loading', 'trash?state=loading'], ['Shared by you', 'shared'], ['Shared by you, empty', 'shared?state=empty'], ['Shared with you', 'shared?tab=with'], ['Shared with you, empty', 'shared?tab=with&state=empty'], ['Create link', 'files?state=share'], ['Share with people', 'files?state=share-people'], ['Public page', 'public'], ['Public: view only', 'public?state=viewonly'], ['Public: link gone', 'public?state=gone'], ['Storage', 'storage'], ['Storage low', 'storage?state=low']]],
+    ['Account and admin (R-012, R-013)', [['Settings', 'settings'], ['Verify with code', 'settings?state=otp'], ['Change phone number', 'settings?state=phone'], ['Phone: country picker', 'settings?state=phone-picker'], ['Phone: wrong number', 'settings?state=phone-error'], ['Phone: already used', 'settings?state=phone-dup'], ['Phone: no country match', 'settings?state=phone-nomatch'], ['Change password', 'settings?state=password'], ['Update: current', 'admin'], ['available', 'admin?u=available'], ['checking', 'admin?u=checking'], ['downloading', 'admin?u=downloading'], ['installing', 'admin?u=installing'], ['restarting', 'admin?u=restarting'], ['failed', 'admin?u=failed'], ['transfers running', 'admin?u=busy']]],
     ['Following updates (R-027)', [['New version', 'files?state=populated&banner=newversion'], ['New version, upload running', 'files?state=upload&banner=newversion-busy'], ['Updating, reconnecting', 'files?state=populated&banner=updating'], ['Live link lost', 'files?state=populated&banner=reconnect']]]
   ];
   function dockBtn() { var b = document.getElementById('dock-btn'); b.innerHTML = I('sliders', 16) + 'Review'; b.setAttribute('aria-expanded', !document.getElementById('dock').hidden); }

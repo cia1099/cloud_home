@@ -495,3 +495,34 @@ select.input { appearance: none; background-image: none; }
   :root { --text-2: #515154; --line: rgba(0,0,0,.35); } [data-theme=dark] { --text-2: #c7c7cc; --line: rgba(255,255,255,.4); }
   .btn.plain, .seg { box-shadow: inset 0 0 0 1px var(--line); }
 }
+
+/* ---- phone field with country picker (owner decision 5) ---- */
+.phonerow { display: flex; gap: 8px; align-items: stretch; }
+.cc { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 48px; padding: 0 10px 0 12px; border-radius: 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); font-size: 17px; color: var(--text); }
+.cc .code { font-weight: 600; letter-spacing: .02em; }
+.cc .dial { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.cc[aria-expanded=true], .cc:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--focus), 0 0 0 4px var(--accent-tint-2); }
+.cc .ic { color: var(--text-3); }
+.phonerow .input { flex: 1; min-width: 0; font-variant-numeric: tabular-nums; }
+.cpanel { border-radius: 14px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); overflow: hidden; display: grid; grid-template-rows: auto minmax(0, 1fr); max-height: 300px; }
+.cpanel .search { width: auto; margin: 8px; }
+.cpanel .search input { height: 40px; padding-inline-start: 36px; } .cpanel .search .ic { top: 12px; }
+.cpanel .lst { overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 6px; }
+.cpanel .gl { font-size: 12px; font-weight: 600; color: var(--text-2); padding: 10px 10px 4px; }
+.cpanel .opt-c { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 0 10px; border-radius: 8px; text-align: start; font-size: 15.5px; color: var(--text); }
+.cpanel .opt-c:hover { background: var(--surface-2); }
+.cpanel .opt-c[aria-selected=true] { font-weight: 600; }
+.cpanel .opt-c .nm { flex: 1; min-width: 0; }
+.cpanel .opt-c .dial { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.cpanel .opt-c .ck { width: 18px; color: var(--accent); flex: none; display: grid; }
+.cpanel .none { padding: 22px 12px; text-align: center; color: var(--text-2); font-size: 14.5px; }
+/* people picker in the share dialog */
+.people { display: grid; border-radius: 12px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); overflow: hidden; }
+.people button { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 12px; width: 100%; text-align: start; position: relative; color: var(--text); }
+.people button + button::before { content: ""; position: absolute; top: 0; inset-inline: 56px 0; height: 1px; background: var(--line); }
+.people .tk { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; margin-inline-start: auto; box-shadow: inset 0 0 0 1.5px var(--text-3); color: transparent; flex: none; }
+.people button[aria-checked=true] .tk { background: var(--accent-fill); color: #fff; box-shadow: none; }
+/* shared page tabs */
+.sharetabs .seg { display: flex; width: min(100%, 440px); }
+.sharetabs .seg button { flex: 1; min-width: 0; white-space: normal; line-height: 1.2; }
+.newdot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-fill); flex: none; }
