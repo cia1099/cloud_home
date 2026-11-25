@@ -17,7 +17,8 @@ The report site (R-001) has its first edition built and published; it is in revi
 
 ## Active tasks
 - R-002 · designer · main checkout · state: follow-up delivered (01cc6e5, 5c6ccb9), unviewed in a browser · next: tester/manager looks at mockup at phone width (dark), then R-003 (frontend) and R-071 (backend) can start; no worker active
-- R-020 merged into agent/manager (94 tests pass); live curl check still outstanding (needs a running instance).
+- R-020 merged into agent/manager (94 tests reported at merge; not re-run in the report session); live curl check still outstanding (needs a running instance).
+- Report 2026-11-25-1200-web-app-design built and deployed; live check passed (site 200, report listed, report page 200, screenshots load). Mockup screenshots only; cargo is not available in the report session, so tests were not re-run.
 
 ## Waiting on the owner
 See SPEC.md section 6 and the site's approvals queue.
