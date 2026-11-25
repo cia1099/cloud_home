@@ -573,6 +573,10 @@ LIMIT ? OFFSET ?
 | POST | /admin/users/delete  | 软删除账户 |
 | POST | /admin/users/restore | 还原账户 |
 | POST | /admin/trash/purge   | 立即清空某账户的回收站（物理删除，**不可逆**） |
+| GET  | /admin/update           | 在线更新状态：当前版本、可用新版本、阶段、设置、最近错误 |
+| POST | /admin/update/check     | 立即检查一次更新 |
+| POST | /admin/update/install   | 安装已发现的新版本（有传输在进行时 409，除非 `force`） |
+| PUT  | /admin/update/settings  | 修改更新设置并持久化 |
 
 **这不是权限系统**：没有管理员角色，只有一个共享口令加一层来源限制。三道关卡按序执行，
 且都在读取请求体之前（`AdminGuard` 提取器）：
@@ -582,6 +586,37 @@ LIMIT ? OFFSET ?
 3. `X-Admin-Password` 缺失或不符 → `401`（定长比较，避免按字节提前返回泄露前缀）。
 
 口令与请求头的值**绝不写入日志**，`Config` 的手写 `Debug` 也对其脱敏。
+
+**在线更新端点**（`handlers/admin_update.rs`，同一道 `AdminGuard`；机制见 `spec/update.md`）。
+它们只读写进程级更新器状态与 `update/settings.json`，不碰用户数据，故无账户隔离问题。
+所有成功响应体都是 `{"data": <status>}`，`<status>` 为：
+
+```json
+{
+  "enabled": true,                 // false = 非安装目录运行（开发机），check/install/settings 一律 409
+  "target": "aarch64-apple-darwin",
+  "phase": "idle",                 // idle|checking|downloading|installing|restarting|failed
+  "current_version": "0.3.1",      // 后端与内嵌 UI 同一个产品版本
+  "available": {"version": "0.4.0", "notes_url": "https://…", "size": 12345678},  // 无则 null
+  "last_checked_at": "2025-01-01T00:00:00Z",   // 或 null
+  "last_error": null,              // 最近一次检查/安装失败的原因
+  "settings": {"mode": "manual", "window": "03:00-05:00", "channel": "stable", "check_interval_hours": 6}
+}
+```
+
+- `POST /admin/update/check`：同步检查（最长约一分钟）。检查本身失败（网络、验签）仍是 `200`，
+  原因在 `last_error`；`UPDATE_DISABLED` / `UPDATE_IN_PROGRESS` 为 `409`。
+- `POST /admin/update/install`，体可省略或 `{"force": bool}`：前置检查同步完成，通过则 `202`，
+  安装在后台任务里进行（不绑在请求上，客户端断开不会留下半截状态），用 `GET /admin/update` 观察
+  `phase`：downloading → installing → restarting（进程随后重启），失败为 `failed` 并带 `last_error`。
+  `409` 的错误码：`UPDATE_DISABLED`、`UPDATE_NOT_AVAILABLE`（还没检查到新版本）、
+  `UPDATE_IN_PROGRESS`、`UPDATE_TRANSFERS_ACTIVE`（有上传 / 下载在进行；`force: true` 可强制，会中断它们）。
+- `PUT /admin/update/settings`：字段 `mode`(`manual|auto`)、`window`(`HH:MM-HH:MM`，可跨午夜，起止不同)、
+  `channel`(`stable|beta`)、`check_interval_hours`(1..=720)，**只改给出的字段**，未知字段拒绝；
+  校验失败 `400`；通过后原子写入 `update/settings.json` 并立即生效（覆盖 `.env` 默认值）。
+- 审计事件：`admin.update.check`、`admin.update.install`（`accepted`，含 `version`、`force`）、
+  `admin.update.settings`；更新器自身另记 `update.check` / `update.install`。
+- 状态变化也通过 SSE `update` 事件（发现新版本）推送，但阶段进度需轮询 `GET /admin/update`。
 
 > 来源限制的局限要正视：反向代理在前时，对端 IP 就是网关自己的回环地址，内网判定会
 > 形同虚设，除非开启 `TRUST_PROXY_HEADERS` 并信任 `X-Forwarded-For`。它是给局域网机器

@@ -21,6 +21,8 @@ git tag vX.Y.Z ─► GitHub Actions (.github/workflows/release.yml)
 提交：服务稳定运行 2 分钟后清除 pending
 ```
 
+运行时可通过管理端点查看 / 触发 / 改设置，见 `spec/backend.md`「在线更新端点」（`/admin/update*`）。
+
 ## 安装目录
 
 ```
@@ -43,7 +45,7 @@ $UPDATE_ROOT (默认 /opt/cloud_home)
 | `UPDATE_MODE` | `manual` | `manual` 仅提示；`auto` 在时间窗内空闲时自动安装 |
 | `UPDATE_WINDOW` | `03:00-05:00` | 自动安装时间窗（本地时间，可跨午夜） |
 | `UPDATE_CHANNEL` | `stable` | `beta` 同时接收 `-rc` 预发布 |
-| `UPDATE_CHECK_INTERVAL_HOURS` | `6` | 检查间隔（另加 0~10% 抖动） |
+| `UPDATE_CHECK_INTERVAL_HOURS` | `6` | 检查间隔（1..=720 小时，另加 0~10% 抖动） |
 | `UPDATE_ROOT` | `/opt/cloud_home` | 安装根目录 |
 | `UPDATE_BASE_URL` | 空 | 仅测试：用本地镜像代替 GitHub，生产勿设 |
 
