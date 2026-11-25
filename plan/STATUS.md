@@ -16,7 +16,8 @@ The report site (R-001) has its first edition built and published; it is in revi
 | Report site | first edition built, checked and published (R-001, in review) | owner review; next report after the next milestone |
 
 ## Active tasks
-_none_  <!-- one line per task: R-id · role · branch · worktree · state · next -->
+- R-002 · designer · main checkout (design/) · state: delegated · next: verify mockups, apple-design review
+- R-020 · backend-engineer · branch agent/R-020-ota-admin-api · worktree (auto) · state: delegated · next: verify build/test/clippy, merge  <!-- one line per task: R-id · role · branch · worktree · state · next -->
 
 ## Waiting on the owner
 See SPEC.md section 6 and the site's approvals queue.
