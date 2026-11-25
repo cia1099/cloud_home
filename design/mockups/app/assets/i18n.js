@@ -114,7 +114,7 @@ window.S = {
   'trash_note': ['Items are deleted for good after 7 days.', '项目将在 7 天后永久删除。', '項目會在 7 天後永久刪除。'],
   'trash_days_left': ['{n} days left', '还剩 {n} 天', '剩下 {n} 天'],
   'trash_day_left': ['1 day left', '还剩 1 天', '剩下 1 天'],
-  'trash_today': ['Deleted today', '今天将被删除', '今天將被刪除'],
+  'trash_today': ['Deletes today', '今天将被删除', '今天將被刪除'],
   'empty_trash': ['Empty Trash', '清空回收站', '清空垃圾桶'],
   'restore': ['Restore', '恢复', '還原'],
   'delete_forever': ['Delete Forever', '永久删除', '永久刪除'],
@@ -279,14 +279,5 @@ window.S = {
   'updating': ['Updating, reconnecting…', '正在更新，正在重新连接…', '正在更新，重新連線中…'],
   'updating_text': ['Cloud Home is restarting with the new version. This usually takes under a minute.', 'Cloud Home 正在以新版本重新启动，通常不到一分钟。', 'Cloud Home 正以新版本重新啟動，通常不到一分鐘。'],
   'updating_retry': ['Trying again in {s} s', '{s} 秒后重试', '{s} 秒後重試'],
-  'sse_reconnecting': ['Reconnecting…', '正在重新连接…', '重新連線中…'],
-  /* review dock (mockup chrome only, not part of the product) */
-  'dock.title': ['Review', '评审', '檢閱'],
-  'dock.screens': ['Screens', '界面', '畫面'],
-  'dock.states': ['States', '状态', '狀態'],
-  'dock.device': ['Device', '设备', '裝置'],
-  'dock.auto': ['Window', '窗口', '視窗'],
-  'dock.phone': ['Phone', '手机', '手機'],
-  'dock.tablet': ['Tablet', '平板', '平板'],
-  'dock.mockup': ['Mockup: sample data only', '原型：仅含示例数据', '原型：僅含範例資料']
+  'sse_reconnecting': ['Reconnecting…', '正在重新连接…', '重新連線中…']
 };
