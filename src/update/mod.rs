@@ -13,6 +13,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use serde::Serialize;
+use utoipa::ToSchema;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::Config;
@@ -29,7 +30,7 @@ pub const PUBLIC_KEY: &str = "RWR4IcEpkUB52UT0pqy7cHKuT1IKMRljRctf8rcOYT332Z29K2
 pub const REPO: &str = "cia1099/cloud_home";
 const LATEST_BASE_URL: &str = "https://github.com/cia1099/cloud_home/releases/latest/download";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Phase {
     Idle,
@@ -41,14 +42,14 @@ pub enum Phase {
     Failed,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct Available {
     pub version: String,
     pub notes_url: String,
     pub size: u64,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct Snapshot {
     pub phase: Phase,
     pub current_version: &'static str,
@@ -191,10 +192,6 @@ impl Updater {
         }
     }
 
-    pub fn activity(&self) -> &ActivityTracker {
-        &self.inner.activity
-    }
-
     /// 解析清单所在目录的 URL：测试覆盖 > beta 通道（取最新的含预发布 Release）> 稳定版 `latest`。
     async fn base_url(&self, channel: Channel) -> anyhow::Result<String> {
         if let Some(u) = &self.inner.cfg.update_base_url {
@@ -327,17 +324,12 @@ impl Updater {
         Ok(avail)
     }
 
-    /// 安装已发现的新版本。成功后触发优雅关停，由守护进程拉起新版本。
-    /// `force = false` 时若有传输进行中则拒绝。
-    pub async fn install(&self, force: bool) -> Result<(), UpdateError> {
+    /// 安装前置检查：已启用、没有别的更新在跑、有已验签的新版本、（非 force 时）无在途传输。
+    /// 返回将要安装的清单。
+    fn preflight(&self, force: bool) -> Result<Manifest, UpdateError> {
         if !self.enabled() {
             return Err(UpdateError::Disabled);
         }
-        let _lock = self
-            .inner
-            .install_lock
-            .try_lock()
-            .map_err(|_| UpdateError::InProgress)?;
         if self.busy() {
             return Err(UpdateError::InProgress);
         }
@@ -352,6 +344,33 @@ impl Updater {
         if !force && active > 0 {
             return Err(UpdateError::Busy(active));
         }
+        Ok(m)
+    }
+
+    /// 管理端点用：同步做前置检查（失败即返回对应错误），通过后在后台任务里安装并立刻返回。
+    /// 安装要下载整个安装包，不能绑在 HTTP 请求上——客户端断开会取消请求 future，
+    /// 把更新器留在「下载中」的半截状态。进度与结果通过 [`Updater::snapshot`] 观察。
+    pub fn install_in_background(&self, force: bool) -> Result<(), UpdateError> {
+        self.preflight(force)?;
+        let this = self.clone();
+        tokio::spawn(async move {
+            // 失败已由 install 记入审计与 last_error；重复触发（InProgress）无需再报。
+            if let Err(e) = this.install(force).await {
+                tracing::debug!(error = %e, "后台安装未执行或失败");
+            }
+        });
+        Ok(())
+    }
+
+    /// 安装已发现的新版本。成功后触发优雅关停，由守护进程拉起新版本。
+    /// `force = false` 时若有传输进行中则拒绝。
+    pub async fn install(&self, force: bool) -> Result<(), UpdateError> {
+        let _lock = self
+            .inner
+            .install_lock
+            .try_lock()
+            .map_err(|_| UpdateError::InProgress)?;
+        let m = self.preflight(force)?;
 
         crate::audit!(info, "update.install", "started", version = %m.version, force, "开始安装更新");
         match self.install_inner(&m).await {
@@ -428,6 +447,26 @@ impl Updater {
             return Err(e);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+impl Updater {
+    /// 测试用：直接登记一个「已发现」的新版本（真实清单需要发布私钥签名）。
+    /// 清单没有任何目标安装包，所以真正安装会在下载前失败。
+    pub(crate) fn seed_available_for_test(&self, version: &str) {
+        let notes_url = "https://example.invalid/notes".to_string();
+        *self.inner.manifest.write().unwrap() = Some(Manifest {
+            version: version.to_string(),
+            notes_url: notes_url.clone(),
+            min_from_version: None,
+            targets: Default::default(),
+        });
+        self.inner.status.write().unwrap().available = Some(Available {
+            version: version.to_string(),
+            notes_url,
+            size: 1,
+        });
     }
 }
 

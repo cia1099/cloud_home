@@ -22,6 +22,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   keep working. The web app is updated separately (R-062).
 
 ### Added
+- OTA admin API behind the existing `AdminGuard` (shared password, local
+  network), listed in `/docs`: `GET /admin/update` (current version, available
+  version + notes URL, phase `idle|checking|downloading|installing|restarting|failed`,
+  settings, last error), `POST /admin/update/check`, `POST /admin/update/install`
+  (`202`, runs in the background; `409 UPDATE_TRANSFERS_ACTIVE` while uploads or
+  downloads are running unless `{"force": true}`; other `409` codes
+  `UPDATE_DISABLED`, `UPDATE_NOT_AVAILABLE`, `UPDATE_IN_PROGRESS`) and
+  `PUT /admin/update/settings` (partial update of mode, window, channel,
+  check interval; validated, persisted to `update/settings.json`). Audit events
+  `admin.update.check|install|settings`. `check_interval_hours` is now limited
+  to 1..=720. CORS now allows `PUT`.
 - Account approval via the private admin endpoints: `GET /admin/users` gains
   `?status=pending|approved|rejected|all` and returns `approval_status`,
   `approval_decided_*`, `approval_note`, `registered_ip` and `created_at`;
