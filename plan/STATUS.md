@@ -16,8 +16,8 @@ The report site (R-001) has its first edition built and published; it is in revi
 | Report site | first edition built, checked and published (R-001, in review) | owner review; next report after the next milestone |
 
 ## Active tasks
-- R-002 · designer · main checkout (design/) · state: delivered (abccdae), owner answered the open questions · next: verify mockups, apply the owner decisions below to design/app-spec.md and the mockup, send layout fixes back to the designer, then mark review
-- R-020 · backend-engineer · branch agent/R-020-ota-admin-api · worktree (auto) · state: verified (94 tests, clippy only the old wait_idle warning), NOT merged · next: `git merge --no-ff` into agent/manager from the main checkout, then the live curl check  <!-- one line per task: R-id · role · branch · worktree · state · next -->
+- R-002 · designer · main checkout · state: follow-up delivered (01cc6e5, 5c6ccb9), unviewed in a browser · next: tester/manager looks at mockup at phone width (dark), then R-003 (frontend) and R-071 (backend) can start; no worker active
+- R-020 merged into agent/manager (94 tests pass); live curl check still outstanding (needs a running instance).
 
 ## Waiting on the owner
 See SPEC.md section 6 and the site's approvals queue.
@@ -32,7 +32,7 @@ Record these in SPEC.md and design/app-spec.md, and carry them into R-002 follow
 
 ## Log
 - 2026-11-19 — team and SPEC.md created.
-- 2026-11-25 — R-002 web-app design delivered (abccdae); R-020 verified but unmerged; owner answered the 5 design questions (see Owner decisions).
+- 2026-11-25 — R-020 merged; R-002 follow-up (owner decisions) delivered; R-071 added. R-002 web-app design delivered (abccdae); R-020 verified but unmerged; owner answered the 5 design questions (see Owner decisions).
 - 2026-11-25 — R-060/R-061 approval flow merged into agent/manager (84 tests, no new clippy warnings); live curl check outstanding.
 - 2026-11-24 — report site design committed; report site first edition built (8 pages, English + 简体中文, light/dark, phone width), first report written from the repo, published.
 
