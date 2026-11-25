@@ -1,6 +1,7 @@
 //! Router 组装与中间件注册。
 
 pub mod admin;
+pub mod admin_update;
 pub mod auth;
 pub mod drives;
 pub mod events;
@@ -57,6 +58,10 @@ pub fn build_router(state: AppState) -> Router {
         .routes(routes!(admin::delete_user))
         .routes(routes!(admin::restore_user))
         .routes(routes!(admin::purge_trash))
+        .routes(routes!(admin_update::status))
+        .routes(routes!(admin_update::check))
+        .routes(routes!(admin_update::install))
+        .routes(routes!(admin_update::put_settings))
         // 硬盘
         .routes(routes!(drives::list))
         // 文件
@@ -153,6 +158,7 @@ fn build_cors(state: &AppState) -> CorsLayer {
         .allow_methods([
             Method::GET,
             Method::POST,
+            Method::PUT,
             Method::PATCH,
             Method::DELETE,
             Method::OPTIONS,

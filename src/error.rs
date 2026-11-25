@@ -43,6 +43,10 @@ pub enum AppError {
     #[error("资源冲突: {0}")]
     Conflict(String),
 
+    /// 409，带稳定的机器可读错误码（前端据此区分「有传输进行中，可强制」等情形）。
+    #[error("{1}")]
+    CodedConflict(&'static str, String),
+
     #[error("分享链接已过期")]
     Gone,
 
@@ -81,6 +85,7 @@ impl AppError {
                 tracing::warn!(reason = "drive_unavailable", "外接硬盘不可用");
             }
             AppError::Conflict(_)
+            | AppError::CodedConflict(..)
             | AppError::Gone
             | AppError::AccountPending
             | AppError::AccountRejected
@@ -110,6 +115,7 @@ impl AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, "NOT_FOUND"),
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, "BAD_REQUEST"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT"),
+            AppError::CodedConflict(code, _) => (StatusCode::CONFLICT, code),
             AppError::Gone => (StatusCode::GONE, "GONE"),
             AppError::DriveUnavailable => (StatusCode::SERVICE_UNAVAILABLE, "DRIVE_UNAVAILABLE"),
             AppError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE"),
@@ -156,6 +162,7 @@ mod tests {
             (AppError::AccountRejected, 403, "ACCOUNT_REJECTED"),
             (AppError::RegistrationClosed, 403, "REGISTRATION_CLOSED"),
             (AppError::RegistrationBusy("x".into()), 429, "REGISTRATION_BUSY"),
+            (AppError::CodedConflict("UPDATE_X", "x".into()), 409, "UPDATE_X"),
         ] {
             let (s, c) = err.parts();
             assert_eq!((s.as_u16(), c), (status, code));
