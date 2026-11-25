@@ -21,6 +21,7 @@ The report site (R-001) has its first edition built and published; it is in revi
 - Report 2026-11-25-1200-web-app-design built and deployed; live check passed (site 200, report listed, report page 200, screenshots load). Mockup screenshots only; cargo is not available in the report session, so tests were not re-run.
 
 - 2026-11-26 re-check: the live URL could not be checked from this session (DNS for the report host does not resolve here, with or without the sandbox). The earlier live check (2026-11-25) stands; this one is not confirmed. Re-check from a session with network access.
+- 2026-11-26 (later): rebuilt (9 pages, 2 reports) and re-ran scripts/deploy_report.sh: upload to the server succeeded, but the live HTTP check still fails here (DNS does not resolve in this session). Published but NOT live-verified in this session.
 
 ## Waiting on the owner
 See SPEC.md section 6 and the site's approvals queue.
