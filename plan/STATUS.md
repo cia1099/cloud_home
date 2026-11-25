@@ -16,14 +16,23 @@ The report site (R-001) has its first edition built and published; it is in revi
 | Report site | first edition built, checked and published (R-001, in review) | owner review; next report after the next milestone |
 
 ## Active tasks
-- R-002 · designer · main checkout (design/) · state: delegated · next: verify mockups, apple-design review
-- R-020 · backend-engineer · branch agent/R-020-ota-admin-api · worktree (auto) · state: delegated · next: verify build/test/clippy, merge  <!-- one line per task: R-id · role · branch · worktree · state · next -->
+- R-002 · designer · main checkout (design/) · state: delivered (abccdae), owner answered the open questions · next: verify mockups, apply the owner decisions below to design/app-spec.md and the mockup, send layout fixes back to the designer, then mark review
+- R-020 · backend-engineer · branch agent/R-020-ota-admin-api · worktree (auto) · state: verified (94 tests, clippy only the old wait_idle warning), NOT merged · next: `git merge --no-ff` into agent/manager from the main checkout, then the live curl check  <!-- one line per task: R-id · role · branch · worktree · state · next -->
 
 ## Waiting on the owner
 See SPEC.md section 6 and the site's approvals queue.
 
+## Owner decisions (2026-11-25, answers to design/app-spec.md section 12)
+1. File extensions: **show** them (do not hide by default).
+2. Appearance: **keep** the Automatic / Light / Dark control in Settings; the default is Automatic (follow the system).
+3. "Shared with me" view: **yes**, add it (the mockup only has "shared by you").
+4. Public share page: **yes**, add a language switch.
+5. Phone numbers: **yes**, add a country picker.
+Record these in SPEC.md and design/app-spec.md, and carry them into R-002 follow-up and R-003.
+
 ## Log
 - 2026-11-19 — team and SPEC.md created.
+- 2026-11-25 — R-002 web-app design delivered (abccdae); R-020 verified but unmerged; owner answered the 5 design questions (see Owner decisions).
 - 2026-11-25 — R-060/R-061 approval flow merged into agent/manager (84 tests, no new clippy warnings); live curl check outstanding.
 - 2026-11-24 — report site design committed; report site first edition built (8 pages, English + 简体中文, light/dark, phone width), first report written from the repo, published.
 
