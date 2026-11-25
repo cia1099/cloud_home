@@ -23,6 +23,11 @@ out.push('| Concept | English | 简体中文 | 繁體中文 (Taiwan) | Why |', '
   ['Software', 'Software Update', '软件更新', '軟體更新', ''],
   ['Storage', 'Storage', '存储空间', '儲存空間', ''],
   ['Disk', 'Drive', '硬盘', '硬碟', ''],
+  ['Text message', 'text message', '短信', '簡訊', '簡訊 is the Taiwan term; 短信 is mainland'],
+  ['Shared with you', 'Shared with You', '分享给你', '與你分享', 'Taiwan phrasing is 與你分享 (not 分享給你)'],
+  ['Mainland China', 'Mainland China', '中国大陆', '中國大陸', 'country list; 臺灣 is written with 臺 in Taiwan official usage'],
+  ['South Korea', 'South Korea', '韩国', '南韓', 'Taiwan says 南韓'],
+  ['Australia', 'Australia', '澳大利亚', '澳洲', 'Taiwan says 澳洲'],
   ['Quotes', '“ ”', '“ ”', '「 」', 'corner quotes in Traditional']
 ].forEach(r => out.push('| ' + r.join(' | ') + ' |'));
 out.push('', '| Key | English | 简体中文 | 繁體中文 (Taiwan) |', '|---|---|---|---|');
