@@ -25,6 +25,9 @@ The report site (R-001) has its first edition built and published; it is in revi
 
 - 2026-11-26 (final): live check passed from a session with network access: site 200, report listed on /reports/, report page 200, screenshot asset 200 image/png. The earlier DNS failure is resolved. Tests not re-run in the report session (no cargo).
 
+- R-072 · designer · main checkout · state: delegated (brand directions, 3 options) · next: verify, then frontend builds /decisions/ brand + admin-explanation pages, APPROVALS A-001/A-002
+- R-063 · backend-engineer · branch agent/R-063-chat-core · state: delegating · next: verify, merge
+
 ## Waiting on the owner
 See SPEC.md section 6 and the site's approvals queue.
 
@@ -35,6 +38,14 @@ See SPEC.md section 6 and the site's approvals queue.
 4. Public share page: **yes**, add a language switch.
 5. Phone numbers: **yes**, add a country picker.
 Record these in SPEC.md and design/app-spec.md, and carry them into R-002 follow-up and R-003.
+
+## Owner requests (2026-11-26) — do these on the next run
+The owner's answers to the open questions in SPEC.md section 6 (already recorded there):
+1. **Google/Apple sign-in (R-023): interface first.** The owner has developer accounts but no time to fetch credentials now. Build the interface only (see the R-023 row); real credentials come later.
+2. **Telegram bot token (R-063): interface first.** Keep building and testing with the fake provider; the live check waits for the token.
+3. **Single admin vs several: the owner does not understand it yet and wants an explanation on the report site before deciding.** Do this: (a) write a plain-language explanation page or section on the report site (English + 简体中文, in the `/decisions/` area, linked from the pending decision), covering what changes day to day for each option — who gets the Approve/Reject message, what happens when two admins tap at once (first tap wins, the other sees "already decided by …"), what happens if the one admin loses the phone (re-pairing needs the private `/admin` endpoint and the admin password from the home network), whether admins have equal power (yes, all equal), how pairing works, and a recommendation with the reasoning; use a small diagram or example conversation; (b) add an approval request in `plan/APPROVALS.md` offering the options so the owner can answer with a button; (c) until answered, keep the default (whoever pairs). Source facts: `spec/admin_chat.md` sections 2, 4 (Pairing) and 9.
+4. **Brand (R-072): the designer designs a new brand for Cloud Home.** Show 2–3 directions on the report site `/decisions/` with an approval request, then apply the chosen one.
+Only the three items above plus R-072 are new; continue the rest of the plan as before. Deploy the report site after the explanation and brand directions are built.
 
 ## Log
 - 2026-11-19 — team and SPEC.md created.
