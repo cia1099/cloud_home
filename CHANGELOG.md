@@ -22,6 +22,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   keep working. The web app is updated separately (R-062).
 
 ### Added
+- Admin chat core (R-063): new registration requests are pushed to paired
+  administrators in a chat app, with **Approve / Reject** buttons.
+  `CHAT_PROVIDER=none|telegram` (default `none`), `CHAT_BOT_TOKEN` (redacted in
+  `Config`'s `Debug`, never logged), `CHAT_LANGUAGE=en|zh-Hans|zh-Hant`,
+  `CHAT_MASK_IDENTIFIERS=true`. Telegram uses outbound-only HTTPS long polling (no
+  webhook, no inbound port, no new dependency); the provider is a trait with an
+  in-memory fake used by all tests. Pairing via `POST /admin/chat/pairing` (8-char
+  one-time code, 10 minutes, stored hashed) and `/pair <code>`; `GET /admin/chat`
+  and `DELETE /admin/chat/admins/{id}` (revokes immediately). Commands `/start
+  /help /pair /pending /whoami`. Button payloads are opaque single-use tokens
+  (24 h, bound to admin + account + action); the decision goes through the same
+  `approval_service::decide` as the admin endpoints and the original messages are
+  edited afterwards. Unpaired senders are silently ignored and audited
+  (`chat.command`, rate-limited). Notifications go through a persistent outbox with
+  exponential-backoff retries (chat outages never block or imply an approval), bursts
+  (more than 5 in 10 minutes) collapse into one summary, and a daily reminder covers
+  requests pending for over 24 hours. Migration `…0009_add_admin_chat.sql`
+  (additive). What is sent to the provider is documented in `spec/admin_chat.md`.
 - OTA admin API behind the existing `AdminGuard` (shared password, local
   network), listed in `/docs`: `GET /admin/update` (current version, available
   version + notes URL, phase `idle|checking|downloading|installing|restarting|failed`,

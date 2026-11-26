@@ -107,6 +107,8 @@ pub async fn register(
     );
 
     if outcome == user_service::RegisterOutcome::Pending {
+        // 通知已配对的管理员（入队即返回；聊天不可用也不影响注册）。
+        state.chat.notify_registration(&user).await;
         // 待批准：不签发令牌、不设 Cookie。
         let body = ApiResponse::new(RegisterPendingResponse {
             status: "pending_approval",

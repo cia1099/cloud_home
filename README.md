@@ -91,6 +91,27 @@ curl $BASE/auth/me -H "Authorization: Bearer <token>"
 
 完整 API 列表见 [`spec/backend.md`](spec/backend.md)。
 
+## 在聊天里批准注册（可选）
+
+默认 `CHAT_PROVIDER=none`，审批只走上面的 `/admin/*` 端点。设置 `CHAT_PROVIDER=telegram` 与 `CHAT_BOT_TOKEN`
+（向 @BotFather 申请的机器人令牌，属于密钥，只放 `.env`）后，新的注册申请会推送给已配对的管理员，
+消息上有 **批准 / 拒绝** 按钮。机器人用长轮询，只发起出站 HTTPS 连接，不需要开放任何入站端口。
+
+```sh
+# 1. 运维签发一次性配对码（需 ADMIN_PASSWORD，本机/内网；8 位，10 分钟，单次有效）
+curl -X POST $BASE/admin/chat/pairing -H 'X-Admin-Password: <ADMIN_PASSWORD>'
+# 2. 管理员在 Telegram 里私聊机器人：/pair <code>
+# 3. 之后：/pending 查看待批准申请，点按钮批准或拒绝；/whoami、/help
+curl $BASE/admin/chat -H 'X-Admin-Password: <ADMIN_PASSWORD>'            # 提供方、连接状态、已配对管理员
+curl -X DELETE $BASE/admin/chat/admins/<id> -H 'X-Admin-Password: <ADMIN_PASSWORD>'   # 取消配对，立即生效
+```
+
+只有已配对的管理员能操作；其他人给机器人发任何消息都得不到回应（仅写入审计日志）。
+聊天服务不可用时注册照常进入待批准状态，消息留在队列里等恢复后补发，不会隐式批准任何人。
+**发给聊天提供方的内容**：申请人的显示名、打码后的邮箱/手机号（`CHAT_MASK_IDENTIFIERS=false` 才发全文）、申请时间、
+来源 IP，以及 批准/拒绝 按钮；绝不包含密码、令牌、文件名或文件内容。完整说明与令牌轮换见
+[`spec/admin_chat.md`](spec/admin_chat.md) 第 10 节。
+
 ## 开发命令
 
 ```sh

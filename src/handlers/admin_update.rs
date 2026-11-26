@@ -254,6 +254,12 @@ mod tests {
                 reject_cooldown_days: 7,
                 pending_expire_days: 14,
             },
+            chat: crate::config::ChatConfig {
+                provider: crate::config::ChatProviderKind::None,
+                bot_token: None,
+                language: crate::config::ChatLanguage::En,
+                mask_identifiers: true,
+            },
         });
         let db = crate::db::test_pool().await;
         let drive_manager = crate::drive::DriveManager::new("d");
@@ -269,6 +275,7 @@ mod tests {
             events.clone(),
         )
         .unwrap();
+        let chat = crate::chat::ChatService::from_config(db.clone(), &config.chat).unwrap();
         let state = AppState {
             db,
             config,
@@ -278,6 +285,7 @@ mod tests {
             activity,
             shutdown,
             updater,
+            chat,
         };
         Harness {
             app: crate::handlers::build_router(state.clone()),
