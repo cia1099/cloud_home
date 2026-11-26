@@ -27,7 +27,7 @@ The report site (R-001) has its first edition built and published; it is in revi
 
 - RESOLVED 2026-11-26: decision pages merged (2d3298b), deployed, /decisions/brand/ and /decisions/admins/ live (200). Owner must answer A-001 and A-002. R-063 still needs a worker with Bash; not re-delegated this session. Earlier note: Bash was denied/needs approval for workers and for the manager in worktrees. Frontend decision pages (branch agent/R-001-decision-pages, worktree .claude/worktrees/decision-pages) are built (bun build/check/tests/links passed per worker) but UNCOMMITTED and not visually checked. Next: owner restores Bash permission; then commit, screenshot at phone width, verify, merge, deploy report.
 - R-072 · designer→frontend-engineer · state: directions committed (4f612c5, PNG previews missing: designer had no renderer); A-001/A-002 written in APPROVALS · next: frontend builds /decisions/brand/ and /decisions/admins/ pages in manager-site, deploy
-- R-063 · backend-engineer · branch agent/R-063-chat-core (empty, = agent/manager) · state: stalled, the worker's Bash permission was denied (no code written) · next: owner must allow Bash for backend-engineer, then re-delegate
+- R-063 · backend-engineer · merged into agent/manager from worktree-agent-a42d510a1b1e1a54b · state: review (cargo test 131 pass; clippy --all-targets: 1 pre-existing warning, `wait_idle` unused, R-070) · next: live curl check (worker could not start the server); live Telegram check waits for the owner's bot token (R-073); then R-064, R-066, R-070, R-003. Bash works for workers again.
 
 ## Waiting on the owner
 See SPEC.md section 6 and the site's approvals queue.
