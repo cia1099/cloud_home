@@ -134,11 +134,7 @@ impl ChatProvider for TelegramProvider {
                 "allowed_updates": ["message", "callback_query"],
             });
             let raw: Vec<RawUpdate> = self
-                .call(
-                    "getUpdates",
-                    body,
-                    Duration::from_secs(POLL_SECS + 10),
-                )
+                .call("getUpdates", body, Duration::from_secs(POLL_SECS + 10))
                 .await?;
             if let Some(max) = raw.iter().map(|u| u.update_id).max() {
                 *self.offset.lock().unwrap() = max + 1;
@@ -257,8 +253,14 @@ mod tests {
 
     #[test]
     fn parses_commands_with_bot_suffix_and_args() {
-        assert_eq!(parse_command("/pair@MyBot  ab12 "), Some(("pair".into(), "ab12".into())));
-        assert_eq!(parse_command("/Start"), Some(("start".into(), String::new())));
+        assert_eq!(
+            parse_command("/pair@MyBot  ab12 "),
+            Some(("pair".into(), "ab12".into()))
+        );
+        assert_eq!(
+            parse_command("/Start"),
+            Some(("start".into(), String::new()))
+        );
         assert_eq!(parse_command("hello"), None);
         assert_eq!(parse_command("/"), None);
     }
@@ -283,8 +285,10 @@ mod tests {
         assert_eq!(got.len(), 3, "普通文字被丢弃");
         assert!(matches!(&got[0], Update::Command { from, name, .. }
             if from.id == "42" && from.private && name == "pending"));
-        assert!(matches!(&got[1], Update::ButtonPress { token, ack, message, .. }
-            if token == "tok" && ack == "cb1" && message.id == "9"));
+        assert!(
+            matches!(&got[1], Update::ButtonPress { token, ack, message, .. }
+            if token == "tok" && ack == "cb1" && message.id == "9")
+        );
         assert!(matches!(&got[2], Update::Command { from, .. } if !from.private));
     }
 
@@ -293,7 +297,10 @@ mod tests {
         assert_eq!(markup(&Message::text("x")), json!({"inline_keyboard": []}));
         let m = Message {
             text: "x".into(),
-            buttons: vec![Button { label: "Go".into(), token: "t".into() }],
+            buttons: vec![Button {
+                label: "Go".into(),
+                token: "t".into(),
+            }],
         };
         assert_eq!(
             markup(&m),

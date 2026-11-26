@@ -3,10 +3,10 @@
 //! 授权在**每条**更新上现查（`admin_chat_identities`），不是连接时一次性判定：
 //! 取消配对立即生效。陌生发送者一律沉默（只审计，限流），机器人不向陌生人暴露自己。
 
+use super::ChatService;
 use super::outbox::PENDING_LIST_MAX;
 use super::pairing::Identity;
 use super::provider::{Message, Sender, Update};
-use super::ChatService;
 use crate::error::{AppError, AppResult};
 use crate::models::user::APPROVAL_PENDING;
 use crate::services::approval_service::{self, Decision};
@@ -78,7 +78,10 @@ impl ChatService {
 
         match &update {
             Update::Command { name, .. } => match name.as_str() {
-                "pair" => self.reply(&from.chat, self.inner.texts.already_paired()).await,
+                "pair" => {
+                    self.reply(&from.chat, self.inner.texts.already_paired())
+                        .await
+                }
                 "pending" => self.on_pending(&admin).await?,
                 "whoami" => {
                     let text = self.inner.texts.whoami(
@@ -135,7 +138,8 @@ impl ChatService {
     async fn on_pending(&self, admin: &Identity) -> AppResult<()> {
         let pending = user_service::list_all(&self.inner.db, Some(APPROVAL_PENDING)).await?;
         if pending.is_empty() {
-            self.reply(&admin.chat_id, self.inner.texts.no_pending()).await;
+            self.reply(&admin.chat_id, self.inner.texts.no_pending())
+                .await;
             return Ok(());
         }
         let shown = pending.len().min(PENDING_LIST_MAX);
@@ -185,7 +189,8 @@ impl ChatService {
                 sender_id = %from.id,
                 "聊天：按钮令牌无效（已用 / 过期 / 不属于该管理员）"
             );
-            self.reply(&from.chat, self.inner.texts.button_invalid()).await;
+            self.reply(&from.chat, self.inner.texts.button_invalid())
+                .await;
             return Ok(());
         };
 

@@ -77,7 +77,9 @@ cloud_home/
 │   ├── 20240101000002_create_drives.sql
 │   ├── 20240101000003_create_files.sql
 │   ├── 20240101000004_create_trash.sql
-│   └── 20240101000005_create_shares.sql
+│   ├── 20240101000005_create_shares.sql
+│   ├── …                                 # 0006–0008（索引、媒体 MIME、账户审批）
+│   └── 20240101000009_add_admin_chat.sql # 管理员聊天：身份 / 配对码 / 按钮令牌 / 发送队列
 └── src/
     ├── main.rs           # 入口：组装 AppState、启动服务和 trash_cleaner 任务
     ├── config.rs         # 从 .env 加载的配置结构体
@@ -104,6 +106,7 @@ cloud_home/
     │   ├── auth.rs       # /auth/*
     │   ├── me.rs         # /me/*（显示名、密码、标识增改删与验证）
     │   ├── admin.rs      # /admin/users*（共享口令 + 内网限制，AdminGuard 提取器）
+    │   ├── admin_chat.rs # /admin/chat*（配对码、状态、取消配对）
     │   ├── files.rs      # /files/*
     │   ├── folders.rs    # /folders
     │   ├── search.rs     # /search
@@ -111,6 +114,7 @@ cloud_home/
     │   ├── shares.rs     # /shares/*
     │   ├── public.rs     # /public/shares/:token（无 auth）
     │   └── drives.rs     # /drives
+    ├── chat/             # 管理员聊天集成：provider(trait+Fake)、telegram、pairing、outbox、dispatch、text
     ├── services/
     │   ├── file_service.rs   # 文件业务逻辑（上传/下载/移动）
     │   ├── user_service.rs   # 用户与身份（凭证/标识）、账户软删除与还原
@@ -310,7 +314,16 @@ Base URL: `http://localhost:8080/api/v1`
   `PENDING_EXPIRE_DAYS`=14 天仍 pending 的申请由 `tasks/pending_expirer.rs`（每小时）自动拒绝（`decided_by = expiry`）。
 - **还原**：`user_service::restore` 要求账户 `approved`，且 UPDATE 带 `approval_status = 'approved'`，
   绝不会借还原放行未通过审批的账户。
-- **管理端审批**见下方运维端点；决策逻辑在 `services/approval_service.rs`，之后的聊天机器人直接调同一组函数。
+- **管理端审批**见下方运维端点；决策逻辑在 `services/approval_service.rs`，聊天机器人调用同一组函数（`decided_by = chat:<provider>:<sender-id>`）。
+
+#### 管理员聊天集成（`src/chat/`，迁移 `…0009_add_admin_chat.sql`，设计见 `spec/admin_chat.md`）
+
+`CHAT_PROVIDER=none`（默认）时整个模块是空操作。四张表（只追加）：`admin_chat_identities`
+（已配对管理员，`UNIQUE(provider, sender_id)`，sender 是提供方的不可变数字 id）、`chat_pairing_codes`
+（只存哈希）、`chat_action_tokens`（按钮令牌：只存哈希，绑定 管理员 + 账户 + 动作，24 小时、单次）、
+`chat_outbox`（待发 / 已发消息，`state` = `queued|sent|failed|suppressed|decided`）。
+令牌与账户、管理员外键级联：取消配对或账户被物理删除（冷却期后重注册的 rejected 旧行）时随之清理。
+这些表只含管理员身份与待批准申请的摘要，**不含任何用户的文件数据，也没有按账户隔离的数据路径**。
 
 **用户名不唯一**，它只是可随时修改的显示名；登录一律靠邮箱或手机号。
 JWT 的 Claims 里**不带用户名**——`AuthUser` 提取时本就要查库确认账户仍启用，
@@ -573,6 +586,9 @@ LIMIT ? OFFSET ?
 | POST | /admin/users/delete  | 软删除账户 |
 | POST | /admin/users/restore | 还原账户 |
 | POST | /admin/trash/purge   | 立即清空某账户的回收站（物理删除，**不可逆**） |
+| POST | /admin/chat/pairing  | 签发一次性聊天配对码 `{code, expires_at}`（8 位，10 分钟，单次；`CHAT_PROVIDER=none` 时 `409`） |
+| GET  | /admin/chat          | `{provider, connected, admins:[{id, label, paired_at}]}`；`connected` = 最近一次拉取更新成功 |
+| DELETE | /admin/chat/admins/{id} | 取消某管理员的配对，立即生效；返回 `{id, label}`，不存在 `404` |
 | GET  | /admin/update           | 在线更新状态：当前版本、可用新版本、阶段、设置、最近错误 |
 | POST | /admin/update/check     | 立即检查一次更新 |
 | POST | /admin/update/install   | 安装已发现的新版本（有传输在进行时 409，除非 `force`） |
@@ -717,6 +733,10 @@ JWT 的 `Claims` 因此新增 `username` 字段（`#[serde(default)]` 兼容改�
 | `user.register` failure | 同上（Conflict 分支）、`user_service.rs` | `reason` = `duplicate_identifier` \| `reject_cooldown` \| `rate_limited`（含 `client_ip`）\| `pending_max` |
 | `user.approve` / `user.reject` | `services/approval_service.rs` | `target_user_id`, `target_username`, `decided_by` |
 | `user.expire` | 同上（`tasks/pending_expirer.rs` 调用） | `target_user_id`, `target_username`, `expire_days` |
+| `chat.pair` | `chat/pairing.rs` | `result` = `code_issued` \| `paired`；`provider`、`sender_id`（配对码本身绝不记） |
+| `chat.unpair` | 同上 | `provider`, `sender_id` |
+| `chat.command` | `chat/dispatch.rs` | `result` = `authorized` \| `unauthorized`（warn，按发送者限流）\| `invalid_token`；`provider`, `sender_id`, `command`（仅已知指令名，未知记 `other`；**绝不记消息正文、参数、令牌**） |
+| `chat.delivery` failure | `chat/outbox.rs` | 消息重试 8 次仍未送达而放弃：`provider`, `kind`, `attempts`, `error`（不含令牌） |
 | `auth.login` failure（用户不存在） | 同上 | `reason="unknown_user"`, `identifier` |
 | `auth.login` failure（密码错误） | 同上 | `reason="bad_password"`, `user_id`, `username` |
 | `auth.login` failure（未获批准） | 同上 | `reason="pending_approval"` \| `"rejected"`, `user_id` |
@@ -782,6 +802,12 @@ REGISTER_RATE_PER_IP_PER_HOUR=5
 PENDING_MAX=20
 REJECT_COOLDOWN_DAYS=7
 PENDING_EXPIRE_DAYS=14
+
+# 管理员聊天集成（spec/admin_chat.md）：none（默认）| telegram
+CHAT_PROVIDER=none
+CHAT_BOT_TOKEN=              # 密钥；Config 的 Debug 脱敏，绝不写日志
+CHAT_LANGUAGE=en             # en | zh-Hans | zh-Hant
+CHAT_MASK_IDENTIFIERS=true
 ```
 
 > `DATABASE_URL` 由程序在运行时根据侦测到的硬盘路径自动构造，无需在 .env 中写死。

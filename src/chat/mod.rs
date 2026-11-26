@@ -10,13 +10,13 @@
 //! 聊天不可用不影响注册与审批：申请照常 pending，消息留在队列里等恢复。
 
 mod dispatch;
+#[cfg(test)]
+mod flow_tests;
 mod outbox;
 mod pairing;
 pub mod provider;
 pub mod telegram;
 mod text;
-#[cfg(test)]
-mod flow_tests;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};

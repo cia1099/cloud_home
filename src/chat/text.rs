@@ -52,7 +52,11 @@ pub fn clean_name(name: &str) -> String {
 /// 当前时间的展示格式（UTC，精确到分钟）。
 pub fn fmt_time(rfc3339: &str) -> String {
     chrono::DateTime::parse_from_rfc3339(rfc3339)
-        .map(|t| t.with_timezone(&chrono::Utc).format("%Y-%m-%d %H:%M UTC").to_string())
+        .map(|t| {
+            t.with_timezone(&chrono::Utc)
+                .format("%Y-%m-%d %H:%M UTC")
+                .to_string()
+        })
         .unwrap_or_else(|_| rfc3339.to_string())
 }
 
@@ -79,7 +83,9 @@ impl Texts {
 
     pub fn new_registration(self, name: &str, ident: &str, time: &str, ip: &str) -> String {
         self.pick(
-            format!("New registration request\nName: {name}\nContact: {ident}\nTime: {time}\nFrom: {ip}"),
+            format!(
+                "New registration request\nName: {name}\nContact: {ident}\nTime: {time}\nFrom: {ip}"
+            ),
             format!("新的注册申请\n名称：{name}\n联系方式：{ident}\n时间：{time}\n来源：{ip}"),
             format!("新的註冊申請\n名稱：{name}\n聯絡方式：{ident}\n時間：{time}\n來源：{ip}"),
         )
@@ -87,7 +93,8 @@ impl Texts {
 
     pub fn burst_summary(self) -> String {
         self.pick(
-            "Many registration requests arrived in a short time. Send /pending to review them.".into(),
+            "Many registration requests arrived in a short time. Send /pending to review them."
+                .into(),
             "短时间内收到多个注册申请。发送 /pending 逐个查看。".into(),
             "短時間內收到多個註冊申請。傳送 /pending 逐個查看。".into(),
         )
@@ -201,8 +208,20 @@ mod tests {
 
     #[test]
     fn decided_line_is_localized() {
-        assert!(Texts(ChatLanguage::En).decided(true, "Ann", "T").starts_with("✅ Approved by Ann"));
-        assert!(Texts(ChatLanguage::ZhHans).decided(false, "Ann", "T").contains("拒绝"));
-        assert!(Texts(ChatLanguage::ZhHant).decided(false, "Ann", "T").contains("拒絕"));
+        assert!(
+            Texts(ChatLanguage::En)
+                .decided(true, "Ann", "T")
+                .starts_with("✅ Approved by Ann")
+        );
+        assert!(
+            Texts(ChatLanguage::ZhHans)
+                .decided(false, "Ann", "T")
+                .contains("拒绝")
+        );
+        assert!(
+            Texts(ChatLanguage::ZhHant)
+                .decided(false, "Ann", "T")
+                .contains("拒絕")
+        );
     }
 }

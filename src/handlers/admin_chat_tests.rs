@@ -132,7 +132,10 @@ async fn call(
     let bytes = axum::body::to_bytes(resp.into_body(), 1 << 20)
         .await
         .unwrap();
-    (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+    (
+        status,
+        serde_json::from_slice(&bytes).unwrap_or(Value::Null),
+    )
 }
 
 async fn admin(h: &Harness, method: &str, path: &str) -> (u16, Value) {
@@ -158,7 +161,10 @@ async fn chat_endpoints_are_guarded() {
         ("DELETE", "/admin/chat/admins/x"),
     ] {
         assert_eq!(call(&h, m, p, None, None, "127.0.0.1").await.0, 401);
-        assert_eq!(call(&h, m, p, None, Some("wrong"), "127.0.0.1").await.0, 401);
+        assert_eq!(
+            call(&h, m, p, None, Some("wrong"), "127.0.0.1").await.0,
+            401
+        );
         assert_eq!(call(&h, m, p, None, Some(PW), "8.8.8.8").await.0, 403);
     }
 }

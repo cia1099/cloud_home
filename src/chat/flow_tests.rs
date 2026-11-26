@@ -3,8 +3,8 @@
 use std::io;
 use std::sync::Arc;
 
-use super::provider::{FakeProvider, MessageRef, Sender, Update};
 use super::ChatService;
+use super::provider::{FakeProvider, MessageRef, Sender, Update};
 use crate::config::{
     ChatConfig, ChatLanguage, ChatProviderKind, RegistrationMode, RegistrationPolicy,
 };
@@ -122,7 +122,9 @@ async fn pairing_code_works_once_and_strangers_get_silence() {
     let code = h.svc.create_pairing_code().await.unwrap().code;
     assert_eq!(code.len(), 8);
 
-    h.svc.handle_update(cmd("1", "pair", &code.to_lowercase())).await;
+    h.svc
+        .handle_update(cmd("1", "pair", &code.to_lowercase()))
+        .await;
     assert_eq!(h.svc.status().await.unwrap().admins.len(), 1);
     assert_eq!(h.fake.sent().len(), 1, "成功配对回一条确认");
 
@@ -224,7 +226,10 @@ async fn unmasked_when_configured() {
     register_and_deliver(&h, "Bob", "bob@x.org").await;
     let sent = h.fake.sent();
     let text = &sent.last().unwrap().1.text;
-    assert!(text.contains("bob@x.org") && text.contains("新的注册申请"), "{text}");
+    assert!(
+        text.contains("bob@x.org") && text.contains("新的注册申请"),
+        "{text}"
+    );
 }
 
 #[tokio::test]
@@ -256,7 +261,15 @@ async fn paired_admin_approves_and_message_is_edited() {
     h.svc.handle_update(press("1", &approve)).await;
     assert_eq!(h.fake.edits().len(), 2);
     assert!(h.fake.sent().len() > replies);
-    assert!(h.fake.sent().last().unwrap().1.text.contains("no longer valid"));
+    assert!(
+        h.fake
+            .sent()
+            .last()
+            .unwrap()
+            .1
+            .text
+            .contains("no longer valid")
+    );
 }
 
 #[tokio::test]
@@ -286,7 +299,10 @@ async fn unpaired_sender_cannot_press_and_is_audited() {
     assert_eq!(status_of(&h, &u.id).await.0, "pending");
     assert_eq!(h.fake.sent().len(), sent_before, "陌生人没有任何回复");
     assert!(h.fake.acks().is_empty());
-    assert!(logged.contains("unauthorized") && logged.contains("666"), "{logged}");
+    assert!(
+        logged.contains("unauthorized") && logged.contains("666"),
+        "{logged}"
+    );
     // 令牌未被消耗：真正的管理员仍可使用。
     h.svc.handle_update(press("1", &approve)).await;
     assert_eq!(status_of(&h, &u.id).await.0, "approved");
@@ -302,7 +318,15 @@ async fn token_bound_to_another_admin_is_refused() {
 
     h.svc.handle_update(press("2", &approve_of_1)).await;
     assert_eq!(status_of(&h, &u.id).await.0, "pending");
-    assert!(h.fake.sent().last().unwrap().1.text.contains("no longer valid"));
+    assert!(
+        h.fake
+            .sent()
+            .last()
+            .unwrap()
+            .1
+            .text
+            .contains("no longer valid")
+    );
 }
 
 #[tokio::test]
@@ -368,7 +392,10 @@ async fn button_after_decision_elsewhere_reports_who_decided() {
     h.svc.handle_update(press("1", &approve)).await;
     assert_eq!(status_of(&h, &u.id).await.0, "rejected");
     let last = h.fake.sent().last().unwrap().1.text.clone();
-    assert!(last.starts_with("Already decided") && last.contains("admin-endpoint"), "{last}");
+    assert!(
+        last.starts_with("Already decided") && last.contains("admin-endpoint"),
+        "{last}"
+    );
 }
 
 #[tokio::test]
@@ -418,7 +445,11 @@ async fn chat_outage_does_not_block_registration_and_outbox_retries() {
     let u = pending_user(&h.db, "Alice", "alice@gmail.com").await;
     h.svc.notify_registration(&u).await;
     h.svc.deliver_due().await;
-    assert_eq!(status_of(&h, &u.id).await.0, "pending", "宕机期间不会隐式批准");
+    assert_eq!(
+        status_of(&h, &u.id).await.0,
+        "pending",
+        "宕机期间不会隐式批准"
+    );
     let (attempts, state): (i64, String) =
         sqlx::query_as("SELECT attempts, state FROM chat_outbox WHERE kind = 'notify'")
             .fetch_one(&h.db)
@@ -546,7 +577,15 @@ async fn commands_reply_to_paired_admins() {
     h.svc.handle_update(cmd("1", "start", "")).await;
     assert!(h.fake.sent().last().unwrap().1.text.contains("/pending"));
     h.svc.handle_update(cmd("1", "pending", "")).await;
-    assert!(h.fake.sent().last().unwrap().1.text.contains("No registration requests"));
+    assert!(
+        h.fake
+            .sent()
+            .last()
+            .unwrap()
+            .1
+            .text
+            .contains("No registration requests")
+    );
 
     // /pending 为每个待批准申请发一条带新令牌的消息，且能直接用来批准。
     let u = pending_user(&h.db, "Alice", "alice@gmail.com").await;
@@ -583,7 +622,10 @@ async fn no_secret_or_unmasked_identifier_reaches_the_logs() {
     let logged = logs.text();
     assert!(!logged.contains("alice@gmail.com"), "邮箱不得进日志");
     assert!(!logged.contains(&code), "配对码不得进日志");
-    assert!(!logged.contains(&approve) && !logged.contains(&reject), "令牌不得进日志");
+    assert!(
+        !logged.contains(&approve) && !logged.contains(&reject),
+        "令牌不得进日志"
+    );
     assert!(!logged.contains("BADBADBA"), "指令参数不得进日志");
     assert!(logged.contains("user.approve"), "{logged}");
     assert!(logged.contains(&u.username));

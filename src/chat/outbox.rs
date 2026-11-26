@@ -5,9 +5,9 @@
 
 use chrono::{Duration, Utc};
 
+use super::pairing::Identity;
 use super::provider::{Button, Message, MessageRef};
 use super::text::{clean_name, fmt_time, show_identifier};
-use super::pairing::Identity;
 use super::{ChatService, TOKEN_TTL_HOURS, digest};
 use crate::error::AppResult;
 use crate::models::user::{
@@ -222,10 +222,12 @@ impl ChatService {
                         .fetch_optional(db)
                         .await?;
                 if status.is_none_or(|(s,)| s != APPROVAL_PENDING) {
-                    sqlx::query("UPDATE chat_outbox SET state = 'suppressed', buttons = NULL WHERE id = ?")
-                        .bind(row.id)
-                        .execute(db)
-                        .await?;
+                    sqlx::query(
+                        "UPDATE chat_outbox SET state = 'suppressed', buttons = NULL WHERE id = ?",
+                    )
+                    .bind(row.id)
+                    .execute(db)
+                    .await?;
                     continue;
                 }
             }
