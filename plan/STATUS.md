@@ -50,9 +50,7 @@ The owner's answers to the open questions in SPEC.md section 6 (already recorded
 Only the items above plus R-072 and R-073 are new; continue the rest of the plan as before. Deploy the report site after the explanation and brand directions are built.
 
 ## Notes for the team (2026-11-26)
-Two observations from the owner's session about the report site's DNS. Read them before you touch DNS or treat a live check as failed.
-1. **How the domain resolves.** `cia1099.cloudns.ch` is a free subdomain of ClouDNS, so its zone is hosted on ClouDNS and ClouDNS answers first. The NS records at the zone's top are only a list, not a delegation; only `www` is really delegated to Cloudflare (`dylan`/`lindsey.ns.cloudflare.com`). ClouDNS rejects new NS records for other names ("Invalid record"), so a new subdomain is created as a **CNAME to `www.cia1099.cloudns.ch`** in ClouDNS (never a wildcard NS, never hard-coded Cloudflare IPs), plus the matching record in Cloudflare. `report.cia1099.cloudns.ch` already works this way. Before it was fixed, Google/Quad9/Alibaba DNS answered "does not exist" while 1.1.1.1 resolved it; this is the "DNS does not resolve in this session" failure seen in earlier live checks.
-2. **Rules for DNS and live checks.** Do not delete the `www` record in Cloudflare (`report` depends on it), do not enable DNSSEC, and do not remove the top-level NS records in ClouDNS. You cannot change DNS yourself (no ssh/dig access to the registrar panels), so if a live check fails, compare several resolvers before concluding anything (`dig +short @8.8.8.8 report.cia1099.cloudns.ch A`, then `@9.9.9.9`, `@1.1.1.1`) and tell the owner which ones fail instead of retrying the deploy. A deploy that uploaded but could not be live-checked is "published, not verified", never "live".
+The report site works now (https://report.cia1099.cloudns.ch/). If a live check fails, check DNS first: compare `dig +short @8.8.8.8`, `@9.9.9.9` and `@1.1.1.1` for `report.cia1099.cloudns.ch`, and tell the owner which ones fail. Do not change DNS and do not keep retrying the deploy.
 
 ## Log
 - 2026-11-19 — team and SPEC.md created.
