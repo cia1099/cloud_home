@@ -2,6 +2,8 @@
 
 pub mod admin;
 pub mod admin_chat;
+#[cfg(test)]
+mod admin_chat_tests;
 pub mod admin_update;
 pub mod auth;
 pub mod drives;
