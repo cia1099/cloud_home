@@ -1,6 +1,7 @@
 //! Router 组装与中间件注册。
 
 pub mod admin;
+pub mod admin_chat;
 pub mod admin_update;
 pub mod auth;
 pub mod drives;
@@ -58,6 +59,9 @@ pub fn build_router(state: AppState) -> Router {
         .routes(routes!(admin::delete_user))
         .routes(routes!(admin::restore_user))
         .routes(routes!(admin::purge_trash))
+        .routes(routes!(admin_chat::create_pairing))
+        .routes(routes!(admin_chat::status))
+        .routes(routes!(admin_chat::unpair))
         .routes(routes!(admin_update::status))
         .routes(routes!(admin_update::check))
         .routes(routes!(admin_update::install))

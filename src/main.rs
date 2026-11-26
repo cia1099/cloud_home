@@ -1,4 +1,5 @@
 mod auth;
+mod chat;
 mod config;
 mod db;
 mod drive;
@@ -100,6 +101,9 @@ async fn main() -> anyhow::Result<()> {
         events.clone(),
     )?;
 
+    let chat = chat::ChatService::from_config(pool.clone(), &config.chat)
+        .context("初始化聊天集成失败")?;
+
     let state = AppState {
         db: pool.clone(),
         config: config.clone(),
@@ -109,6 +113,7 @@ async fn main() -> anyhow::Result<()> {
         activity,
         shutdown: shutdown.clone(),
         updater: updater.clone(),
+        chat: chat.clone(),
     };
 
     // 6. 启动后台任务：回收站清理 + 硬盘监控。
@@ -121,6 +126,7 @@ async fn main() -> anyhow::Result<()> {
     tasks::pending_expirer::spawn(pool.clone(), config.registration.pending_expire_days);
     tasks::drive_monitor::spawn(config.clone(), drive_manager.clone(), mount.clone());
     update::start(&updater);
+    chat.spawn(shutdown.clone());
 
     // 7. 启动 HTTP 服务。
     let app = handlers::build_router(state);
