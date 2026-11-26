@@ -199,7 +199,11 @@ export function reqRow(r: Requirement): string {
 
 // ---------- decisions ----------
 
-export function decisionCard(a: Approval): string {
+/** Decisions that have a page of their own (relative to decisions/): the explanation the owner reads before answering. */
+export const DETAIL_PAGE: Record<string, string> = { 'A-001': 'brand/', 'A-002': 'admins/' };
+
+/** `root` is the relative prefix from the rendered page to the site root ("../", "../../"). `detail: false` hides the link on the detail page itself. */
+export function decisionCard(a: Approval, root: string, detail = true): string {
   const f = a.fields;
   const rows: [string, Bi | undefined][] = [
     [T('What', '内容'), f.what],
@@ -209,7 +213,9 @@ export function decisionCard(a: Approval): string {
     [T('If denied', '拒绝后'), f.ifDenied],
   ];
   const dl = rows.filter((r): r is [string, Bi] => r[1] !== undefined).map(([k, v]) => `<dt>${k}</dt><dd>${plainBi(v)}</dd>`).join('');
-  return `<article class="card dcard rv" id="${a.id}"><div class="dh"><span class="hash" style="height:24px">${a.id}</span>${a.requested ? `<span class="small">${T('Requested by the manager,', '经理提出于')} ${D(a.requested)}</span>` : ''}</div><h3>${plainBi(a.title)}</h3>${dl ? `<dl class="dl">${dl}</dl>` : ''}<div class="dact"><a class="btn btn-pri btn-lg" href="${esc(decisionUrl(a.id, a.title.en, 'approve'))}" target="_blank" rel="noopener">${ic('check')}${t('action.approve')}</a><a class="btn btn-neutral btn-lg" href="${esc(decisionUrl(a.id, a.title.en, 'deny'))}" target="_blank" rel="noopener">${ic('xmark')}${t('action.deny')}</a><p class="note">${T('Opens a pre-filled issue on GitHub. Nothing is sent until you press Submit there.', '在 GitHub 上打开预填好的议题。你按下提交之前不会发送任何内容。')}</p></div></article>`;
+  const page = detail ? DETAIL_PAGE[a.id] : undefined;
+  const more = page ? `<p style="margin:18px 0 0"><a href="${root}decisions/${page}">${T('Read the full explanation ›', '阅读完整说明 ›')}</a></p>` : '';
+  return `<article class="card dcard rv" id="${a.id}"><div class="dh"><span class="hash" style="height:24px">${a.id}</span>${a.requested ? `<span class="small">${T('Requested by the manager,', '经理提出于')} ${D(a.requested)}</span>` : ''}</div><h3>${plainBi(a.title)}</h3>${dl ? `<dl class="dl">${dl}</dl>` : ''}${more}<div class="dact"><a class="btn btn-pri btn-lg" href="${esc(decisionUrl(a.id, a.title.en, 'approve'))}" target="_blank" rel="noopener">${ic('check')}${t('action.approve')}</a><a class="btn btn-neutral btn-lg" href="${esc(decisionUrl(a.id, a.title.en, 'deny'))}" target="_blank" rel="noopener">${ic('xmark')}${t('action.deny')}</a><p class="note">${T('Opens a pre-filled issue on GitHub. Nothing is sent until you press Submit there.', '在 GitHub 上打开预填好的议题。你按下提交之前不会发送任何内容。')}</p></div></article>`;
 }
 
 export function historyItem(a: Approval): string {

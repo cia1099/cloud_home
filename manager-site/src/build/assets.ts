@@ -23,23 +23,34 @@ export class Assets {
   /** `rel` is relative to reports/<reportId>/; returns the site-root-relative URL, e.g. assets/media/shot-1a2b3c4d.webp. */
   media(reportId: string, rel: string): string {
     const abs = join(this.reportsDir, reportId, rel);
+    if (!existsSync(abs)) throw new Error(`reports/${reportId}: media file "${rel}" does not exist`);
+    const url = this.publish(abs, `reports/${reportId}/${rel}`);
+    const files = this.perReport.get(reportId) ?? new Map<string, number>();
+    files.set(url, statSync(abs).size);
+    this.perReport.set(reportId, files);
+    const total = [...files.values()].reduce((a, b) => a + b, 0);
+    if (total > MAX_REPORT) throw new Error(`reports/${reportId}: media is ${(total / 1048576).toFixed(1)} MB, over the 25 MB per-report limit`);
+    return url;
+  }
+
+  /** A file from anywhere in the repository (for example design/brand/): same hashing and size limit, no per-report budget. */
+  file(abs: string): string {
+    if (!existsSync(abs)) throw new Error(`${basename(abs)}: file does not exist`);
+    return this.publish(abs, abs);
+  }
+
+  private publish(abs: string, label: string): string {
     const cached = this.byPath.get(abs);
     if (cached) return cached;
-    if (!existsSync(abs)) throw new Error(`reports/${reportId}: media file "${rel}" does not exist`);
     const size = statSync(abs).size;
-    if (size > MAX_FILE) throw new Error(`reports/${reportId}/${rel}: ${(size / 1048576).toFixed(1)} MB exceeds the 10 MB per-file limit`);
+    if (size > MAX_FILE) throw new Error(`${label}: ${(size / 1048576).toFixed(1)} MB exceeds the 10 MB per-file limit`);
     const hash = new Bun.CryptoHasher('sha256').update(readFileSync(abs)).digest('hex').slice(0, 10);
-    const ext = extname(rel);
-    const slug = basename(rel, ext).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'file';
+    const ext = extname(abs);
+    const slug = basename(abs, ext).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'file';
     const url = `assets/media/${slug}-${hash}${ext.toLowerCase()}`;
     mkdirSync(join(OUT_DIR, 'assets/media'), { recursive: true });
     copyFileSync(abs, join(OUT_DIR, url));
     this.byPath.set(abs, url);
-    const files = this.perReport.get(reportId) ?? new Map<string, number>();
-    files.set(url, size);
-    this.perReport.set(reportId, files);
-    const total = [...files.values()].reduce((a, b) => a + b, 0);
-    if (total > MAX_REPORT) throw new Error(`reports/${reportId}: media is ${(total / 1048576).toFixed(1)} MB, over the 25 MB per-report limit`);
     return url;
   }
 

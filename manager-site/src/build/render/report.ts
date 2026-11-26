@@ -165,7 +165,7 @@ export function renderSection(c: Ctx, s: Section): string {
         .map((id) => {
           const a = c.site.approvals.find((x) => x.id === id);
           if (!a) throw new Error(`${w}: decision ${String(id)} is not in plan/APPROVALS.md`);
-          return a.state === 'pending' ? decisionCard(a) : `<p>${chip(a.state === 'approved' ? 'done' : 'blocked')} ${plainBi(a.title)}</p>`;
+          return a.state === 'pending' ? decisionCard(a, c.root) : `<p>${chip(a.state === 'approved' ? 'done' : 'blocked')} ${plainBi(a.title)}</p>`;
         })
         .join('');
     default:

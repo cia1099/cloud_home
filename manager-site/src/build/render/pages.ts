@@ -4,7 +4,7 @@ import { ic } from '../../shared/icons.ts';
 import { newRequirementUrl } from '../../shared/issue.ts';
 import { STATUSES, ROLES, type Role } from '../../shared/i18n.ts';
 import type { Assets } from '../assets.ts';
-import { burndown, chip, areaBars, checks, decisionCard, emptyFrame, gallery, historyItem, kpiGrid, player, reqRow, reportCard, ring, timelineList, waffle } from './components.ts';
+import { burndown, chip, areaBars, checks, DETAIL_PAGE, decisionCard, emptyFrame, gallery, historyItem, kpiGrid, player, reqRow, reportCard, ring, timelineList, waffle } from './components.ts';
 import { al, D, esc, plainBi, t, T } from './html.ts';
 import type { Page } from './layout.ts';
 import { bespokeCtx, renderCompare, renderStandard, shotsOf, stepsOf, type Ctx } from './report.ts';
@@ -34,8 +34,7 @@ function pendingBanner(site: Site): string {
   if (!n) {
     return `<div class="wrap"><aside class="pend clear" ${al('decision.pending_aria')}><span class="dot" aria-hidden="true"></span><div class="pend-t"><b>${t('decision.none')}</b> · <span>${T('It will appear here when something needs you.', '有需要时会出现在这里。')}</span></div><a class="btn" href="decisions/">${t('nav.decisions')}</a></div></div>`;
   }
-  const first = site.pending[0];
-  return `<div class="wrap"><aside class="pend" ${al('decision.pending_aria')}><span class="dot" aria-hidden="true"></span><div class="pend-t"><b>${T(`${n} decision${n === 1 ? ' is' : 's are'} waiting for you`, `${n} 个决策在等你`)}</b>${first ? ` · <span>${T('Next:', '下一个：')} ${plainBi(first.title)}</span>` : ''}</div><a class="btn" href="decisions/">${t('action.review')}</a></aside></div>`;
+  return `<div class="wrap"><aside class="pend" ${al('decision.pending_aria')}><span class="dot" aria-hidden="true"></span><div class="pend-t"><b>${T(`${n} decision${n === 1 ? ' is' : 's are'} waiting for you`, `${n} 个决策在等你`)}</b> · <span>${site.pending.slice(0, 3).map((a) => (a.id in DETAIL_PAGE ? `<a href="decisions/${DETAIL_PAGE[a.id]}" style="color:inherit;text-decoration:underline;text-underline-offset:3px">${plainBi(a.title)}</a>` : plainBi(a.title))).join(' · ')}</span></div><a class="btn" href="decisions/">${t('action.review')}</a></aside></div>`;
 }
 
 function roleCards(site: Site): string {
@@ -156,7 +155,7 @@ export function decisions(site: Site): Rendered {
   const history = site.approvals.filter((a) => a.state !== 'pending');
   const steps = `<ol class="steps card" style="padding:22px 24px;margin:0 0 40px;list-style:none"><li><b>${T('Tap Approve or Deny', '点“批准”或“拒绝”')}</b><span>${T('A pre-filled GitHub issue opens in a new tab.', '会在新标签页打开一个预填好的 GitHub 议题。')}</span></li><li><b>${T('Press Submit new issue', '按“Submit new issue”')}</b><span>${T('The title is ready; add a note if you like.', '标题已写好，内容无需修改；想补充可以加一句备注。')}</span></li><li><b>${T('The manager picks it up', '经理在下个周期处理')}</b><span>${T('It replies on the issue, records the answer and carries on.', '回复议题、记录结果并继续工作。')}</span></li></ol>`;
   const pend = site.pending.length
-    ? `<div class="sec-h"><h2 class="title">${T('Waiting for your answer', '等待回答')}</h2><span class="chip warn">${t('ui.pending_n', { n: site.pending.length })}</span></div>${site.pending.map(decisionCard).join('')}`
+    ? `<div class="sec-h"><h2 class="title">${T('Waiting for your answer', '等待回答')}</h2><span class="chip warn">${t('ui.pending_n', { n: site.pending.length })}</span></div>${site.pending.map((a) => decisionCard(a, '../')).join('')}`
     : `<div class="sec-h"><h2 class="title">${T('Waiting for your answer', '等待回答')}</h2></div><div class="card allclear"><span class="k-ic ok-ic">${ic('check')}</span><h3 class="h3">${t('decision.caught_up')}</h3><p class="sub" style="margin:6px 0 0">${T('The team does not need anything from you right now. When it does, the request appears here and at the top of the Overview.', '团队目前不需要你的任何回答。需要时，请求会出现在这里，并显示在概览页顶部。')}</p></div>`;
   const hist = history.length
     ? `<div class="card" style="padding:8px 24px"><ul class="hist">${history.map(historyItem).join('')}</ul></div>`
