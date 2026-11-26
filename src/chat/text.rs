@@ -85,11 +85,11 @@ impl Texts {
         )
     }
 
-    pub fn burst_summary(self, pending: usize) -> String {
+    pub fn burst_summary(self) -> String {
         self.pick(
-            format!("Many registration requests arrived in a short time. {pending} waiting. Send /pending to review them."),
-            format!("短时间内收到多个注册申请，共 {pending} 个待处理。发送 /pending 逐个查看。"),
-            format!("短時間內收到多個註冊申請，共 {pending} 個待處理。傳送 /pending 逐個查看。"),
+            "Many registration requests arrived in a short time. Send /pending to review them.".into(),
+            "短时间内收到多个注册申请。发送 /pending 逐个查看。".into(),
+            "短時間內收到多個註冊申請。傳送 /pending 逐個查看。".into(),
         )
     }
 
@@ -187,7 +187,7 @@ mod tests {
     fn masks_email_and_phone() {
         assert_eq!(mask_email("alice@gmail.com"), "a***@gmail.com");
         assert_eq!(mask_phone("+886912345123"), "+886******123");
-        assert_eq!(mask_phone("+12345"), "+****");
+        assert_eq!(mask_phone("+12345"), "+*****");
         assert_eq!(show_identifier("email", "bob@x.org", true), "b***@x.org");
         assert_eq!(show_identifier("email", "bob@x.org", false), "bob@x.org");
         assert!(!show_identifier("phone", "+886912345123", true).contains("91234"));

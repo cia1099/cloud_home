@@ -101,8 +101,7 @@ impl ChatService {
                 .fetch_one(db)
                 .await?;
                 if summaries == 0 {
-                    let pending = pending_count(db).await?;
-                    let text = self.inner.texts.burst_summary(pending as usize);
+                    let text = self.inner.texts.burst_summary();
                     self.insert_row(&admin.id, "summary", None, &text, None, "queued")
                         .await?;
                 }
@@ -390,13 +389,6 @@ impl ChatService {
             }
         }
     }
-}
-
-async fn pending_count(db: &crate::db::Db) -> AppResult<i64> {
-    let (n,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users WHERE approval_status = 'pending'")
-        .fetch_one(db)
-        .await?;
-    Ok(n)
 }
 
 #[cfg(test)]

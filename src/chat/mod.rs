@@ -15,6 +15,8 @@ mod pairing;
 pub mod provider;
 pub mod telegram;
 mod text;
+#[cfg(test)]
+mod flow_tests;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
