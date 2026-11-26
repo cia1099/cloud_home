@@ -25,7 +25,7 @@ The report site (R-001) has its first edition built and published; it is in revi
 
 - 2026-11-26 (final): live check passed from a session with network access: site 200, report listed on /reports/, report page 200, screenshot asset 200 image/png. The earlier DNS failure is resolved. Tests not re-run in the report session (no cargo).
 
-- R-072 · designer · main checkout · state: delegated (brand directions, 3 options) · next: verify, then frontend builds /decisions/ brand + admin-explanation pages, APPROVALS A-001/A-002
+- R-072 · designer→frontend-engineer · state: directions committed (4f612c5, PNG previews missing: designer had no renderer); A-001/A-002 written in APPROVALS · next: frontend builds /decisions/brand/ and /decisions/admins/ pages in manager-site, deploy
 - R-063 · backend-engineer · branch agent/R-063-chat-core (empty, = agent/manager) · state: stalled, the worker's Bash permission was denied (no code written) · next: owner must allow Bash for backend-engineer, then re-delegate
 
 ## Waiting on the owner
