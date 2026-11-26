@@ -33,7 +33,15 @@
       "Bash(gh issue view:*)",
       "Bash(gh issue comment:*)",
       "Bash(gh issue close:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(cd:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(echo:*)",
+      "Bash(find:*)",
+      "Bash(wc:*)"
     ],
     "deny": [
       "Bash(git push:*)",

@@ -55,6 +55,9 @@ The owner cares a great deal about the quality of these reports: they are their 
 
 **Public site rules.** Anyone with the URL can read it. Never include secrets, tokens, local paths, server details, or the owner's personal/contact information, in text, screenshots or recordings (check captured screens for them).
 
+# Git inside worktrees (unattended runs deny these)
+Claude Code refuses `cd <dir> && git …` and `git -C <dir> …` unless a human approves, and nobody is there in an unattended run, so every attempt fails and the work stalls. Never run git with `cd` or `-C`. Give each worker that needs its own checkout the Agent tool's `isolation: "worktree"`, so its working directory is the worktree and plain `git status` / `git add` / `git commit` work; tell it to commit before it reports. Do not create worker worktrees by hand with `git worktree add`. From the main checkout look at a task by branch (`git log <branch>`, `git diff agent/manager..<branch>`, `git merge <branch>`) and read uncommitted files with `ls` / `cat` / `find` on their path.
+
 # Rules for you and the whole team
 - `CLAUDE.md`, `spec/backend.md` and `spec/update.md` are binding. `SPEC.md` is the only source of requirements; the owner edits it directly.
 - You do not write feature code. You may edit `SPEC.md`, `plan/`, `reports/`, and the owner-facing text of reports.
