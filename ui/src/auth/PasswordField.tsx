@@ -1,6 +1,7 @@
 import { useId, useState, type Ref } from 'react'
 import { Icon } from '../components/Icon'
 import { useI18n } from '../i18n/useI18n'
+import type { MessageKey } from '../i18n/messages/en'
 
 interface Props {
   value: string
@@ -8,17 +9,19 @@ interface Props {
   invalid?: boolean
   autoComplete: 'current-password' | 'new-password'
   hint?: string
+  /** Defaults to the plain "Password" label. */
+  label?: MessageKey
   ref?: Ref<HTMLInputElement>
 }
 
 /** Password input with a show/hide button; labelled, and `hint` is announced with it. */
-export function PasswordField({ value, onChange, invalid, autoComplete, hint, ref }: Props) {
+export function PasswordField({ value, onChange, invalid, autoComplete, hint, label = 'auth.password', ref }: Props) {
   const { t } = useI18n()
   const [visible, setVisible] = useState(false)
   const id = useId()
   return (
     <div className="field">
-      <label htmlFor={id}>{t('auth.password')}</label>
+      <label htmlFor={id}>{t(label)}</label>
       <div className="pw">
         <input
           id={id}

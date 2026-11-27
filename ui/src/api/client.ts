@@ -17,6 +17,8 @@ interface RequestOptions {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown
   signal?: AbortSignal
+  /** For requests that carry the current password: a 401 means "wrong password", not "session ended". */
+  keepSession?: boolean
 }
 
 let onUnauthorized: (() => void) | undefined
@@ -39,7 +41,7 @@ export function isErrorEnvelope(value: unknown): value is { error: { code: strin
 
 /** Sends a JSON request and returns the `data` of the `{ data }` envelope. */
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal } = options
+  const { method = 'GET', body, signal, keepSession = false } = options
   let response: Response
   try {
     response = await fetch(API_BASE + path, {
@@ -56,7 +58,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
   const payload: unknown = await response.json().catch(() => undefined)
   if (!response.ok) {
-    if (response.status === 401) onUnauthorized?.()
+    if (response.status === 401 && !keepSession) onUnauthorized?.()
     if (isErrorEnvelope(payload)) throw new ApiError(response.status, payload.error.code, payload.error.message)
     throw new ApiError(response.status, 'UNKNOWN', response.statusText)
   }

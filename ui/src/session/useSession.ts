@@ -13,6 +13,8 @@ export interface SessionApi {
   /** Resolves to `pending_approval` when the account waits for the administrator (no session is created). */
   signUp: (registration: Registration) => Promise<'signed_in' | 'pending_approval'>
   signOut: () => Promise<void>
+  /** Replaces the signed-in user after a profile change (the API returns the updated user). */
+  setUser: (user: User) => void
   /** Re-runs `GET /auth/me` after a failed start (for example while offline). */
   retry: () => void
 }
