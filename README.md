@@ -38,9 +38,14 @@ openssl rand -base64 64
 ## 构建
 
 ```sh
-cargo build            # 开发构建
+# 先构建 UI（需要 bun）；发布构建会把 ui/dist 嵌入二进制
+(cd ui && bun install --frozen-lockfile && bun run build)
+
+cargo build            # 开发构建（运行时读磁盘上的 ui/dist；没有 ui/dist 也能编译）
 cargo build --release  # 发布构建（产物在 target/release/cloud_home）
 ```
+
+发布构建要求 `ui/dist/index.html` 存在，且 UI 内置版本等于 `Cargo.toml` 的 `version`，否则编译失败。
 
 ## 运行
 
@@ -111,5 +116,7 @@ curl /api/v1/files/upload \
 
 ## 前端
 
-`ui/`（Vite + React + TypeScript）稍后实现，当前阶段后端优先。
+`ui/`（Vite + React + TypeScript）构建后嵌入 `cloud_home` 二进制，与 API 同源提供：打开 `http://<host>:<port>/` 即是 Web UI，
+`/api/v1`、`/docs`、`/openapi.json` 不受影响，未知的 `/api/*` 仍返回 JSON 404。开发时用 `bun run dev`（Vite 代理 `/api` 到后端），
+或 `bun run build` 后直接 `cargo run`（调试构建读磁盘上的 `ui/dist`）。
   

@@ -145,7 +145,8 @@ mod tests {
     fn files() -> impl Fn(&str) -> Option<Cow<'static, [u8]>> {
         |p: &str| match p {
             "index.html" => Some(Cow::Borrowed(
-                br#"<script src="/assets/a-1.js"></script><link href="/assets/a-1.css">"#.as_slice(),
+                br#"<script src="/assets/a-1.js"></script><link href="/assets/a-1.css">"#
+                    .as_slice(),
             )),
             "assets/a-1.js" => Some(Cow::Borrowed(b"js".as_slice())),
             "assets/a-1.css" => Some(Cow::Borrowed(b"css".as_slice())),
@@ -221,7 +222,12 @@ mod tests {
     async fn head_has_headers_without_body() {
         let r = respond(&Method::HEAD, "/", &files());
         assert_eq!(r.status(), StatusCode::OK);
-        assert!(to_bytes(r.into_body(), usize::MAX).await.unwrap().is_empty());
+        assert!(
+            to_bytes(r.into_body(), usize::MAX)
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]
@@ -244,9 +250,21 @@ mod tests {
     fn verify_rejects_missing_index_asset_or_version() {
         let no_index = |p: &str| if p == "index.html" { None } else { files()(p) };
         assert!(verify(&no_index, "1.2.3").is_err());
-        let no_asset = |p: &str| if p == "assets/a-1.css" { None } else { files()(p) };
+        let no_asset = |p: &str| {
+            if p == "assets/a-1.css" {
+                None
+            } else {
+                files()(p)
+            }
+        };
         assert!(verify(&no_asset, "1.2.3").is_err());
-        let no_version = |p: &str| if p == "version.json" { None } else { files()(p) };
+        let no_version = |p: &str| {
+            if p == "version.json" {
+                None
+            } else {
+                files()(p)
+            }
+        };
         assert!(verify(&no_version, "1.2.3").is_err());
     }
 
