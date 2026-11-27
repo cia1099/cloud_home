@@ -33,3 +33,10 @@ The report site shows pending requests at the top of the Overview and on `/decis
 - Risk: low; with one admin, a lost phone needs re-pairing from the home network with the admin password.
 - If approved: approve = several admins allowed (pairing is still one code at a time; default whoever pairs). Deny = strictly one admin (a second /pair is refused). Until answered the default is "whoever pairs".
 - Owner note: Approved 2026-11-27 (issue #3): several equal admins; rejected members may re-register without limit, no cooldown.
+
+### A-003 [ ] Cloud icon variant for Cloud Home (R-072) — 2026-11-27 — requested by manager
+- What: pick between two refinements of the report site's cloud icon (design/brand/cloud-a.svg "Variant A" and cloud-b.svg "Variant B"), shown on the report site /decisions/brand/.
+- Why: you asked to base the brand on the report site's cloud and make it more Apple-like and elegant.
+- Risk: low.
+- If approved: approve = A; deny = B (say another change in the owner note if neither). I produce the final SVG set and apply it to the mockup, sign-in, share page and report header.
+- Owner note:
