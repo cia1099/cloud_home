@@ -46,7 +46,21 @@ export function translate(locale: Locale, key: MessageKey, params?: Record<strin
   return text.replace(/\{(\w+)\}/g, (whole, name: string) => (name in params ? String(params[name]) : whole))
 }
 
-const UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const
+/** Medium date plus short time in the locale's own conventions (for example "Nov 27, 2026, 3:04 PM"). */
+export function formatDate(locale: Locale, iso: string): string {
+  const time = Date.parse(iso)
+  if (Number.isNaN(time)) return ''
+  return new Intl.DateTimeFormat(INTL_TAGS[locale], { dateStyle: 'medium', timeStyle: 'short' }).format(time)
+}
+
+/** Messages that come as `<base>.one` / `<base>.other`; the form is picked with the locale's plural rules. */
+export type PluralBase = MessageKey extends infer K ? (K extends `${infer B}.one` ? B : never) : never
+
+export function pluralKey(locale: Locale, base: PluralBase, n: number): MessageKey {
+  return `${base}.${new Intl.PluralRules(INTL_TAGS[locale]).select(n) === 'one' ? 'one' : 'other'}`
+}
+
+const UNITS =['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const
 
 /** Decimal units (kB/MB/GB) like the design mockup, localized through Intl. */
 export function formatBytes(locale: Locale, bytes: number): string {

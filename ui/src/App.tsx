@@ -9,6 +9,7 @@ import { SessionProvider } from './session/SessionProvider'
 import { AppShell } from './shell/AppShell'
 import { RequireAuth } from './shell/RequireAuth'
 import { ThemeProvider } from './theme/ThemeProvider'
+import { ToastProvider } from './toast/ToastProvider'
 
 export function App() {
   return (
@@ -16,6 +17,7 @@ export function App() {
       <I18nProvider>
         <BrowserRouter>
           <SessionProvider>
+            <ToastProvider>
             <Routes>
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/register" element={<RegisterPage />} />
@@ -28,6 +30,7 @@ export function App() {
               </Route>
               <Route path="*" element={<Navigate to="/files" replace />} />
             </Routes>
+            </ToastProvider>
           </SessionProvider>
         </BrowserRouter>
       </I18nProvider>

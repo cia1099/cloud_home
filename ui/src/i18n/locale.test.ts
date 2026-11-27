@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { catalogs, detectLocale, formatBytes, LOCALES, translate } from './locale'
+import { catalogs, detectLocale, formatBytes, formatDate, LOCALES, pluralKey, translate } from './locale'
 import { en } from './messages/en'
 
 describe('catalogs', () => {
@@ -39,8 +39,24 @@ describe('detectLocale', () => {
 
 describe('translate', () => {
   it('fills placeholders and leaves unknown ones visible', () => {
-    expect(translate('en', 'files.usage', { used: '1 GB', total: '2 GB' })).toBe('1 GB of 2 GB used')
-    expect(translate('zh-Hant', 'files.usage', { used: '1 GB' })).toBe('已使用 1 GB（共 {total}）')
+    expect(translate('en', 'files.search.location', { path: 'Photos' })).toBe('In Photos')
+    expect(translate('zh-Hant', 'files.search.results_for', {})).toBe('「{q}」的搜尋結果')
+  })
+})
+
+describe('pluralKey', () => {
+  it('uses the singular form in English and one form in Chinese', () => {
+    expect(pluralKey('en', 'files.selected', 1)).toBe('files.selected.one')
+    expect(pluralKey('en', 'files.selected', 3)).toBe('files.selected.other')
+    expect(pluralKey('zh-Hans', 'files.selected', 1)).toBe('files.selected.other')
+  })
+})
+
+describe('formatDate', () => {
+  it('formats in the locale and tolerates bad input', () => {
+    expect(formatDate('en', '2026-11-27T15:04:00Z')).toMatch(/2026/)
+    expect(formatDate('zh-Hant', '2026-11-27T15:04:00Z')).toMatch(/2026/)
+    expect(formatDate('en', 'nope')).toBe('')
   })
 })
 

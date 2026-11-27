@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { formatBytes, initialLocale, rememberLocale, translate, type Locale } from './locale'
+import { formatBytes, formatDate, initialLocale, pluralKey, rememberLocale, translate, type Locale } from './locale'
 import { I18nContext, type I18n } from './useI18n'
 
 export function I18nProvider({ children }: { children: ReactNode }) {
@@ -21,6 +21,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       setLocale,
       t: (key, params) => translate(locale, key, params),
       bytes: (n) => formatBytes(locale, n),
+      date: (iso) => formatDate(locale, iso),
+      tn: (base, n, params) => translate(locale, pluralKey(locale, base, n), { n, ...params }),
     }),
     [locale, setLocale],
   )
