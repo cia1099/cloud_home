@@ -16,6 +16,7 @@ The report site (R-001) has its first edition built and published; it is in revi
 | Report site | first edition built, checked and published (R-001, in review) | owner review; next report after the next milestone |
 
 ## Active tasks
+- R-026 · backend-engineer · branch agent/R-026-embed-ui (worktree) · state: delegated · next: verify cargo build/test/clippy, curl GET /, merge, then R-031 UI assertions.
 - 2026-11-27 (session 5) · R-031/R-021 merged (004b7b7): e2e_update 40/40, e2e_install 52/52 (re-run by manager). Open: UI assertions need R-026. Next: R-026 (backend embeds UI), then R-030.
 - 2026-11-27 (session 4) · tester for R-031/R-021 stopped: Bash denied for compound cd/cargo/self-test calls, nothing run or committed. Tester notes: updater PUBLIC_KEY is compiled in (src/update/mod.rs:29), so the happy-path e2e needs a patched copy build (owner to confirm); UI embedding (R-026) not checked. Owner: allow worker Bash, then restart manager. Issue #6 handled.
 - 2026-11-27 end of session 3: tester also denied Bash (R-021 fake-mirror test not run). Everything left (R-021 runtime test, R-030/R-031, R-003 live check, UI tasks R-005..R-013) needs workers with shell permission; owner to allow bash/mktemp/minisign/tar/python3/bun/cargo for subagents, then restart the manager. Waiting on owner: A-004 (icon C or D), manager.md "Choose X" text.
