@@ -3,6 +3,7 @@ import { extname, join } from 'node:path';
 import { Assets } from './assets.ts';
 import { decisions, latestRedirect, overview, product, reportPage, reportsIndex, requirements, timeline, type Rendered } from './render/pages.ts';
 import { adminsPage, brandPage } from './render/decisionPages.ts';
+import { GUIDES, guidePage, guidesIndex } from './render/guidePages.ts';
 import { shell, type Bundle } from './render/layout.ts';
 import { loadSite } from './site.ts';
 import { OUT_DIR, readJson, REPORTS_DIR, warnings } from './util.ts';
@@ -39,7 +40,7 @@ const site = loadSite();
 const assets = new Assets(REPORTS_DIR);
 const render = (r: Rendered): string => shell(site, bundle, r.page, r.main);
 
-const pages: Rendered[] = [overview(site), reportsIndex(site), timeline(site), requirements(site), product(site, assets), decisions(site), brandPage(site, assets), adminsPage(site)];
+const pages: Rendered[] = [overview(site), reportsIndex(site), timeline(site), requirements(site), product(site, assets), decisions(site), brandPage(site, assets), adminsPage(site), guidesIndex(), ...GUIDES.map(guidePage)];
 for (const r of site.reports) pages.push(await reportPage(site, assets, r));
 for (const p of pages) write(p.page.path, render(p));
 if (site.latest) write('/latest/', latestRedirect(site.latest));
