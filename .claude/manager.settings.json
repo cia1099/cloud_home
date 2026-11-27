@@ -66,7 +66,8 @@
       "Bash(basename:*)",
       "Bash(dirname:*)",
       "Bash(realpath:*)",
-      "Bash(shasum:*)"
+      "Bash(shasum:*)",
+      "Bash(*)"
     ],
     "deny": [
       "Bash(git push:*)",
