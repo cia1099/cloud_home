@@ -16,7 +16,8 @@ The report site (R-001) has its first edition built and published; it is in revi
 | Report site | first edition built, checked and published (R-001, in review) | owner review; next report after the next milestone |
 
 ## Active tasks
-- 2026-11-28 (session 8) · R-023 UI merged; R-030 tests (39 api_http) committed, R-030 review; approval_http flaky (connect unwrap) -> tester fixing then R-032 (main checkout); backend B-004 JSON envelope fix on agent/B-004-json-envelope. Next: verify, merge, deploy report.
+- 2026-11-28 (session 8) · ALL MERGED+VERIFIED: B-004 fixed, approval_http flake fixed (30/30), R-032 browser tests 24/24 (scripts/e2e_ui.sh, media plan/media/R-032). Report 2026-11-28-0330-oauth-tests-e2e deployed, live check passed (site, report, hashed screenshot 200). SPEC: R-032 -> review. No workers active. Next: R-062 check, R-073 guides, R-025, R-065.
+- 2026-11-28 (session 8) · (earlier) R-023 UI merged; R-030 tests (39 api_http) committed, R-030 review; approval_http flaky (connect unwrap) -> tester fixing then R-032 (main checkout); backend B-004 JSON envelope fix on agent/B-004-json-envelope. Next: verify, merge, deploy report.
 - 2026-11-28 (session 8) · R-023 backend merged (clippy clean, 180+30+12+7 tests). Running: frontend R-023 buttons (agent/R-023-oauth-buttons), tester R-030 (on agent/manager, tests/ only; do not commit src changes). Then R-032, report deploy.
 - 2026-11-28 (session 8) · R-013+R-027 merged (review; build, 102 tests; 2 React-compiler lint warnings in UpdateWatcher.tsx, no live browser check). Still running: R-023 backend.
 - 2026-11-28 (session 8) · R-012 merged (review; build/lint/93 tests). Previous session was interrupted: recovered R-013 draft from worktree agent-a6b28db02ae7ccfb9 (uncommitted); running frontend (agent/R-013-update-page-2) and backend R-023 interface (agent/R-023-oauth-interface). Next: verify+merge both, then tester R-030/R-032, R-023 UI buttons, R-073.
