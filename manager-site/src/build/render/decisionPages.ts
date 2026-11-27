@@ -92,7 +92,7 @@ function beforeAfter(assets: Assets): string {
 }
 
 export function brandPage(site: Site, assets: Assets): Rendered {
-  const intro = `<p class="sub" style="margin:0 0 16px;max-width:640px">${T('Approve: variant A (Sky). Deny: variant B (Porcelain). If you want something else, say so in the issue body and the designer will adjust.', '批准：选方案 A（Sky）。拒绝：选方案 B（Porcelain）。如果两个都不合适，在议题正文里写明想怎么改，设计师会调整。')}</p>`;
+  const intro = `<p class="sub" style="margin:0 0 16px;max-width:640px">${T('Choose A for variant A (Sky), or B for variant B (Porcelain). If you want something else, say so in the issue body and the designer will adjust.', '点“选 A”是方案 A（Sky），点“选 B”是方案 B（Porcelain）。如果两个都不合适，在议题正文里写明想怎么改，设计师会调整。')}</p>`;
   const main = `<main id="main" class="wrap">${head(T('Your cloud icon, refined', '把你的云图标打磨一下'), T('You asked for the report site’s cloud to feel more like Apple design and more elegant. Here are two refinements, each at the sizes it will really be used, in light and dark.', '你希望报告网站的云图标更有 Apple 的味道、更优雅。这里是两个打磨方案，按实际使用的尺寸展示，浅色与深色各一份。'))}
 <div style="max-width:720px">${callout('info', { en: 'The designer recommends A, Sky', zh: '设计师推荐 A：Sky' }, { en: 'It is the icon you said you like, with a more refined finish. B is quieter but less recognisable. Nothing is applied to the product until you choose; the report site keeps today’s logo meanwhile.', zh: '这就是你说喜欢的那个图标，只是质感更讲究。B 更安静，但辨识度较低。你选定之前，产品里不会改动任何地方；报告网站暂时仍用现在的标志。' })}</div>
 ${beforeAfter(assets)}

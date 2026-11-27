@@ -18,6 +18,8 @@ export const S = {
   'action.new_req': ['New requirement', '新需求'],
   'action.change': ['Change', '修改'],
   'action.remove': ['Remove', '移除'],
+  'action.accept': ['Accept', '验收'],
+  'action.choose': ['Choose {x}', '选 {x}'],
   'action.approve': ['Approve', '批准'],
   'action.deny': ['Deny', '拒绝'],
   'action.review': ['Review', '去处理'],

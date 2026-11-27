@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { askUrl, changeRequirementUrl, decisionUrl, newRequirementUrl, removeRequirementUrl } from './issue.ts';
+import { acceptRequirementUrl, askUrl, changeRequirementUrl, decisionUrl, newRequirementUrl, removeRequirementUrl } from './issue.ts';
 
 function decode(url: string): { title: string; body: string } {
   const u = new URL(url);
@@ -29,7 +29,16 @@ test('change and remove carry the id and the visible title', () => {
   expect(d.body).toContain('R-012');
 });
 
+test('accept carries the id, the visible title and an optional note', () => {
+  const a = decode(acceptRequirementUrl('R-012', 'Upload & "share"'));
+  expect(a.title).toBe('[OK R-012] Upload & "share"');
+  expect(a.body).toContain('Note (optional)');
+});
+
 test('decisions', () => {
+  const pick = decode(decisionUrl('A-003', 'Cloud icon', 'choose B'));
+  expect(pick.title).toBe('[DECISION A-003] choose B');
+  expect(pick.body).toContain('A-003: Cloud icon');
   expect(decode(decisionUrl('A-003', 'Tag v0.3.1', 'approve')).title).toBe('[DECISION A-003] approve');
   const deny = decode(decisionUrl('A-003', 'Tag v0.3.1', 'deny'));
   expect(deny.title).toBe('[DECISION A-003] deny');

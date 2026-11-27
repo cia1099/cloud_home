@@ -5,7 +5,7 @@ deploying anything other than the report site, key/secret changes, breaking API 
 costly or restrictively-licensed dependencies, deleting data or features, unclear requirements).
 The report site shows pending requests at the top of the Overview and on `/decisions/`.
 
-**To answer:** tap *Approve* / *Deny* on the report site's Decisions page (opens a pre-filled GitHub issue `[DECISION A-nnn] approve|deny`; submit it), **or** change the box on the request's first line here and optionally add a note under it.
+**To answer:** tap *Approve* / *Deny* (or *Choose A* / *Choose B* when the request lists options) on the report site's Decisions page (opens a pre-filled GitHub issue `[DECISION A-nnn] approve|deny|choose X`; submit it), **or** change the box on the request's first line here and optionally add a note under it.
 `[ ]` pending · `[x]` approved · `[!]` denied. The manager reads this file at the start of every cycle.
 
 ## Request format
@@ -17,6 +17,7 @@ The report site shows pending requests at the top of the Overview and on `/decis
 - If approved: …   If denied: …
 - Owner note:
 ```
+For a choice between named options instead of yes/no, add `- Options: A, B` (single words or letters, comma-separated) and replace the If line with `- If A: …   If B: …`. The site then shows one *Choose X* button per option.
 
 ## Requests
 
@@ -38,5 +39,6 @@ The report site shows pending requests at the top of the Overview and on `/decis
 - What: pick between two refinements of the report site's cloud icon (design/brand/cloud-a.svg "Variant A" and cloud-b.svg "Variant B"), shown on the report site /decisions/brand/.
 - Why: you asked to base the brand on the report site's cloud and make it more Apple-like and elegant.
 - Risk: low.
-- If approved: approve = A; deny = B (say another change in the owner note if neither). I produce the final SVG set and apply it to the mockup, sign-in, share page and report header.
+- Options: A, B
+- If A: I produce the final SVG set from Variant A (Sky) and apply it to the mockup, sign-in, share page and report header.   If B: the same, from Variant B (Porcelain). If neither, say the change in the owner note.
 - Owner note:

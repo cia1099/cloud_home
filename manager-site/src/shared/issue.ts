@@ -23,5 +23,9 @@ export const changeRequirementUrl = (id: string, title: string): string =>
 export const removeRequirementUrl = (id: string, title: string): string =>
   issue(`[DEL ${id}] ${clip(title)}`, `**Remove ${id}: ${clip(title)}**\n\nReason (optional):\n\n`);
 
-export const decisionUrl = (id: string, title: string, verdict: 'approve' | 'deny'): string =>
-  issue(`[DECISION ${id}] ${verdict}`, `**Decision ${id}: ${clip(title)}** — ${verdict}\n\nNote (optional):\n`);
+export const acceptRequirementUrl = (id: string, title: string): string =>
+  issue(`[OK ${id}] ${clip(title)}`, `**Accept ${id}: ${clip(title)}**\n\nNote (optional):\n`);
+
+/** `answer` is `approve`, `deny`, or `choose X` for a request with named options. */
+export const decisionUrl = (id: string, title: string, answer: string): string =>
+  issue(`[DECISION ${id}] ${answer}`, `**Decision ${id}: ${clip(title)}** — ${answer}\n\nNote (optional):\n`);

@@ -1,5 +1,5 @@
 import { ic, statusGlyph, type IconName } from '../../shared/icons.ts';
-import { changeRequirementUrl, COMMIT_URL, decisionUrl, removeRequirementUrl } from '../../shared/issue.ts';
+import { acceptRequirementUrl, changeRequirementUrl, COMMIT_URL, decisionUrl, removeRequirementUrl } from '../../shared/issue.ts';
 import { fill, S, type Bi, type Status } from '../../shared/i18n.ts';
 import type { Approval } from '../approvals.ts';
 import type { Report } from '../reports.ts';
@@ -194,7 +194,8 @@ export function reqRow(r: Requirement): string {
   const q = `${r.id} ${r.title.en} ${r.title.zh}`.toLowerCase();
   const ch = esc(changeRequirementUrl(r.id, r.title.en));
   const de = esc(removeRequirementUrl(r.id, r.title.en));
-  return `<li class="req" data-s="${r.status}" data-q="${esc(q)}"><span class="id">${r.id}</span><span class="t">${plainBi(r.title)}${r.blocked ? `<span class="why">${plainBi(r.blocked)}</span>` : ''}</span><span class="pri" data-p="${r.pri}" title="${esc(S[`priority.${r.pri}` as const][0])}">${r.pri}</span><span class="ch">${chip(r.status)}</span><span class="own">${ownerLabel(r.owner)}</span><span class="acts"><a class="btn btn-ghost" href="${ch}" target="_blank" rel="noopener">${ic('pencil')}${t('action.change')}</a><a class="btn btn-ghost del" href="${de}" target="_blank" rel="noopener">${ic('xmark')}${t('action.remove')}</a></span></li>`;
+  const ok = r.status === 'review' ? `<a class="btn btn-ghost acc" href="${esc(acceptRequirementUrl(r.id, r.title.en))}" target="_blank" rel="noopener">${ic('check')}${t('action.accept')}</a>` : '';
+  return `<li class="req" data-s="${r.status}" data-q="${esc(q)}"><span class="id">${r.id}</span><span class="t">${plainBi(r.title)}${r.blocked ? `<span class="why">${plainBi(r.blocked)}</span>` : ''}</span><span class="pri" data-p="${r.pri}" title="${esc(S[`priority.${r.pri}` as const][0])}">${r.pri}</span><span class="ch">${chip(r.status)}</span><span class="own">${ownerLabel(r.owner)}</span><span class="acts">${ok}<a class="btn btn-ghost" href="${ch}" target="_blank" rel="noopener">${ic('pencil')}${t('action.change')}</a><a class="btn btn-ghost del" href="${de}" target="_blank" rel="noopener">${ic('xmark')}${t('action.remove')}</a></span></li>`;
 }
 
 // ---------- decisions ----------
@@ -209,13 +210,21 @@ export function decisionCard(a: Approval, root: string, detail = true): string {
     [T('What', '内容'), f.what],
     [T('Why', '原因'), f.why],
     [T('Risk', '风险'), f.risk],
-    [T('If approved', '批准后'), f.ifApproved],
-    [T('If denied', '拒绝后'), f.ifDenied],
+    ...(a.options
+      ? a.options.map((o): [string, Bi | undefined] => [T(`If ${o}`, `选 ${o} 后`), a.ifOptions?.[o]])
+      : [[T('If approved', '批准后'), f.ifApproved], [T('If denied', '拒绝后'), f.ifDenied]] as [string, Bi | undefined][]),
   ];
   const dl = rows.filter((r): r is [string, Bi] => r[1] !== undefined).map(([k, v]) => `<dt>${k}</dt><dd>${plainBi(v)}</dd>`).join('');
   const page = detail ? DETAIL_PAGE[a.id] : undefined;
   const more = page ? `<p style="margin:18px 0 0"><a href="${root}decisions/${page}">${T('Read the full explanation ›', '阅读完整说明 ›')}</a></p>` : '';
-  return `<article class="card dcard rv" id="${a.id}"><div class="dh"><span class="hash" style="height:24px">${a.id}</span>${a.requested ? `<span class="small">${T('Requested by the manager,', '经理提出于')} ${D(a.requested)}</span>` : ''}</div><h3>${plainBi(a.title)}</h3>${dl ? `<dl class="dl">${dl}</dl>` : ''}${more}<div class="dact"><a class="btn btn-pri btn-lg" href="${esc(decisionUrl(a.id, a.title.en, 'approve'))}" target="_blank" rel="noopener">${ic('check')}${t('action.approve')}</a><a class="btn btn-neutral btn-lg" href="${esc(decisionUrl(a.id, a.title.en, 'deny'))}" target="_blank" rel="noopener">${ic('xmark')}${t('action.deny')}</a><p class="note">${T('Opens a pre-filled issue on GitHub. Nothing is sent until you press Submit there.', '在 GitHub 上打开预填好的议题。你按下提交之前不会发送任何内容。')}</p></div></article>`;
+  return `<article class="card dcard rv" id="${a.id}"><div class="dh"><span class="hash" style="height:24px">${a.id}</span>${a.requested ? `<span class="small">${T('Requested by the manager,', '经理提出于')} ${D(a.requested)}</span>` : ''}</div><h3>${plainBi(a.title)}</h3>${dl ? `<dl class="dl">${dl}</dl>` : ''}${more}<div class="dact">${answerButtons(a)}<p class="note">${T('Opens a pre-filled issue on GitHub. Nothing is sent until you press Submit there.', '在 GitHub 上打开预填好的议题。你按下提交之前不会发送任何内容。')}</p></div></article>`;
+}
+
+function answerButtons(a: Approval): string {
+  const link = (cls: string, answer: string, icon: IconName, label: string): string =>
+    `<a class="btn ${cls} btn-lg" href="${esc(decisionUrl(a.id, a.title.en, answer))}" target="_blank" rel="noopener">${ic(icon)}${label}</a>`;
+  if (a.options) return a.options.map((o, i) => link(i === 0 ? 'btn-pri' : 'btn-neutral', `choose ${o}`, 'check', t('action.choose', { x: o }))).join('');
+  return link('btn-pri', 'approve', 'check', t('action.approve')) + link('btn-neutral', 'deny', 'xmark', t('action.deny'));
 }
 
 export function historyItem(a: Approval): string {

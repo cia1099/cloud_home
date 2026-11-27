@@ -46,17 +46,24 @@ const APPROVALS = `## Request format
 - If approved: Pipeline runs.   If denied: Stay on rc.
 - zh title: 打标签
 - zh What: 推送并打标签。
+### A-004 [ ] Pick an icon — 2026-12-03
+- Options: A, B
+- If A: Use sky.   If B: Use porcelain.
+- zh If A: 用天空。
 ### A-002 [!] Paid SMS — 2026-11-26
 - Owner note: email first
 `;
 
 test('approvals: pending, denied, zh fallbacks, fenced template ignored', () => {
   const a = parseApprovals(APPROVALS);
-  expect(a.map((x) => [x.id, x.state])).toEqual([['A-003', 'pending'], ['A-002', 'denied']]);
+  expect(a.map((x) => [x.id, x.state])).toEqual([['A-003', 'pending'], ['A-004', 'pending'], ['A-002', 'denied']]);
   expect(a[0]?.title).toEqual({ en: 'Tag v0.3.1', zh: '打标签' });
   expect(a[0]?.fields.what).toEqual({ en: 'Push and tag.', zh: '推送并打标签。' });
   expect(a[0]?.fields.ifDenied?.en).toBe('Stay on rc.');
-  expect(a[1]?.fields.note?.zh).toBe('email first');
+  expect(a[0]?.options).toBeUndefined();
+  expect(a[1]?.options).toEqual(['A', 'B']);
+  expect(a[1]?.ifOptions).toEqual({ A: { en: 'Use sky.', zh: '用天空。' }, B: { en: 'Use porcelain.', zh: 'Use porcelain.' } });
+  expect(a[2]?.fields.note?.zh).toBe('email first');
 });
 
 test('burn-down: open count, optional target, no invented points', () => {

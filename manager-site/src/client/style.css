@@ -119,6 +119,7 @@ h1,h2,h3,h4 { margin:0; font-weight:700; text-wrap:balance; }
 .btn-lg { height:44px; padding:0 22px; font-size:0.9375rem; }
 .btn-ghost { background:none; color:var(--text-2); height:32px; padding:0 10px; font-weight:500; font-size:0.8125rem; }
 .btn-ghost:hover { color:var(--accent); background:var(--accent-tint); }
+.btn-ghost.acc:hover { color:var(--st-done-fg); background:var(--st-done-bg); }
 .btn-ghost.del:hover { color:var(--st-blocked-fg); background:var(--st-blocked-bg); }
 .btn .ic { width:16px; height:16px; }
 
@@ -465,7 +466,7 @@ html[data-l=zh] .ms-hero h1 { letter-spacing:-.01em; line-height:1.15; }
   .diagram { padding:20px; }
   .req { grid-template-columns:58px minmax(0,1fr) auto; gap:8px 12px; padding:14px 16px; cursor:pointer; align-items:start; }
   .req .id { padding-top:2px; } .req .t { font-size:1rem; } .req .pri { display:none; } .req .own, .req .acts { display:none; }
-  .req.open .own { display:block; grid-column:2/-1; } .req.open .acts { display:grid; grid-template-columns:1fr 1fr; gap:10px; grid-column:1/-1; margin-top:4px; } .req.open .acts .btn { height:44px; background:var(--accent-tint); color:var(--accent); font-size:0.9375rem; } .req.open .acts .btn.del { color:var(--st-blocked-fg); background:var(--st-blocked-bg); }
+  .req.open .own { display:block; grid-column:2/-1; } .req.open .acts { display:grid; grid-template-columns:1fr 1fr; gap:10px; grid-column:1/-1; margin-top:4px; } .req.open .acts .btn { height:44px; background:var(--accent-tint); color:var(--accent); font-size:0.9375rem; } .req.open .acts .btn.acc { grid-column:1/-1; color:var(--st-done-fg); background:var(--st-done-bg); } .req.open .acts .btn.del { color:var(--st-blocked-fg); background:var(--st-blocked-bg); }
   .dl { grid-template-columns:1fr; gap:2px; } .dl dd { margin-bottom:12px; } .steps { grid-template-columns:1fr; } .dcard { padding:22px; } .dact .btn { flex:1; height:48px; font-size:1rem; }
   .gal, .learn, .preview-list { grid-template-columns:1fr; } .shot.wide { grid-column:auto; }
   .walk { grid-template-columns:1fr; gap:0; } .walk-dev { position:sticky; top:calc(var(--hdr) + 52px); z-index:3; background:#0b0b0f; padding-bottom:12px; } .wstep { min-height:46vh; }  .bignums { grid-template-columns:repeat(2,1fr); } .bignums div:nth-child(3) { border-left:0; padding-left:0; } .bignums div { padding-bottom:24px; }
