@@ -59,6 +59,7 @@ Read the open issues (#1–#4) and handle them. How to read them:
 - **#3 A-002 approve**: several equal admins. Also: a rejected member may register again, with no limit on the number of tries; drop the cooldown after a rejection (keep the other abuse limits unless they conflict, and ask if they do).
 - **#4 A-001 deny**: do not use directions A, B or C. Base the new brand on the report site's cloud icon (header logo and favicon in `manager-site/`) and make it feel more like Apple design, elegant. The issue body has the owner's reference images.
 Close each issue after you have acted on it.
+- **R-074 (new, owner asked for it): Accept button.** Until it ships, treat a `[CHG R-nnn]` or `[DEL R-nnn]` issue whose text says accepted / reviewed / well done as *accepted*: mark that requirement `done` (never delete work) and close the issue. Also: the owner reported seeing no update on the report site. Render and check the two new cloud icon variants, publish them on `/decisions/` with a fresh approval request, verify and merge R-060 (cargo is on PATH when the owner starts you from their terminal), then build and deploy the site and write the report.
 
 ## Log
 - 2026-11-19 — team and SPEC.md created.
