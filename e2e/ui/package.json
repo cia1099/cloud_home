@@ -1,0 +1,8 @@
+{
+  "name": "cloud-home-ui-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "bun test --timeout 120000" },
+  "dependencies": { "playwright-core": "1.65.1" },
+  "devDependencies": { "@types/bun": "latest", "typescript": "^7" }
+}
