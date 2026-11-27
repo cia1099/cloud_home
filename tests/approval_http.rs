@@ -51,10 +51,17 @@ impl Server {
 
     /// 在已有目录上（重新）启动：数据库随目录保留。
     fn start_in(dir: PathBuf, env: &[(&str, &str)]) -> Self {
-        let port = {
-            let l = TcpListener::bind("127.0.0.1:0").unwrap();
-            l.local_addr().unwrap().port()
-        };
+        for _ in 0..5 {
+            if let Some(srv) = Self::try_start(&dir, env) {
+                return srv;
+            }
+        }
+        panic!("服务连续 5 次启动失败（端口被占用？）：\n{}", Self::read_log(&dir));
+    }
+
+    fn try_start(dir: &Path, env: &[(&str, &str)]) -> Option<Self> {
+        let port = free_port();
+        let log_start = std::fs::metadata(dir.join("stdout.log")).map_or(0, |m| m.len());
         let stdout = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -82,16 +89,30 @@ impl Server {
             cmd.env(k, v);
         }
         let child = cmd.spawn().unwrap();
-        let srv = Self { child, port, dir };
-        srv.wait_ready();
-        srv
+        let mut srv = Self { child, port, dir: dir.to_path_buf() };
+        if srv.wait_ready(log_start) {
+            return Some(srv);
+        }
+        let _ = srv.child.kill();
+        let _ = srv.child.wait();
+        srv.dir = PathBuf::new(); // 目录属于调用者，重试时继续使用
+        None
     }
 
-    fn wait_ready(&self) {
+    /// 以服务自己写出的“已启动”日志为准（只看本次启动之后追加的部分）：
+    /// 光是端口能连并不能证明是自己的进程，可能连上了别的服务。
+    /// 子进程提前退出（如绑定失败）返回 false。
+    fn wait_ready(&mut self, log_start: u64) -> bool {
         let deadline = Instant::now() + Duration::from_secs(30);
         while Instant::now() < deadline {
-            if TcpStream::connect(("127.0.0.1", self.port)).is_ok() {
-                return;
+            let log = std::fs::read(self.dir.join("stdout.log")).unwrap_or_default();
+            if String::from_utf8_lossy(&log[(log_start as usize).min(log.len())..])
+                .contains("Cloud Home 后端已启动")
+            {
+                return true;
+            }
+            if self.child.try_wait().unwrap().is_some() {
+                return false;
             }
             std::thread::sleep(Duration::from_millis(50));
         }
@@ -121,7 +142,9 @@ impl Server {
         req.push_str(&format!("Content-Length: {}\r\n\r\n{payload}", payload.len()));
         s.write_all(req.as_bytes()).unwrap();
         let mut raw = Vec::new();
-        s.read_to_end(&mut raw).unwrap();
+        if let Err(e) = s.read_to_end(&mut raw) {
+            panic!("{method} {path}: {e}; got {} bytes\n{}", raw.len(), self.log_text());
+        }
         let text = String::from_utf8_lossy(&raw).into_owned();
         let (head, body) = text.split_once("\r\n\r\n").unwrap();
         let mut lines = head.lines();
@@ -200,8 +223,12 @@ impl Server {
 
     /// 标准输出与日志目录里的全部文本。
     fn log_text(&self) -> String {
-        let mut text = std::fs::read_to_string(self.dir.join("stdout.log")).unwrap_or_default();
-        collect_files(&self.dir.join("logs"), &mut text);
+        Self::read_log(&self.dir)
+    }
+
+    fn read_log(dir: &Path) -> String {
+        let mut text = std::fs::read_to_string(dir.join("stdout.log")).unwrap_or_default();
+        collect_files(&dir.join("logs"), &mut text);
         text
     }
 }
@@ -214,6 +241,12 @@ impl Drop for Server {
             let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
+}
+
+/// 取一个当前空闲的端口。释放到服务绑定之间有空窗，别的进程（或并行的测试）可能抢走，
+/// 所以调用者必须用 `Server::wait_ready` 确认服务确实绑定成功，失败则换端口重试。
+fn free_port() -> u16 {
+    TcpListener::bind("127.0.0.1:0").unwrap().local_addr().unwrap().port()
 }
 
 fn db_file(dir: &Path) -> PathBuf {
