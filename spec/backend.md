@@ -404,14 +404,28 @@ OTP 限制：6 位数字、5 分钟有效、单码最多 5 次尝试、同一目
 `handlers/oauth.rs`），但 **Google / Apple 的真实客户端（凭证、令牌交换）尚未接入**，
 生产注册表为空，`GET /auth/providers` 恒返回 `providers: []`；自动化测试用 `cfg(test)` 的
 `FakeProvider`，不联网。总开关 `OAUTH_ENABLED`（默认 `false`）关闭时，除 `/auth/providers`
-外的 oauth 端点一律 404；provider 未配置同样 404。错误码：400 第三方未给已验证邮箱；
-401 授权码无效或账户已停用；409 邮箱已属于「本地邮箱尚未验证」的账户，或第三方账号已绑到别的账户
-（`link` 绝不转移归属）。契约与支撑它的 schema：
+外的 oauth 端点一律 404；provider 未配置同样 404。错误码：
+
+| 状态 | code | 场景 |
+|---|---|---|
+| 200 / 202 | — | login：既有账户或 open 模式新建 → 200（token + Cookie）；approval 模式新建 → 202 `{"status":"pending_approval"}`，**无 token、无 Cookie** |
+| 400 | `BAD_REQUEST` | 第三方未给已验证邮箱 |
+| 401 | `UNAUTHORIZED` | 授权码无效，或账户已被运维删除 |
+| 403 | `ACCOUNT_PENDING` / `ACCOUNT_REJECTED` | 既有账户未获批准（与密码登录一致） |
+| 403 | `REGISTRATION_CLOSED` | `REGISTRATION_MODE=closed` 时新建账户被拒（既有账户仍可登录） |
+| 409 | `OAUTH_EMAIL_UNVERIFIED_LINK` | login：邮箱已属于一个「本地邮箱尚未验证」的账户，不能并入 |
+| 409 | `OAUTH_ACCOUNT_ALREADY_LINKED` | link：该第三方账号已绑定到另一个账户（绝不转移归属） |
+| 409 | `OAUTH_PROVIDER_ALREADY_LINKED` | link：当前账户已绑了同一 provider 的另一个第三方账号 |
+| 429 | `REGISTRATION_BUSY` | approval 模式的队列上限 / 按 IP 限流，同 `/auth/register` |
+
+契约与支撑它的 schema：
 
 - **关联既有账户还要求其本地邮箱已 `verified_at`**：注册不验证归属（见上），否则可先抢注他人邮箱，
   等本人用 Google 登录时被并入攻击者持有密码的账户。未验证时返回 409，让用户先登录验证、再用 `link` 绑定。
-- **新建账户遵循注册模式**：R-060（审批流）落地前，OAuth 新账户与 `/auth/register` 一样直接启用；
-  R-060 落地时 `oauth_service::login` 的新建分支必须改走同一条建号 / 审批路径。
+- **新建账户遵循注册模式与审批**：`oauth_service::login` 的新建分支与 `/auth/register` 共用
+  `user_service::admission_gate`（closed 拒绝、approval 的队列上限与限流）与 `insert_user`
+  （open 直接启用、approval 待批准、本机 / 内网首个账户引导批准）。新建待批准账户同样通知管理员聊天。
+  并入既有账户不算注册，不过闸门，但账户本身未获批准时仍 403。
 
 - 第三方托管的标识（`managed_by` 非空）在本地**只读**：`/me/identifier` 一律返回 403，
   提示去对应平台修改；纯第三方账户也不需要密码，`/me/password` 同样 403。

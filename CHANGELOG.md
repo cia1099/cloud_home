@@ -15,8 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   sit behind the new `OAUTH_ENABLED` switch (default `false`; off means 404).
   Login follows the documented rules: only provider-verified emails are
   accepted, an existing account is joined only when its local email is already
-  verified, and a third-party account is never moved between accounts. Tested
-  with an in-process fake provider, no network.
+  verified, and a third-party account is never moved between accounts. A new
+  account created by sign-in follows the registration mode and approval flow:
+  `closed` refuses it, `approval` returns `202 pending_approval` with no token
+  or cookie (and notifies the admin chat), `open` enables it. The 409 cases
+  carry distinct codes: `OAUTH_EMAIL_UNVERIFIED_LINK`,
+  `OAUTH_ACCOUNT_ALREADY_LINKED`, `OAUTH_PROVIDER_ALREADY_LINKED`. Tested with
+  an in-process fake provider, no network.
 - **Device packaging (R-021).** `packaging/linux/install.sh` (creates the
   `cloudhome` user, installs a systemd unit with `Restart=always`) and
   `packaging/macos/install.sh` (launchd LaunchDaemon with `KeepAlive`) install

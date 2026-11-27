@@ -12,6 +12,8 @@ pub mod files;
 pub mod folders;
 pub mod me;
 pub mod oauth;
+#[cfg(test)]
+mod oauth_tests;
 pub mod public;
 pub mod search;
 pub mod shares;
