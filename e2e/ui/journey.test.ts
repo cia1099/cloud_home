@@ -153,6 +153,8 @@ describe.each(LOCALES)('journey in %s', (locale) => {
       await pub.goto(link)
       await pub.getByText(photo, { exact: false }).first().waitFor()
       await pub.getByText(t('public.note')).waitFor()
+      // downloads were switched off for this link: viewing only, no Download action
+      expect(await pub.getByRole('link', { name: t('public.download') }).count()).toBe(0)
       await shot(pub, `${tag}-08-public-share`)
       await guest.close()
 
