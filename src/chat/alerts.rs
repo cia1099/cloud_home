@@ -283,12 +283,7 @@ impl ChatService {
 
     /// 点击「立即安装」：只有令牌里的版本仍是当前可装版本才安装，走与 `/admin/update/install`
     /// 相同的前置检查（有传输进行中时拒绝，不强制）。
-    pub(super) async fn install_from_chat(
-        &self,
-        admin: &Identity,
-        sender_id: &str,
-        version: &str,
-    ) {
+    pub(super) async fn install_from_chat(&self, admin: &Identity, sender_id: &str, version: &str) {
         use crate::update::UpdateError;
 
         let texts = self.inner.texts;

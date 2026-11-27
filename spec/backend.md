@@ -357,6 +357,13 @@ Base URL: `http://localhost:8080/api/v1`
 `/admin/trash/purge` 端点用的是同一组函数，审计的 `actor` 为 `admin-endpoint` 或 `chat:<provider>:<sender-id>`）。
 这些表只含管理员身份与待批准申请的摘要，**不含任何用户的文件数据，也没有按账户隔离的数据路径**。
 
+系统告警（R-065，`chat/alerts.rs`，迁移 `…0011_add_chat_update_tokens.sql`，无新端点）：新版本（带「立即安装」按钮，
+复用更新器 `install_in_background(false)`，令牌存表 `chat_update_tokens`：只存哈希、绑定 管理员 + 版本、单次、24 小时）、
+数据盘拔出 / 接回、空间低于 `CHAT_ALERT_DISK_FREE_PERCENT`、管理端点口令失败（`AdminGuard` 每次失败计数，
+10 分钟内 5 次提醒一次）。四类各有 `CHAT_ALERT_*` 开关；限流在内存里（新版本每版本一次、插拔 10 分钟最多 6 条、
+空间不足 6 小时一条、口令失败提醒后静默 30 分钟）。告警直接发送、不进发送队列（拔盘时数据库不可写）。
+详见 `spec/admin_chat.md` 第 12 节。不含用户数据，无账户隔离问题。
+
 **用户名不唯一**，它只是可随时修改的显示名；登录一律靠邮箱或手机号。
 JWT 的 Claims 里**不带用户名**——`AuthUser` 提取时本就要查库确认账户仍启用，
 顺带取回当前用户名即可，改名能立刻反映到日志里，不存在过时副本。
@@ -887,6 +894,12 @@ CHAT_PROVIDER=none
 CHAT_BOT_TOKEN=              # 密钥；Config 的 Debug 脱敏，绝不写日志
 CHAT_LANGUAGE=en             # en | zh-Hans | zh-Hant
 CHAT_MASK_IDENTIFIERS=true
+# 系统告警（R-065）：各类告警独立开关，默认全开；只发给已配对的管理员。
+# CHAT_ALERT_UPDATE=true             # 发现新版本（带「立即安装」按钮）
+# CHAT_ALERT_DRIVE=true              # 数据盘被拔出 / 重新接上
+# CHAT_ALERT_DISK=true               # 数据盘剩余空间过低
+# CHAT_ALERT_DISK_FREE_PERCENT=10    # 剩余低于该百分比即告警（1-99）
+# CHAT_ALERT_ADMIN_AUTH=true         # 管理端点口令 10 分钟内连续失败 5 次
 ```
 
 > `DATABASE_URL` 由程序在运行时根据侦测到的硬盘路径自动构造，无需在 .env 中写死。

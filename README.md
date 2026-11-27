@@ -130,6 +130,9 @@ curl -X DELETE $BASE/admin/chat/admins/<id> -H 'X-Admin-Password: <ADMIN_PASSWOR
 
 只有已配对的管理员能操作；其他人给机器人发任何消息都得不到回应（仅写入审计日志）。
 聊天服务不可用时注册照常进入待批准状态，消息留在队列里等恢复后补发，不会隐式批准任何人。
+已配对的管理员还会收到系统告警：发现新版本（点 **立即安装** 即可更新）、数据盘拔出 / 接回、剩余空间不足、
+管理端点口令连续失败。每类告警可用 `CHAT_ALERT_UPDATE|DRIVE|DISK|ADMIN_AUTH=false` 关闭，且有限流防刷屏
+（见 `.env.example`）。
 **发给聊天提供方的内容**：申请人的显示名、打码后的邮箱/手机号（`CHAT_MASK_IDENTIFIERS=false` 才发全文）、申请时间、
 来源 IP，以及 批准/拒绝 按钮；绝不包含密码、令牌、文件名或文件内容。完整说明与令牌轮换见
 [`spec/admin_chat.md`](spec/admin_chat.md) 第 10 节。

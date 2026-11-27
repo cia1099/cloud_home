@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Chat alerts (R-065).** Paired admins now get system alerts in the chat: a new
+  version is available (with an "Install now" button that runs the same
+  updater as `POST /admin/update/install`, same preconditions), the data drive
+  was unplugged / plugged back, free space on the data drive fell below
+  `CHAT_ALERT_DISK_FREE_PERCENT` (default 10), and repeated failed admin
+  authentications (5 within 10 minutes). Each type has its own switch
+  (`CHAT_ALERT_UPDATE`, `CHAT_ALERT_DRIVE`, `CHAT_ALERT_DISK`,
+  `CHAT_ALERT_ADMIN_AUTH`, all default on) and is rate limited / deduplicated
+  so a flapping drive or an attack cannot flood the chat. The install button
+  token is single-use, bound to the admin and the version, and stored hashed
+  (migration `…0011_add_chat_update_tokens.sql`). No new endpoint or dependency.
 - Provider-neutral Google / Apple sign-in interface (no real client wired yet).
   `GET /auth/providers` reports `{enabled, providers}` so the UI can hide the
   "Continue with Google/Apple" buttons; `GET /auth/oauth/{provider}/authorize`,

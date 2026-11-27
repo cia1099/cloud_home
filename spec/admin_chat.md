@@ -250,3 +250,34 @@ endpoints), texts in `src/chat/text.rs`. No migration, no new endpoint, no new c
 - **Isolation.** These are the same cross-account operator powers as `/admin/*` (a paired admin is as powerful as the
   shared admin password), but each operation names exactly one account id: delete/restore touch only that account's
   rows, purge goes through `trash_service::empty(owner_id)` which filters every query by owner.
+
+## 12. Phase D as built (R-065)
+
+Code: `src/chat/alerts.rs`, texts in `src/chat/text.rs`, hooks in `src/tasks/drive_monitor.rs` and
+`AdminGuard` (`src/handlers/admin.rs`); the update alert is driven by the existing `UpdateAvailable` event. Migration
+`…0011_add_chat_update_tokens.sql` (one new table). No new endpoint, no new crate.
+
+| Alert | Trigger | Switch (default on) | Flood protection |
+|---|---|---|---|
+| Update available | the updater finds a new version | `CHAT_ALERT_UPDATE` | once per version (24 h) |
+| Drive unplugged / plugged | the mount monitor sees the data drive leave / return | `CHAT_ALERT_DRIVE` | at most 6 per 10 minutes in total |
+| Low disk space | every 5 min, free space of the data drive < `CHAT_ALERT_DISK_FREE_PERCENT` (default 10, range 1-99) | `CHAT_ALERT_DISK` | at most one per 6 hours while it stays low |
+| Repeated admin-auth failures | 5 failed admin-endpoint authentications (any reason) within 10 minutes | `CHAT_ALERT_ADMIN_AUTH` | after one alert, silent for 30 minutes |
+
+Switching a type off sends nothing of that type. All limits are in memory (a restart resets them).
+
+- **Tap to install.** The update message carries an "Install now" button. Its payload is a random 32-hex token stored
+  only as a hash in `chat_update_tokens`, bound to the admin it was issued to and to the version, single-use, valid
+  24 hours (same as approval tokens). On a tap: the token is consumed atomically (another admin's, a used, or an
+  expired token is "no longer valid"); the version must still be the one the updater offers; then the same
+  `Updater::install_in_background(false)` as `POST /admin/update/install` runs, so the same preconditions apply (updates
+  enabled, none already running, and it refuses while uploads/downloads are in progress instead of forcing). The admin
+  gets a reply for each outcome and `chat.update` / `install` is audited. A paired admin can already update through the
+  admin endpoint, so the button grants nothing new.
+- **Delivery.** Alerts are sent directly, not through the outbox: they are time-sensitive and the database lives on the
+  data drive, so queueing a "drive unplugged" alert would fail exactly when it matters. Recipients are the paired
+  admins read from the database; if that read fails, the last list read successfully is used.
+- **What is sent** (in addition to sections 10-11): version number, drive state, free percentage and whole gigabytes,
+  failure count and the caller's IP. No account data, no file names, no secrets; the admin password is never logged or
+  sent.
+- **Isolation.** Alerts are device-level and touch no user data; the only new table holds admin-bound update tokens.
