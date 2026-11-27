@@ -47,9 +47,8 @@ const APPROVALS = `## Request format
 - zh title: 打标签
 - zh What: 推送并打标签。
 ### A-004 [ ] Pick an icon — 2026-12-03
-- Options: A, B
-- If A: Use sky.   If B: Use porcelain.
-- zh If A: 用天空。
+- If approved: Use C.   If denied: Redraw.
+- zh If approved: 用 C。
 ### A-002 [!] Paid SMS — 2026-11-26
 - Owner note: email first
 `;
@@ -60,9 +59,8 @@ test('approvals: pending, denied, zh fallbacks, fenced template ignored', () => 
   expect(a[0]?.title).toEqual({ en: 'Tag v0.3.1', zh: '打标签' });
   expect(a[0]?.fields.what).toEqual({ en: 'Push and tag.', zh: '推送并打标签。' });
   expect(a[0]?.fields.ifDenied?.en).toBe('Stay on rc.');
-  expect(a[0]?.options).toBeUndefined();
-  expect(a[1]?.options).toEqual(['A', 'B']);
-  expect(a[1]?.ifOptions).toEqual({ A: { en: 'Use sky.', zh: '用天空。' }, B: { en: 'Use porcelain.', zh: 'Use porcelain.' } });
+  expect(a[1]?.fields.ifApproved).toEqual({ en: 'Use C.', zh: '用 C。' });
+  expect(a[1]?.fields.ifDenied).toEqual({ en: 'Redraw.', zh: 'Redraw.' });
   expect(a[2]?.fields.note?.zh).toBe('email first');
 });
 

@@ -201,7 +201,7 @@ export function reqRow(r: Requirement): string {
 // ---------- decisions ----------
 
 /** Decisions that have a page of their own (relative to decisions/): the explanation the owner reads before answering. */
-export const DETAIL_PAGE: Record<string, string> = { 'A-003': 'brand/', 'A-002': 'admins/' };
+export const DETAIL_PAGE: Record<string, string> = { 'A-004': 'brand/', 'A-002': 'admins/' };
 
 /** `root` is the relative prefix from the rendered page to the site root ("../", "../../"). `detail: false` hides the link on the detail page itself. */
 export function decisionCard(a: Approval, root: string, detail = true): string {
@@ -210,9 +210,8 @@ export function decisionCard(a: Approval, root: string, detail = true): string {
     [T('What', '内容'), f.what],
     [T('Why', '原因'), f.why],
     [T('Risk', '风险'), f.risk],
-    ...(a.options
-      ? a.options.map((o): [string, Bi | undefined] => [T(`If ${o}`, `选 ${o} 后`), a.ifOptions?.[o]])
-      : [[T('If approved', '批准后'), f.ifApproved], [T('If denied', '拒绝后'), f.ifDenied]] as [string, Bi | undefined][]),
+    [T('If approved', '批准后'), f.ifApproved],
+    [T('If denied', '拒绝后'), f.ifDenied],
   ];
   const dl = rows.filter((r): r is [string, Bi] => r[1] !== undefined).map(([k, v]) => `<dt>${k}</dt><dd>${plainBi(v)}</dd>`).join('');
   const page = detail ? DETAIL_PAGE[a.id] : undefined;
@@ -221,9 +220,8 @@ export function decisionCard(a: Approval, root: string, detail = true): string {
 }
 
 function answerButtons(a: Approval): string {
-  const link = (cls: string, answer: string, icon: IconName, label: string): string =>
+  const link = (cls: string, answer: 'approve' | 'deny', icon: IconName, label: string): string =>
     `<a class="btn ${cls} btn-lg" href="${esc(decisionUrl(a.id, a.title.en, answer))}" target="_blank" rel="noopener">${ic(icon)}${label}</a>`;
-  if (a.options) return a.options.map((o, i) => link(i === 0 ? 'btn-pri' : 'btn-neutral', `choose ${o}`, 'check', t('action.choose', { x: o }))).join('');
   return link('btn-pri', 'approve', 'check', t('action.approve')) + link('btn-neutral', 'deny', 'xmark', t('action.deny'));
 }
 

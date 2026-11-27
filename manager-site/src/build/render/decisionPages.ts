@@ -19,46 +19,37 @@ function answer(site: Site, id: string, intro: string): string {
   return `<section class="sec" id="answer"><div class="sec-h"><h2 class="title">${T('Your answer', '你的回答')}</h2></div>${intro}${body}</section>`;
 }
 
-// ---------- A-003: cloud icon variants ----------
+// ---------- A-004: cloud icon variants C and D ----------
 
 interface Variant {
-  key: 'a' | 'b';
+  /** Files in design/brand/: `cloud-<key>.svg` (light), `cloud-<key>-dark.svg`, `cloud-<key>-favicon.svg` (16/32px). */
+  key: 'c' | 'd';
   name: string;
   idea: [string, string];
   rationale: [string, string];
   use: [string, string];
-  /** Files in design/brand/ for the light stage, the dark stage and the 16/32px sizes. */
-  light: string;
-  dark: string;
-  small: string;
 }
 
 const VARIANTS: Variant[] = [
   {
-    key: 'a',
-    name: 'Sky',
-    idea: ['Your cloud on a blue tile, finished like a system icon.', '你喜欢的那朵云，蓝色底，按系统图标的质感完成。'],
+    key: 'c',
+    name: 'Hearth',
+    idea: ['A house drawn inside the cloud: the drive is the cloud, home is what it holds.', '云里画着一座房子：云是网盘，家是它装着的东西。'],
     rationale: [
-      'Same tile and same white cloud as today. What changes is the finish: a continuous-curvature corner instead of a plain rounded rectangle, a faint gradient inside the cloud, a soft blue shade along its lower edge, one gentle shadow and a hint of light from the top left. At 16 and 32px a simplified file is used, with a slightly larger cloud and no effects, so it stays crisp. It keeps the white-on-blue identity you said you like, and it reads the same on light and dark backgrounds.',
-      '底和云都和现在一样，改变的是质感：用连续曲率的圆角取代普通圆角矩形，云朵内部有极淡的渐变，下缘有一抹柔和的蓝色阴影，加上一道轻柔的投影和左上方的一点光。16px 与 32px 使用简化版本：云稍大、不加特效，保证清晰。它保留了你喜欢的“蓝底白云”，在浅色和深色背景上看起来一样。',
+      'An outline cloud with a small house inside it, like the cloud and house symbols composed into one. It is the more explicit picture of “a cloud drive at home”. The house needs about 48px to resolve, so it shines at large sizes and gives way to a simplified solid version at 16 and 32px.',
+      '云的轮廓里有一座小房子，就像把“云”和“房子”两个符号合成一个。它把“家里的网盘”画得最直白。房子大约要 48px 才看得清，所以大尺寸最好看；16px 与 32px 改用简化的实心版本。',
     ],
-    use: ['Header logo, favicon, product app icon', '页眉标志、网站图标、产品应用图标'],
-    light: 'cloud-a',
-    dark: 'cloud-a',
-    small: 'cloud-a-favicon',
+    use: ['Large sizes: header logo, sign-in screen, social image', '大尺寸：页眉标志、登录界面、分享图'],
   },
   {
-    key: 'b',
-    name: 'Porcelain',
-    idea: ['A pale tile with a blue cloud; graphite tile in dark mode.', '浅色底配蓝色云；深色模式下换成石墨色底。'],
+    key: 'd',
+    name: 'Roofline',
+    idea: ['A cloud wearing a roof, with a doorway cut into its base.', '给云戴上屋顶，底部开一扇门。'],
     rationale: [
-      'The inverse: the tile is pale (graphite in dark mode) and the cloud carries the colour, as a blue gradient with a soft highlight at the top. It is quieter and looks more like a built-in system app, but it is less recognisable as the icon you know, and at 16px a blue cloud on a pale tile has less contrast than white on blue. Because the tile changes with the theme, it has two files.',
-      '反过来：底是浅色（深色模式下是石墨色），颜色由云承担，是带顶部柔光的蓝色渐变。它更安静，更像系统自带的应用，但不如你熟悉的那个图标好认；16px 时，浅底上的蓝云对比度也不如蓝底白云。因为底色随主题变化，所以有两个文件。',
+      'A bolder silhouette: a roof over a solid cloud, and an arched doorway cut through its base. A cloud wearing a roof is a home. It reads better at 16px, where the roof and door still come through as one shape, so it is the stronger choice for the browser tab and small icons. It is also the best single mark if one icon must serve every size.',
+      '更粗壮的轮廓：实心的云上加一个屋顶，云的底部镂出一扇拱门。戴着屋顶的云就是一个家。它在 16px 时依然清楚，屋顶和门还是一个整体，所以更适合浏览器标签页和小图标。如果只能用一个图标应付所有尺寸，它也是最稳妥的。',
     ],
-    use: ['Sign-in screen, quiet contexts', '登录界面等较安静的场合'],
-    light: 'cloud-b',
-    dark: 'cloud-b-dark',
-    small: '',
+    use: ['Small sizes: browser tab, favicon, 16 to 24px', '小尺寸：浏览器标签页、网站图标、16 到 24px'],
   },
 ];
 
@@ -67,38 +58,38 @@ function variantCard(v: Variant, assets: Assets): string {
   const src = (name: string): string => `../../${assets.file(repoPath('design/brand', `${name}.svg`))}`;
   const img = (name: string, s: number): string => `<img src="${src(name)}" width="${s}" height="${s}" alt="" loading="lazy" decoding="async">`;
   const stage = (dark: boolean): string => {
-    const file = dark ? v.dark : v.light;
-    const small = v.small || file;
+    const file = `cloud-${v.key}${dark ? '-dark' : ''}`;
+    const small = `cloud-${v.key}-favicon`;
     const label = dark ? T('Dark', '深色') : T('Light', '浅色');
     const sizes = [16, 32, 64, 180].map((s) => `<figure>${img(s <= 32 ? small : file, s)}<figcaption>${s}px</figcaption></figure>`).join('');
     return `<div class="stage${dark ? ' dark' : ''}"><span class="stage-l">${label}</span>
 <div class="mk-row" role="group" ${alBi({ en: `Variant ${L}, ${dark ? 'dark' : 'light'}: the icon at 16, 32, 64 and 180 pixels`, zh: `方案 ${L}${dark ? '深色' : '浅色'}：16、32、64、180 像素的图标` })}>${sizes}</div>
 <div class="mk-row"><figure class="appicon">${img(file, 96)}<figcaption>${T('App icon', '应用图标')}</figcaption></figure></div></div>`;
   };
-  return `<article class="card dir" id="variant-${v.key}"><div class="dir-h"><span class="dir-l" aria-hidden="true">${L}</span><div><h3>${T(`Variant ${L}: ${v.name}`, `方案 ${L}：${v.name}`)}</h3><p class="sub" style="margin:2px 0 0">${T(v.idea[0], v.idea[1])}</p></div>${v.key === 'a' ? `<span class="chip ok" style="margin-left:auto">${ic('check')}${T('Designer’s recommendation', '设计师推荐')}</span>` : ''}</div>
+  return `<article class="card dir" id="variant-${v.key}"><div class="dir-h"><span class="dir-l" aria-hidden="true">${L}</span><div><h3>${T(`Variant ${L}: ${v.name}`, `方案 ${L}：${v.name}`)}</h3><p class="sub" style="margin:2px 0 0">${T(v.idea[0], v.idea[1])}</p></div>${v.key === 'c' ? `<span class="chip ok" style="margin-left:auto">${ic('check')}${T('Designer’s recommendation', '设计师推荐')}</span>` : ''}</div>
 <div class="stages">${stage(false)}${stage(true)}</div>
 <p style="margin:20px 0 0;text-wrap:pretty">${T(v.rationale[0], v.rationale[1])}</p>
 <dl class="dl" style="margin-top:16px"><dt>${T('Best for', '适用于')}</dt><dd>${T(v.use[0], v.use[1])}</dd></dl></article>`;
 }
 
-/** Before and after: the header logo as it is today next to the recommended refinement, at the sizes the header and the favicon use. */
+/** Before and after: the header logo as it is today next to each variant, at the sizes the header and the favicon use. */
 function beforeAfter(assets: Assets): string {
-  const after = (s: number): string => `<img src="../../${assets.file(repoPath('design/brand', s <= 32 ? 'cloud-a-favicon.svg' : 'cloud-a.svg'))}" width="${s}" height="${s}" alt="" loading="lazy" decoding="async">`;
+  const after = (key: Variant['key'], dark: boolean) => (s: number): string => `<img src="../../${assets.file(repoPath('design/brand', `cloud-${key}${s <= 32 ? '-favicon' : dark ? '-dark' : ''}.svg`))}" width="${s}" height="${s}" alt="" loading="lazy" decoding="async">`;
   const row = (inner: (s: number) => string): string => [28, 64, 128].map((s) => `<figure>${inner(s)}<figcaption>${s}px</figcaption></figure>`).join('');
   const now = (s: number): string => `<span class="logo-now" style="width:${s}px;height:${s}px">${LOGO}</span>`;
   const pair = (dark: boolean): string =>
-    `<div class="stage${dark ? ' dark' : ''}"><span class="stage-l">${dark ? T('Dark', '深色') : T('Light', '浅色')}</span><div class="mk-row"><div class="ba"><b class="ba-t">${T('Today', '现在')}</b><div class="mk-row">${row(now)}</div></div><div class="ba"><b class="ba-t">${T('Variant A', '方案 A')}</b><div class="mk-row">${row(after)}</div></div></div></div>`;
+    `<div class="stage${dark ? ' dark' : ''}"><span class="stage-l">${dark ? T('Dark', '深色') : T('Light', '浅色')}</span><div class="mk-row"><div class="ba"><b class="ba-t">${T('Today', '现在')}</b><div class="mk-row">${row(now)}</div></div>${VARIANTS.map((v) => `<div class="ba"><b class="ba-t">${T(`Variant ${v.key.toUpperCase()}`, `方案 ${v.key.toUpperCase()}`)}</b><div class="mk-row">${row(after(v.key, dark))}</div></div>`).join('')}</div></div>`;
   return `<section class="sec"><div class="sec-h"><h2 class="title">${T('Before and after', '改前与改后')}</h2></div><div class="stages">${pair(false)}${pair(true)}</div></section>`;
 }
 
 export function brandPage(site: Site, assets: Assets): Rendered {
-  const intro = `<p class="sub" style="margin:0 0 16px;max-width:640px">${T('Choose A for variant A (Sky), or B for variant B (Porcelain). If you want something else, say so in the issue body and the designer will adjust.', '点“选 A”是方案 A（Sky），点“选 B”是方案 B（Porcelain）。如果两个都不合适，在议题正文里写明想怎么改，设计师会调整。')}</p>`;
-  const main = `<main id="main" class="wrap">${head(T('Your cloud icon, refined', '把你的云图标打磨一下'), T('You asked for the report site’s cloud to feel more like Apple design and more elegant. Here are two refinements, each at the sizes it will really be used, in light and dark.', '你希望报告网站的云图标更有 Apple 的味道、更优雅。这里是两个打磨方案，按实际使用的尺寸展示，浅色与深色各一份。'))}
-<div style="max-width:720px">${callout('info', { en: 'The designer recommends A, Sky', zh: '设计师推荐 A：Sky' }, { en: 'It is the icon you said you like, with a more refined finish. B is quieter but less recognisable. Nothing is applied to the product until you choose; the report site keeps today’s logo meanwhile.', zh: '这就是你说喜欢的那个图标，只是质感更讲究。B 更安静，但辨识度较低。你选定之前，产品里不会改动任何地方；报告网站暂时仍用现在的标志。' })}</div>
+  const intro = `<p class="sub" style="margin:0 0 16px;max-width:640px">${T('Approve means “I choose the variant named in my note”: write C or D in the issue note. Deny: say in the note what to change and the designer will adjust.', '批准表示“我选备注里写的那个方案”：请在议题备注里写 C 或 D。拒绝：在备注里写明想怎么改，设计师会调整。')}</p>`;
+  const main = `<main id="main" class="wrap">${head(T('Your cloud icon, refined', '把你的云图标打磨一下'), T('You asked for an icon in the style of Apple’s SF Symbols that says “a cloud drive at home”. Here are two new directions, each at the sizes it will really be used, in light and dark.', '你希望图标采用 Apple SF Symbols 的风格，并且能表达“家里的网盘”。这里是两个新方向，按实际使用的尺寸展示，浅色与深色各一份。'))}
+<div style="max-width:720px">${callout('info', { en: 'The designer recommends C, Hearth', zh: '设计师推荐 C：Hearth' }, { en: 'Use C at large sizes (logo, sign-in screen): it is the more explicit picture, a house inside the cloud. D, Roofline, is better at 16px, so it is the pick if one mark must serve every size. Nothing is applied to the product until you choose; the report site keeps today’s logo meanwhile.', zh: '大尺寸（标志、登录界面）用 C：它的画面更直白，云里有一座房子。D（Roofline）在 16px 时更清楚，如果只能用一个图标应付所有尺寸，就选 D。你选定之前，产品里不会改动任何地方；报告网站暂时仍用现在的标志。' })}</div>
 ${beforeAfter(assets)}
 <div class="stack" style="margin-top:32px">${VARIANTS.map((v) => variantCard(v, assets)).join('')}</div>
 <p class="small" style="margin-top:16px;max-width:640px">${T('The tiles here are the site-logo version. For a system app icon the artwork is delivered as a full square and the system rounds it. Product name stays “Cloud Home” in every language.', '这里的底是网站标志版本。系统应用图标会提供完整的方形图稿，由系统自己裁圆角。产品名在所有语言里都是 “Cloud Home”。')}</p>
-${answer(site, 'A-003', intro)}</main>`;
+${answer(site, 'A-004', intro)}</main>`;
   return { page: { path: '/decisions/brand/', nav: 'decisions', title: { en: 'Cloud icon', zh: '云图标' } }, main };
 }
 

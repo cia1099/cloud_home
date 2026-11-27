@@ -36,9 +36,6 @@ test('accept carries the id, the visible title and an optional note', () => {
 });
 
 test('decisions', () => {
-  const pick = decode(decisionUrl('A-003', 'Cloud icon', 'choose B'));
-  expect(pick.title).toBe('[DECISION A-003] choose B');
-  expect(pick.body).toContain('A-003: Cloud icon');
   expect(decode(decisionUrl('A-003', 'Tag v0.3.1', 'approve')).title).toBe('[DECISION A-003] approve');
   const deny = decode(decisionUrl('A-003', 'Tag v0.3.1', 'deny'));
   expect(deny.title).toBe('[DECISION A-003] deny');

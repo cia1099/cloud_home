@@ -6,10 +6,6 @@ export interface Approval {
   state: 'pending' | 'approved' | 'denied';
   title: Bi;
   requested?: string;
-  /** Named answers (`- Options: A, B`); absent for a plain approve/deny request. */
-  options?: string[];
-  /** What happens for each option (`- If A: …`). */
-  ifOptions?: Record<string, Bi>;
   fields: { what?: Bi; why?: Bi; risk?: Bi; ifApproved?: Bi; ifDenied?: Bi; note?: Bi };
 }
 
@@ -27,7 +23,6 @@ const FIELD: Record<string, keyof Approval['fields']> = {
  * plan/APPROVALS.md, section "## Requests":
  *   ### A-003 [ ] English title — 2026-12-02 — requested by manager
  *   - What: ...   - Why: ...   - Risk: ...   - If approved: ...   If denied: ...   - Owner note: ...
- * A request with named answers adds `- Options: A, B` and uses `- If A: ...   If B: ...` instead of If approved / If denied.
  * Optional Chinese lines use the same keys with a "zh " prefix ("- zh title:", "- zh What:", ...).
  * Heading marks: [ ] pending, [x] approved, [!] denied. Fenced code blocks are ignored.
  */
@@ -42,15 +37,6 @@ export function parseApprovals(text: string): Approval[] {
     for (const [k, f] of Object.entries(FIELD)) {
       const e = en[k];
       if (e) a.fields[f] = { en: e, zh: zh[k] ?? e };
-    }
-    const options = en['options']?.split(',').map((o) => o.trim()).filter(Boolean);
-    if (options?.length) {
-      a.options = options;
-      a.ifOptions = {};
-      for (const o of options) {
-        const e = en[`if ${o.toLowerCase()}`];
-        if (e) a.ifOptions[o] = { en: e, zh: zh[`if ${o.toLowerCase()}`] ?? e };
-      }
     }
     a.title = { en: a.title.en, zh: cur.zhTitle ?? a.title.en };
     out.push(a);

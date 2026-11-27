@@ -19,7 +19,7 @@ bun run build:examples # builds examples/ (sample reports of every component) in
 - Every asset has a content hash in its name: the bundle (`assets/main-<hash>.js|css`) and every report media file (`assets/media/<name>-<hash>.<ext>`). Limits: 10 MB per file, 25 MB per report; the build fails otherwise.
 - English and 简体中文 are both in the HTML (`<span lang="en">` / `<span lang="zh-Hans">`); the choice is stored in `localStorage` and applied before first paint. aria-labels and alt texts carry `data-al-en` / `data-al-zh`. All UI strings come from one table, `src/shared/i18n.ts`.
 - The build fails if any output contains what `scripts/deploy_report.sh` refuses, `/Users/`, or an e-mail address.
-- Request buttons are plain links to pre-filled GitHub issues (`src/shared/issue.ts`, tested): `[ADD] `, `[CHG R-012] <title>`, `[DEL R-012] <title>`, `[OK R-012] <title>` (Accept, only on requirements in `review`), `[Q] `, `[DECISION A-003] approve|deny|choose X` (`choose X` for requests with `- Options:`).
+- Request buttons are plain links to pre-filled GitHub issues (`src/shared/issue.ts`, tested): `[ADD] `, `[CHG R-012] <title>`, `[DEL R-012] <title>`, `[OK R-012] <title>` (Accept, only on requirements in `review`), `[Q] `, `[DECISION A-003] approve|deny`.
 
 ## Data the manager maintains
 
@@ -46,7 +46,7 @@ Chinese titles and blocked reasons live in `content/requirements.zh.json` (`{"R-
 `tone`: `ok|accent|warn`. Roles: `manager|backend|frontend|designer|tester`; a role without an entry shows "No update recorded yet." `state`: `ok|warn|neutral`. `built_before_plan` keys are area keys from `content/areas.json`.
 
 ### `plan/APPROVALS.md`
-Under `## Requests` (fenced blocks are ignored): `### A-003 [ ] English title — 2026-12-02 — requested by manager`, `[ ]` pending, `[x]` approved, `[!]` denied. Bullets `- What:`, `- Why:`, `- Risk:`, `- If approved: …   If denied: …`, `- Owner note:`. Optional `- Options: A, B` turns the Approve/Deny buttons into one *Choose X* button per option, with `- If A: …   If B: …` in place of the If approved/denied line. Chinese: the same keys with a `zh ` prefix (`- zh title:`, `- zh What:`); missing ones fall back to English.
+Under `## Requests` (fenced blocks are ignored): `### A-003 [ ] English title — 2026-12-02 — requested by manager`, `[ ]` pending, `[x]` approved, `[!]` denied. Bullets `- What:`, `- Why:`, `- Risk:`, `- If approved: …   If denied: …`, `- Owner note:`. Chinese: the same keys with a `zh ` prefix (`- zh title:`, `- zh What:`); missing ones fall back to English.
 
 ### `plan/burndown.csv`
 ```
