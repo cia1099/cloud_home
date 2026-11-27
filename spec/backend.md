@@ -79,7 +79,8 @@ cloud_home/
 │   ├── 20240101000004_create_trash.sql
 │   ├── 20240101000005_create_shares.sql
 │   ├── …                                 # 0006–0008（索引、媒体 MIME、账户审批）
-│   └── 20240101000009_add_admin_chat.sql # 管理员聊天：身份 / 配对码 / 按钮令牌 / 发送队列
+│   ├── 20240101000009_add_admin_chat.sql # 管理员聊天：身份 / 配对码 / 按钮令牌 / 发送队列
+│   └── 20240101000010_add_share_recipients.sql # 站内定向分享的收件人
 └── src/
     ├── main.rs           # 入口：组装 AppState、启动服务和 trash_cleaner 任务
     ├── config.rs         # 从 .env 加载的配置结构体
@@ -492,9 +493,24 @@ LIMIT ? OFFSET ?
 
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
-| POST   | /shares          | JWT | 创建分享链接（body: `{ "file_id", "can_download", "expires_at" }`） |
-| GET    | /shares          | JWT | 列出自己创建的所有分享链接 |
-| DELETE | /shares/:id      | JWT | 撤销分享链接（设 is_active=0） |
+| POST   | /shares          | JWT | 创建分享（body: `{ "file_id", "can_download", "expires_at", "recipient_ids" }`）。`recipient_ids` 省略或为空 = 公开链接；非空 = 站内定向分享（见下） |
+| GET    | /shares          | JWT | 列出自己创建的所有分享；每条带 `recipients: [{id, display_name}]`，定向分享的 `token`/`url` 为 null |
+| PATCH  | /shares/:id      | JWT | 整组替换定向分享的收件人（body: `{ "recipient_ids": [...] }`，不能为空，也不能用于公开链接）；新增者收 SSE `share.received`，移除者收 `share.revoked` |
+| DELETE | /shares/:id      | JWT | 撤销分享（设 is_active=0）；收件人收 SSE `share.revoked`，其列表立即不再包含它 |
+| GET    | /shares/received | JWT | 分享给我的项目，最新在前；已撤销、已过期、文件已入回收站的不返回。每项：`id`, `file_id`, `name`, `file_type`, `mime_type`, `size_bytes`, `child_count`（仅资料夹）, `owner {id, display_name}`, `created_at`, `expires_at`, `can_download`, `seen_at`（null = 未读） |
+| POST   | /shares/:id/seen | JWT | 收件人标记已读，`seen_at` 只记第一次；非收件人 404 |
+| GET    | /shares/received/:id/files?parent_id= | JWT | 列出被分享资料夹（省略 `parent_id`）或其子资料夹的内容，只读 |
+| GET    | /shares/received/:id/files/:file_id            | JWT | 被分享项目或其后代的元数据 |
+| GET    | /shares/received/:id/files/:file_id/raw        | JWT | 内联预览/播放，支持 Range |
+| GET    | /shares/received/:id/files/:file_id/thumbnail  | JWT | 图片缩略图 |
+| GET    | /shares/received/:id/files/:file_id/download   | JWT | 强制另存，支持 Range；分享 `can_download=false` 时 403 |
+| GET    | /users/directory | JWT | 人员目录：除自己外已批准、启用账户的 `id` + `display_name`，不含邮箱/手机/管理员标记 |
+
+**站内定向分享（R-071）：** 表 `share_recipients(share_id, user_id, created_at, seen_at)`（主键 `(share_id, user_id)`，随分享或用户删除级联），迁移 `20240101000010_add_share_recipients.sql`。有收件人行的分享只能由这些账户凭登录会话访问：`/public/shares/:token` 对它一律 404（`resolve_public` 排除有收件人的分享；数据库里仍有随机 token，但从不返回）。创建时每个 `recipient_ids` 必须是已批准、启用、未删除且不是分享者本人的账户，任一不合格整体 `400`（不透露是哪一个）。
+
+收件人访问是只读的，且由 `share_service::resolve_received` 统一把关：调用者必须是该分享的收件人、分享 `is_active`、未过期，且请求的 `file_id` 是被分享项目本身或其未删除的后代（沿分享者名下的父链向上必须经过被分享项目）。任何一项不满足一律 `404`（不区分「不存在」与「无权」）。`can_download=false` 时预览/缩略图仍可，`download` 返回 403。物理文件按分享者的目录读取。
+
+SSE（`GET /events/stream`）新增 `share.received` 与 `share.revoked` 事件，载荷 `{ "share_id": "..." }`，只发给对应收件人的连接。未读红点由 `GET /shares/received` 的 `seen_at` 得出。
 
 ### 公开访问（无需认证）
 
@@ -761,8 +777,11 @@ JWT 的 `Claims` 因此新增 `username` 字段（`#[serde(default)]` 兼容改�
 | `trash.restore` | `handlers/trash.rs` | `file_id`, `file_name`, `file_path` |
 | `trash.delete`（永久删除） | 同上 | `trash_id`, `freed_bytes` |
 | `trash.empty` | 同上 | `count`, `freed_bytes` |
-| `share.create` | `handlers/shares.rs` | `share_id`, `file_id`, `share_token_prefix`, `expires_at`, `can_download` |
-| `share.revoke` | 同上 | `share_id` |
+| `share.create` | `handlers/shares.rs` | `share_id`, `file_id`, `share_token_prefix`（定向分享为空）, `recipient_count`, `expires_at`, `can_download` |
+| `share.update` | 同上 | `share_id`, `added_count`, `removed_count` |
+| `share.revoke` | 同上 | `share_id`, `recipient_count` |
+| `share.received_view`（收件人，span 带其 `user_id`） | 同上 | `share_id`, `owner_id`, `file_id`, `what`（`list`/`metadata`/`raw`/`thumbnail`） |
+| `share.received_download` | 同上 | `share_id`, `owner_id`, `file_id`, `size_bytes`；失败 `reason="download_disabled"` |
 | `public.share_view` | `handlers/public.rs`（访问者匿名） | `share_token_prefix`, `owner_id`, `file_id` + span 的 `client_ip` |
 | `public.share_download` | 同上 | 同上 + `size_bytes`；失败 `reason="download_disabled"` |
 | `drive.attached` / `drive.detached` | `tasks/drive_monitor.rs` | `mount` |
