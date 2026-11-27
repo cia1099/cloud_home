@@ -5,12 +5,14 @@
 //! - `pairing`：一次性配对码与管理员身份；
 //! - `outbox`：待发送队列（指数退避重试）、突发合并、每日提醒、决定后编辑原消息；
 //! - `dispatch`：处理指令与按钮点击；
-//! - `admin_ops`：运维指令（`/users /status /delete /restore /purge`）与破坏性操作的确认。
+//! - `admin_ops`：运维指令（`/users /status /delete /restore /purge`）与破坏性操作的确认；
+//! - `alerts`：系统告警（新版本 + 安装按钮、数据盘插拔、空间不足、管理口令反复失败），带开关与限流。
 //!
 //! 审批本身永远走 `approval_service::decide`，与 `/admin/*` 端点权限、审计一致。
 //! 聊天不可用不影响注册与审批：申请照常 pending，消息留在队列里等恢复。
 
 mod admin_ops;
+mod alerts;
 mod dispatch;
 #[cfg(test)]
 mod flow_tests;
@@ -29,7 +31,7 @@ use sha2::{Digest, Sha256};
 use tokio::sync::Notify;
 use tokio_util::sync::CancellationToken;
 
-use crate::config::{ChatConfig, ChatProviderKind};
+use crate::config::{AlertConfig, ChatConfig, ChatProviderKind};
 use crate::db::Db;
 use crate::drive::DriveManager;
 use crate::error::AppResult;
@@ -51,6 +53,8 @@ pub struct AdminEnv {
     pub drive_manager: DriveManager,
     pub events: ChangeNotifier,
     pub trash_retention_days: i64,
+    /// 告警里「安装」按钮走的更新器（与 `/admin/update/install` 是同一个）。
+    pub updater: crate::update::Updater,
 }
 
 /// 聊天服务句柄，可廉价克隆；`CHAT_PROVIDER=none` 时所有操作都是空操作。
@@ -68,6 +72,8 @@ struct Inner {
     provider: Option<Arc<dyn ChatProvider>>,
     texts: Texts,
     mask_identifiers: bool,
+    alerts: AlertConfig,
+    alert_state: Mutex<alerts::AlertState>,
     /// 最近一次拉取更新是否成功。
     connected: AtomicBool,
     /// 有新消息入队时唤醒发送循环。
@@ -105,6 +111,8 @@ impl ChatService {
                 provider,
                 texts: Texts(cfg.language),
                 mask_identifiers: cfg.mask_identifiers,
+                alerts: cfg.alerts,
+                alert_state: Mutex::new(alerts::AlertState::new()),
                 connected: AtomicBool::new(false),
                 wake: Notify::new(),
                 pair_failures: Mutex::new(RateLimiter::new(Duration::from_secs(600))),
@@ -158,6 +166,8 @@ impl ChatService {
                 }
             }
         });
+
+        alerts::spawn_watchers(self, shutdown.clone());
 
         let svc = self.clone();
         tokio::spawn(async move {
@@ -221,6 +231,15 @@ impl RateLimiter {
         let v = self.hits.entry(key.to_string()).or_default();
         v.retain(|t| now.duration_since(*t) < window);
         v.len() < max
+    }
+
+    /// 窗口内已记录的次数。
+    fn count(&mut self, key: &str) -> usize {
+        let now = Instant::now();
+        let window = self.window;
+        let v = self.hits.entry(key.to_string()).or_default();
+        v.retain(|t| now.duration_since(*t) < window);
+        v.len()
     }
 
     fn record(&mut self, key: &str) {

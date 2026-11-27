@@ -36,6 +36,7 @@ async fn harness(kind: ChatProviderKind) -> Harness {
         bot_token: None,
         language: ChatLanguage::En,
         mask_identifiers: true,
+        alerts: crate::config::AlertConfig::default(),
     };
     let config = Arc::new(Config {
         server_host: "127.0.0.1".into(),
@@ -94,6 +95,7 @@ async fn harness(kind: ChatProviderKind) -> Harness {
             drive_manager: drive_manager.clone(),
             events: events.clone(),
             trash_retention_days: 7,
+            updater: updater.clone(),
         },
     );
     let state = AppState {

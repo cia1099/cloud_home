@@ -49,15 +49,17 @@ impl FromRequestParts<AppState> for AdminGuard {
             &parts.extensions,
             state.config.trust_proxy_headers,
         );
+        let client = ip.map(|i| i.to_string()).unwrap_or_else(|| "unknown".into());
         if !ip.map(is_local).unwrap_or(false) {
             crate::audit!(
                 warn,
                 "admin.auth",
                 "failure",
                 reason = "remote_caller",
-                client_ip = %ip.map(|i| i.to_string()).unwrap_or_else(|| "unknown".into()),
+                client_ip = %client,
                 "管理端点拒绝非本地调用"
             );
+            state.chat.note_admin_auth_failure(&client).await;
             return Err(AppError::ForbiddenReason(
                 "管理端点仅允许本机或内网调用".into(),
             ));
@@ -75,6 +77,7 @@ impl FromRequestParts<AppState> for AdminGuard {
                 reason = "missing_admin_password",
                 "管理端点缺少口令"
             );
+            state.chat.note_admin_auth_failure(&client).await;
             return Err(AppError::Unauthorized);
         };
         if !constant_time_eq(supplied.as_bytes(), expected.as_bytes()) {
@@ -85,6 +88,7 @@ impl FromRequestParts<AppState> for AdminGuard {
                 reason = "bad_admin_password",
                 "管理端点口令错误"
             );
+            state.chat.note_admin_auth_failure(&client).await;
             return Err(AppError::Unauthorized);
         }
 

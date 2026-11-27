@@ -4,16 +4,22 @@ use std::io;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use tokio_util::sync::CancellationToken;
+
 use super::{AdminEnv, ChatService};
 use super::provider::{FakeProvider, MessageRef, Sender, Update};
 use crate::config::{
-    ChatConfig, ChatLanguage, ChatProviderKind, RegistrationMode, RegistrationPolicy,
+    AlertConfig, ChatConfig, ChatLanguage, ChatProviderKind, Config, RegistrationMode,
+    RegistrationPolicy,
 };
 use crate::db::{Db, test_pool};
 use crate::drive::{DriveManager, path_resolver};
-use crate::events::ChangeNotifier;
+use crate::events::{ChangeEvent, ChangeNotifier};
+use crate::lifecycle::ActivityTracker;
 use crate::models::user::User;
 use crate::services::user_service::{self, NewAccount, RegisterSource};
+use crate::update::Updater;
+use crate::update::settings::{Channel, Mode};
 
 struct H {
     svc: ChatService,
@@ -24,12 +30,70 @@ struct H {
     mount: PathBuf,
 }
 
+/// 测试用更新器；`managed` 时在临时安装根里造 `current` 符号链接，让它认为自己受管。
+fn test_updater(db: &Db, drive_manager: &DriveManager, managed: bool) -> Updater {
+    let root = std::env::temp_dir().join(format!("ch-chat-upd-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(root.join("versions/0.0.0")).unwrap();
+    if managed {
+        std::os::unix::fs::symlink(root.join("versions/0.0.0"), root.join("current")).unwrap();
+    }
+    let config = Arc::new(Config {
+        server_host: "127.0.0.1".into(),
+        server_port: 0,
+        volumes_watch_path: PathBuf::from("/nonexistent"),
+        drive_data_dir: "d".into(),
+        jwt_secret: "s".into(),
+        jwt_expires_in_hours: 1,
+        max_upload_size_mb: 1,
+        trash_retention_days: 7,
+        trash_cleanup_interval_hours: 1,
+        cors_allowed_origins: vec![],
+        public_base_url: "http://localhost".into(),
+        log_dir: root.clone(),
+        log_format: "pretty".into(),
+        log_file_enabled: false,
+        log_max_size_mb: 1,
+        trust_proxy_headers: false,
+        admin_password: None,
+        oauth_enabled: false,
+        update_mode: Mode::Manual,
+        update_window: "03:00-05:00".into(),
+        update_channel: Channel::Stable,
+        update_check_interval_hours: 6,
+        update_root: root,
+        update_base_url: None,
+        registration: RegistrationPolicy {
+            mode: RegistrationMode::Approval,
+            rate_per_ip_per_hour: 5,
+            pending_max: 20,
+            pending_expire_days: 14,
+        },
+        chat: ChatConfig {
+            provider: ChatProviderKind::None,
+            bot_token: None,
+            language: ChatLanguage::En,
+            mask_identifiers: true,
+            alerts: AlertConfig::default(),
+        },
+    });
+    Updater::new(
+        config,
+        db.clone(),
+        drive_manager.clone(),
+        ActivityTracker::new(),
+        CancellationToken::new(),
+        ChangeNotifier::new(),
+    )
+    .unwrap()
+}
+
 /// 聊天运维指令的依赖：接一个临时目录当数据盘。
-async fn admin_env() -> (AdminEnv, PathBuf) {
+async fn admin_env(db: &Db, managed: bool) -> (AdminEnv, PathBuf) {
     let mount = std::env::temp_dir().join(format!("ch-chat-{}", uuid::Uuid::new_v4()));
     let drive_manager = DriveManager::new("d");
     drive_manager.set_active(Some(mount.clone())).await;
     let env = AdminEnv {
+        updater: test_updater(db, &drive_manager, managed),
         drive_manager,
         events: ChangeNotifier::new(),
         trash_retention_days: 7,
@@ -38,6 +102,10 @@ async fn admin_env() -> (AdminEnv, PathBuf) {
 }
 
 async fn harness() -> H {
+    harness_with(AlertConfig::default(), false).await
+}
+
+async fn harness_with(alerts: AlertConfig, managed: bool) -> H {
     let db = test_pool().await;
     let fake = Arc::new(FakeProvider::default());
     let cfg = ChatConfig {
@@ -45,8 +113,9 @@ async fn harness() -> H {
         bot_token: None,
         language: ChatLanguage::En,
         mask_identifiers: true,
+        alerts,
     };
-    let (env, mount) = admin_env().await;
+    let (env, mount) = admin_env(&db, managed).await;
     let drive = env.drive_manager.clone();
     let svc = ChatService::new(db.clone(), &cfg, Some(fake.clone()), env);
     H {
@@ -546,8 +615,9 @@ async fn pairing_is_unavailable_when_provider_is_none() {
         bot_token: None,
         language: ChatLanguage::En,
         mask_identifiers: true,
+        alerts: AlertConfig::default(),
     };
-    let svc = ChatService::new(db, &cfg, None, admin_env().await.0);
+    let svc = ChatService::new(db.clone(), &cfg, None, admin_env(&db, false).await.0);
     assert!(svc.create_pairing_code().await.is_err());
     let s = svc.status().await.unwrap();
     assert_eq!((s.provider.as_str(), s.connected), ("none", false));
@@ -589,8 +659,9 @@ async fn unmasked_when_configured() {
         bot_token: None,
         language: ChatLanguage::ZhHans,
         mask_identifiers: false,
+        alerts: AlertConfig::default(),
     };
-    let (env, mount) = admin_env().await;
+    let (env, mount) = admin_env(&db, false).await;
     let drive = env.drive_manager.clone();
     let h = H {
         svc: ChatService::new(db.clone(), &cfg, Some(fake.clone()), env),
@@ -1052,4 +1123,227 @@ fn capture_logs() -> LogCapture {
     });
     LOG_BUF.with(|buf| buf.borrow_mut().clear());
     LogCapture
+}
+
+// ---- 系统告警（R-065） ----
+
+/// 最近一条带按钮的消息上唯一按钮的令牌（告警里的「立即安装」）。
+fn install_token(h: &H, chat: &str) -> String {
+    let sent = h.fake.sent();
+    let (_, m, _) = sent
+        .iter()
+        .rev()
+        .find(|(c, m, _)| c == chat && !m.buttons.is_empty())
+        .expect("应收到带按钮的告警");
+    m.buttons[0].token.clone()
+}
+
+fn all_off() -> AlertConfig {
+    AlertConfig {
+        update: false,
+        drive: false,
+        disk: false,
+        admin_auth: false,
+        disk_free_percent: 10,
+    }
+}
+
+#[tokio::test]
+async fn update_alert_has_install_button_and_is_sent_once_per_version() {
+    let h = harness_with(AlertConfig::default(), true).await;
+    pair(&h, "1").await;
+    let before = h.fake.sent().len();
+
+    h.svc
+        .on_event(ChangeEvent::UpdateAvailable("99.0.0".into()))
+        .await;
+    let sent = h.fake.sent();
+    assert_eq!(sent.len(), before + 1);
+    let msg = &sent.last().unwrap().1;
+    assert!(msg.text.contains("99.0.0"), "{}", msg.text);
+    assert_eq!(msg.buttons.len(), 1);
+
+    // 同一版本再次发现（例如重复检查）不会再提醒；新版本会。
+    h.svc
+        .on_event(ChangeEvent::UpdateAvailable("99.0.0".into()))
+        .await;
+    assert_eq!(h.fake.sent().len(), before + 1);
+    h.svc
+        .on_event(ChangeEvent::UpdateAvailable("99.0.1".into()))
+        .await;
+    assert_eq!(h.fake.sent().len(), before + 2);
+}
+
+#[tokio::test]
+async fn tapping_install_starts_the_update_once_and_rejects_replay_and_other_admins() {
+    let h = harness_with(AlertConfig::default(), true).await;
+    pair(&h, "1").await;
+    pair(&h, "2").await;
+    h.svc.inner.env.updater.seed_available_for_test("99.0.0");
+
+    h.svc
+        .on_event(ChangeEvent::UpdateAvailable("99.0.0".into()))
+        .await;
+    let token_1 = install_token(&h, "1");
+
+    // 别的管理员用不了这个令牌：按钮令牌绑定发起它的管理员。
+    h.svc.handle_update(press("2", &token_1)).await;
+    assert!(last_text(&h).contains("no longer valid"), "{}", last_text(&h));
+
+    h.svc.handle_update(press("1", &token_1)).await;
+    assert!(
+        last_text(&h).contains("Installing 99.0.0"),
+        "{}",
+        last_text(&h)
+    );
+
+    // 令牌单次有效。
+    h.svc.handle_update(press("1", &token_1)).await;
+    assert!(last_text(&h).contains("no longer valid"), "{}", last_text(&h));
+}
+
+#[tokio::test]
+async fn install_button_refuses_when_the_offered_version_changed() {
+    let h = harness_with(AlertConfig::default(), true).await;
+    pair(&h, "1").await;
+    h.svc.inner.env.updater.seed_available_for_test("99.0.0");
+    h.svc
+        .on_event(ChangeEvent::UpdateAvailable("99.0.0".into()))
+        .await;
+    let token = install_token(&h, "1");
+
+    h.svc.inner.env.updater.seed_available_for_test("99.0.1");
+    h.svc.handle_update(press("1", &token)).await;
+    assert!(
+        last_text(&h).contains("no longer the one on offer"),
+        "{}",
+        last_text(&h)
+    );
+}
+
+#[tokio::test]
+async fn install_button_explains_when_updates_are_disabled() {
+    let h = harness_with(AlertConfig::default(), false).await;
+    pair(&h, "1").await;
+    h.svc.inner.env.updater.seed_available_for_test("99.0.0");
+    h.svc
+        .on_event(ChangeEvent::UpdateAvailable("99.0.0".into()))
+        .await;
+    let token = install_token(&h, "1");
+    h.svc.handle_update(press("1", &token)).await;
+    assert!(last_text(&h).contains("disabled"), "{}", last_text(&h));
+}
+
+#[tokio::test]
+async fn drive_alerts_say_unplugged_and_plugged_and_are_rate_limited() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    let before = h.fake.sent().len();
+
+    h.svc.alert_drive(false).await;
+    assert!(last_text(&h).contains("unplugged"), "{}", last_text(&h));
+    h.svc.alert_drive(true).await;
+    assert!(last_text(&h).contains("is back"), "{}", last_text(&h));
+
+    // 接触不良反复抖动：窗口内最多 6 条。
+    for _ in 0..20 {
+        h.svc.alert_drive(false).await;
+    }
+    assert_eq!(h.fake.sent().len() - before, 6);
+}
+
+#[tokio::test]
+async fn drive_alert_still_reaches_admins_when_the_database_is_gone() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    // 先发一条，让名单进入内存缓存（线上由启动时的预读完成）。
+    h.svc.alert_drive(true).await;
+    let before = h.fake.sent().len();
+
+    h.db.close().await;
+    h.svc.alert_drive(false).await;
+    assert_eq!(h.fake.sent().len(), before + 1);
+    assert!(last_text(&h).contains("unplugged"));
+}
+
+#[tokio::test]
+async fn low_disk_alert_fires_below_threshold_once_per_cooldown() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    let before = h.fake.sent().len();
+
+    // 剩余 50%：不告警。
+    h.svc.alert_disk(100 << 30, 50 << 30).await;
+    assert_eq!(h.fake.sent().len(), before);
+
+    // 剩余 5%：告警一次，之后冷却期内不重复。
+    h.svc.alert_disk(100 << 30, 5 << 30).await;
+    assert_eq!(h.fake.sent().len(), before + 1);
+    assert!(last_text(&h).contains("5% free"), "{}", last_text(&h));
+    h.svc.alert_disk(100 << 30, 4 << 30).await;
+    assert_eq!(h.fake.sent().len(), before + 1);
+}
+
+#[tokio::test]
+async fn repeated_admin_auth_failures_alert_once_after_the_threshold() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    let before = h.fake.sent().len();
+
+    for _ in 0..4 {
+        h.svc.note_admin_auth_failure("203.0.113.9").await;
+    }
+    assert_eq!(h.fake.sent().len(), before, "未到阈值不应提醒");
+
+    h.svc.note_admin_auth_failure("203.0.113.9").await;
+    assert_eq!(h.fake.sent().len(), before + 1);
+    let t = last_text(&h);
+    assert!(t.contains("5 failed") && t.contains("203.0.113.9"), "{t}");
+
+    // 提醒之后继续失败也不再刷屏。
+    for _ in 0..30 {
+        h.svc.note_admin_auth_failure("203.0.113.9").await;
+    }
+    assert_eq!(h.fake.sent().len(), before + 1);
+}
+
+#[tokio::test]
+async fn each_alert_type_can_be_switched_off() {
+    let h = harness_with(all_off(), true).await;
+    pair(&h, "1").await;
+    h.svc.inner.env.updater.seed_available_for_test("99.0.0");
+    let before = h.fake.sent().len();
+
+    h.svc
+        .on_event(ChangeEvent::UpdateAvailable("99.0.0".into()))
+        .await;
+    h.svc.alert_drive(false).await;
+    h.svc.alert_disk(100 << 30, 1 << 30).await;
+    for _ in 0..10 {
+        h.svc.note_admin_auth_failure("203.0.113.9").await;
+    }
+    assert_eq!(h.fake.sent().len(), before, "全部关闭时不应发任何告警");
+
+    // 只开一类：只有这一类发。
+    let only_drive = AlertConfig {
+        drive: true,
+        ..all_off()
+    };
+    let h = harness_with(only_drive, true).await;
+    pair(&h, "1").await;
+    let before = h.fake.sent().len();
+    h.svc
+        .on_event(ChangeEvent::UpdateAvailable("99.0.0".into()))
+        .await;
+    h.svc.alert_disk(100 << 30, 1 << 30).await;
+    assert_eq!(h.fake.sent().len(), before);
+    h.svc.alert_drive(false).await;
+    assert_eq!(h.fake.sent().len(), before + 1);
+}
+
+#[tokio::test]
+async fn alerts_go_only_to_paired_admins() {
+    let h = harness().await;
+    h.svc.alert_drive(false).await;
+    assert!(h.fake.sent().is_empty(), "没有配对管理员时不发给任何人");
 }

@@ -33,7 +33,7 @@ fn backoff(attempts: i64) -> Duration {
 }
 
 /// 不透明按钮令牌：16 字节 CSPRNG（32 个十六进制字符，适合 Telegram 的 64 字节 callback_data 上限）。
-fn new_token() -> String {
+pub(super) fn new_token() -> String {
     hex::encode(rand::random::<[u8; 16]>())
 }
 

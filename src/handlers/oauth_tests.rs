@@ -37,6 +37,7 @@ async fn app(enabled: bool, mode: RegistrationMode) -> Router {
         bot_token: None,
         language: ChatLanguage::En,
         mask_identifiers: true,
+        alerts: crate::config::AlertConfig::default(),
     };
     let config = Arc::new(Config {
         server_host: "127.0.0.1".into(),
@@ -92,6 +93,7 @@ async fn app(enabled: bool, mode: RegistrationMode) -> Router {
             drive_manager: drive_manager.clone(),
             events: events.clone(),
             trash_retention_days: config.trash_retention_days,
+            updater: updater.clone(),
         },
     )
     .unwrap();

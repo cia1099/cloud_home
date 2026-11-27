@@ -111,6 +111,7 @@ async fn main() -> anyhow::Result<()> {
             drive_manager: drive_manager.clone(),
             events: events.clone(),
             trash_retention_days: config.trash_retention_days,
+            updater: updater.clone(),
         },
     )
     .context("初始化聊天集成失败")?;
@@ -136,7 +137,12 @@ async fn main() -> anyhow::Result<()> {
         events.clone(),
     );
     tasks::pending_expirer::spawn(pool.clone(), config.registration.pending_expire_days);
-    tasks::drive_monitor::spawn(config.clone(), drive_manager.clone(), mount.clone());
+    tasks::drive_monitor::spawn(
+        config.clone(),
+        drive_manager.clone(),
+        mount.clone(),
+        chat.clone(),
+    );
     update::start(&updater);
     chat.spawn(shutdown.clone());
 

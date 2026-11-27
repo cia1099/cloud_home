@@ -10,11 +10,17 @@ use std::time::Duration;
 
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 
+use crate::chat::ChatService;
 use crate::config::Config;
 use crate::drive::{DriveManager, detector};
 
 /// 启动监控任务。`chosen_mount` 为启动时选定的数据盘挂载点。
-pub fn spawn(config: Arc<Config>, drive_manager: DriveManager, chosen_mount: PathBuf) {
+pub fn spawn(
+    config: Arc<Config>,
+    drive_manager: DriveManager,
+    chosen_mount: PathBuf,
+    chat: ChatService,
+) {
     tokio::spawn(async move {
         // notify 回调在独立线程运行，仅用于将“可能有变化”置位，实际判定由轮询完成。
         let dirty = Arc::new(AtomicBool::new(false));
@@ -60,6 +66,7 @@ pub fn spawn(config: Arc<Config>, drive_manager: DriveManager, chosen_mount: Pat
                         "数据盘重新挂载"
                     );
                     drive_manager.set_active(Some(chosen_mount.clone())).await;
+                    notify_drive(&chat, true);
                 } else {
                     crate::audit!(
                         warn,
@@ -69,11 +76,18 @@ pub fn spawn(config: Arc<Config>, drive_manager: DriveManager, chosen_mount: Pat
                         "数据盘已卸载，写操作将返回 503"
                     );
                     drive_manager.set_active(None).await;
+                    notify_drive(&chat, false);
                 }
                 last_available = available;
             }
         }
     });
+}
+
+/// 在独立任务里发聊天告警：盘刚被拔出时数据库读取可能卡住，不能拖住监控循环。
+fn notify_drive(chat: &ChatService, attached: bool) {
+    let chat = chat.clone();
+    tokio::spawn(async move { chat.alert_drive(attached).await });
 }
 
 /// 数据盘是否仍挂载：挂载点存在且其下的数据目录存在。

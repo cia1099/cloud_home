@@ -88,6 +88,50 @@ impl std::str::FromStr for ChatLanguage {
     }
 }
 
+/// 聊天告警开关与阈值（R-065）。四类告警各有独立开关，默认全开。
+#[derive(Debug, Clone, Copy)]
+pub struct AlertConfig {
+    /// 发现新版本（带「安装」按钮）。
+    pub update: bool,
+    /// 数据盘被拔出 / 重新接上。
+    pub drive: bool,
+    /// 数据盘剩余空间过低。
+    pub disk: bool,
+    /// 管理端点口令反复验证失败。
+    pub admin_auth: bool,
+    /// 剩余空间低于该百分比即告警。
+    pub disk_free_percent: u64,
+}
+
+impl Default for AlertConfig {
+    fn default() -> Self {
+        Self {
+            update: true,
+            drive: true,
+            disk: true,
+            admin_auth: true,
+            disk_free_percent: 10,
+        }
+    }
+}
+
+impl AlertConfig {
+    fn from_env() -> anyhow::Result<Self> {
+        let d = Self::default();
+        let disk_free_percent = env_parse("CHAT_ALERT_DISK_FREE_PERCENT", d.disk_free_percent)?;
+        if !(1..=99).contains(&disk_free_percent) {
+            anyhow::bail!("CHAT_ALERT_DISK_FREE_PERCENT 必须在 1..=99 之间");
+        }
+        Ok(Self {
+            update: env_parse("CHAT_ALERT_UPDATE", d.update)?,
+            drive: env_parse("CHAT_ALERT_DRIVE", d.drive)?,
+            disk: env_parse("CHAT_ALERT_DISK", d.disk)?,
+            admin_auth: env_parse("CHAT_ALERT_ADMIN_AUTH", d.admin_auth)?,
+            disk_free_percent,
+        })
+    }
+}
+
 /// 聊天集成配置。机器人令牌是密钥：`Debug` 脱敏，且绝不写日志。
 #[derive(Clone)]
 pub struct ChatConfig {
@@ -96,6 +140,7 @@ pub struct ChatConfig {
     pub language: ChatLanguage,
     /// 发给聊天提供方的邮箱 / 手机号是否打码（默认是）。
     pub mask_identifiers: bool,
+    pub alerts: AlertConfig,
 }
 
 impl std::fmt::Debug for ChatConfig {
@@ -105,6 +150,7 @@ impl std::fmt::Debug for ChatConfig {
             .field("bot_token", &self.bot_token.as_ref().map(|_| "<redacted>"))
             .field("language", &self.language)
             .field("mask_identifiers", &self.mask_identifiers)
+            .field("alerts", &self.alerts)
             .finish()
     }
 }
@@ -124,6 +170,7 @@ impl ChatConfig {
             bot_token,
             language: env_or("CHAT_LANGUAGE", "en").parse()?,
             mask_identifiers: env_parse("CHAT_MASK_IDENTIFIERS", true)?,
+            alerts: AlertConfig::from_env()?,
         })
     }
 }
@@ -305,6 +352,7 @@ mod tests {
             bot_token: Some("123456:SECRET-TOKEN".into()),
             language: ChatLanguage::En,
             mask_identifiers: true,
+            alerts: AlertConfig::default(),
         };
         let shown = format!("{cfg:?}");
         assert!(!shown.contains("SECRET-TOKEN"), "{shown}");

@@ -189,6 +189,12 @@ impl ChatService {
             let _ = provider.ack_button(ack).await;
         }
 
+        // 告警里的「安装更新」按钮与审批按钮共用同一条回调通道，先认前者。
+        if let Some(version) = self.claim_update_token(admin, token).await? {
+            self.install_from_chat(admin, &from.id, &version).await;
+            return Ok(());
+        }
+
         let now = now_rfc3339();
         let claimed: Option<(String, String)> = sqlx::query_as(
             "UPDATE chat_action_tokens SET used_at = ? \

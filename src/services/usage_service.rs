@@ -116,7 +116,7 @@ async fn fetch_owner_totals(db: &Db, owner_id: &str) -> AppResult<(i64, i64, i64
 /// 挂载点所在文件系统的 (总容量, 可用空间)，单位字节。
 ///
 /// `statvfs` 在硬盘刚被拔出但尚未被硬盘监控任务感知时可能阻塞，故置于 `spawn_blocking`。
-async fn statvfs_bytes(mount: &Path) -> AppResult<(i64, i64)> {
+pub(crate) async fn statvfs_bytes(mount: &Path) -> AppResult<(i64, i64)> {
     let mount = mount.to_path_buf();
     tokio::task::spawn_blocking(move || statvfs_bytes_blocking(&mount))
         .await

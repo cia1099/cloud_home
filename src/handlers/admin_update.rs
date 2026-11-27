@@ -258,6 +258,7 @@ mod tests {
                 bot_token: None,
                 language: crate::config::ChatLanguage::En,
                 mask_identifiers: true,
+                alerts: crate::config::AlertConfig::default(),
             },
         });
         let db = crate::db::test_pool().await;
@@ -281,6 +282,7 @@ mod tests {
                 drive_manager: drive_manager.clone(),
                 events: events.clone(),
                 trash_retention_days: config.trash_retention_days,
+                updater: updater.clone(),
             },
         )
         .unwrap();

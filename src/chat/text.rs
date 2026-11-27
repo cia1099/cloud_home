@@ -330,6 +330,84 @@ impl Texts {
         )
     }
 
+    // ---- 告警（R-065） ----
+
+    pub fn install_button(self) -> String {
+        self.pick("Install now".into(), "立即安装".into(), "立即安裝".into())
+    }
+
+    pub fn update_available(self, version: &str) -> String {
+        self.pick(
+            format!("Update available: Cloud Home {version}. Tap the button to install it; the service restarts afterwards."),
+            format!("有新版本：Cloud Home {version}。点击按钮即可安装，安装后服务会重启。"),
+            format!("有新版本：Cloud Home {version}。點擊按鈕即可安裝，安裝後服務會重啟。"),
+        )
+    }
+
+    pub fn update_started(self, version: &str) -> String {
+        self.pick(
+            format!("Installing {version}. The service will restart in a moment."),
+            format!("正在安装 {version}，服务稍后会重启。"),
+            format!("正在安裝 {version}，服務稍後會重啟。"),
+        )
+    }
+
+    pub fn update_gone(self) -> String {
+        self.pick(
+            "That update is no longer the one on offer. Nothing was installed.".into(),
+            "该更新已不是当前可装的版本，没有安装任何东西。".into(),
+            "該更新已不是目前可裝的版本，沒有安裝任何東西。".into(),
+        )
+    }
+
+    pub fn update_busy(self, transfers: usize) -> String {
+        self.pick(
+            format!("Not installed: {transfers} upload/download(s) are in progress. Try again later."),
+            format!("未安装：有 {transfers} 个上传/下载正在进行，请稍后再试。"),
+            format!("未安裝：有 {transfers} 個上傳/下載正在進行，請稍後再試。"),
+        )
+    }
+
+    pub fn update_refused(self) -> String {
+        self.pick(
+            "Not installed: online updates are disabled or an update is already running.".into(),
+            "未安装：在线更新未启用，或已有更新正在进行。".into(),
+            "未安裝：線上更新未啟用，或已有更新正在進行。".into(),
+        )
+    }
+
+    pub fn drive_unplugged(self) -> String {
+        self.pick(
+            "The data drive was unplugged. Writes are refused until it is back.".into(),
+            "数据盘已被拔出，接回之前写入操作会被拒绝。".into(),
+            "資料碟已被拔出，接回之前寫入操作會被拒絕。".into(),
+        )
+    }
+
+    pub fn drive_plugged(self) -> String {
+        self.pick(
+            "The data drive is back.".into(),
+            "数据盘已重新接上。".into(),
+            "資料碟已重新接上。".into(),
+        )
+    }
+
+    pub fn low_disk(self, free_percent: u64, free_gb: u64) -> String {
+        self.pick(
+            format!("Low disk space: {free_percent}% free ({free_gb} GB left) on the data drive."),
+            format!("磁盘空间不足：数据盘仅剩 {free_percent}%（约 {free_gb} GB）。"),
+            format!("磁碟空間不足：資料碟僅剩 {free_percent}%（約 {free_gb} GB）。"),
+        )
+    }
+
+    pub fn admin_auth_failures(self, count: usize, minutes: u64, ip: &str) -> String {
+        self.pick(
+            format!("Security: {count} failed admin-endpoint sign-ins in {minutes} minutes (latest from {ip})."),
+            format!("安全提醒：{minutes} 分钟内管理端点验证失败 {count} 次（最近一次来自 {ip}）。"),
+            format!("安全提醒：{minutes} 分鐘內管理端點驗證失敗 {count} 次（最近一次來自 {ip}）。"),
+        )
+    }
+
     pub fn no_pending(self) -> String {
         self.pick(
             "No registration requests are waiting.".into(),
