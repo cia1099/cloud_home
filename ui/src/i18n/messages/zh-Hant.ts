@@ -38,7 +38,6 @@ export const zhHant: Messages = {
   'auth.show_password': '顯示密碼',
   'auth.hide_password': '隱藏密碼',
   'auth.wrong_credentials': '電子郵件、手機號碼或密碼不正確。',
-  'auth.required': '這個欄位為必填。',
   'auth.method': '登入方式',
 
   'approval.submitted.title': '申請已送出',

@@ -40,7 +40,6 @@ button { background: none; border: 0; padding: 0; cursor: pointer; text-align: i
 a { color: var(--accent); text-decoration: none; }
 h1, h2, h3, p { margin: 0; }
 .ic { flex: none; display: block; }
-.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 :focus { outline: none; }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
 .num { font-variant-numeric: tabular-nums; }

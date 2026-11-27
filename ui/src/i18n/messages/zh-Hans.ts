@@ -37,7 +37,6 @@ export const zhHans: Messages = {
   'auth.show_password': '显示密码',
   'auth.hide_password': '隐藏密码',
   'auth.wrong_credentials': '邮箱、手机号或密码不正确。',
-  'auth.required': '此项为必填。',
   'auth.method': '登录方式',
 
   'approval.submitted.title': '请求已提交',

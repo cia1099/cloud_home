@@ -37,7 +37,6 @@ export const en = {
   'auth.show_password': 'Show password',
   'auth.hide_password': 'Hide password',
   'auth.wrong_credentials': 'The email, phone number or password is not right.',
-  'auth.required': 'This field is required.',
   'auth.method': 'Sign-in method',
 
   'approval.submitted.title': 'Request submitted',
