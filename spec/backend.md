@@ -114,7 +114,7 @@ cloud_home/
     │   ├── shares.rs     # /shares/*
     │   ├── public.rs     # /public/shares/:token（无 auth）
     │   └── drives.rs     # /drives
-    ├── chat/             # 管理员聊天集成：provider(trait+Fake)、telegram、pairing、outbox、dispatch、text
+    ├── chat/             # 管理员聊天集成：provider(trait+Fake)、telegram、pairing、outbox、dispatch、admin_ops、text
     ├── services/
     │   ├── file_service.rs   # 文件业务逻辑（上传/下载/移动）
     │   ├── user_service.rs   # 用户与身份（凭证/标识）、账户软删除与还原
@@ -324,6 +324,12 @@ Base URL: `http://localhost:8080/api/v1`
 （只存哈希）、`chat_action_tokens`（按钮令牌：只存哈希，绑定 管理员 + 账户 + 动作，24 小时、单次）、
 `chat_outbox`（待发 / 已发消息，`state` = `queued|sent|failed|suppressed|decided`）。
 令牌与账户、管理员外键级联：取消配对或账户被物理删除（冷却期后重注册的 rejected 旧行）时随之清理。
+
+运维指令（R-064，`chat/admin_ops.rs`，无新表、无新端点）：`/users [pending|approved|rejected]`、`/status`、
+`/restore <标识> [email|phone]` 直接执行；`/delete`、`/purge` 两步走——先登记待确认并回 6 位短码（`purge`
+明确写出「不可逆」），再 `/confirm <码>` 才执行，`/cancel` 放弃。待确认只存内存，绑定 发起管理员 + 目标账户 + 操作，
+单次有效、2 分钟过期、码错一次即作废。执行都走 `services/admin_service.rs`（`/admin/users/delete|restore`、
+`/admin/trash/purge` 端点用的是同一组函数，审计的 `actor` 为 `admin-endpoint` 或 `chat:<provider>:<sender-id>`）。
 这些表只含管理员身份与待批准申请的摘要，**不含任何用户的文件数据，也没有按账户隔离的数据路径**。
 
 **用户名不唯一**，它只是可随时修改的显示名；登录一律靠邮箱或手机号。
@@ -736,7 +742,7 @@ JWT 的 `Claims` 因此新增 `username` 字段（`#[serde(default)]` 兼容改�
 | `user.expire` | 同上（`tasks/pending_expirer.rs` 调用） | `target_user_id`, `target_username`, `expire_days` |
 | `chat.pair` | `chat/pairing.rs` | `result` = `code_issued` \| `paired`；`provider`、`sender_id`（配对码本身绝不记） |
 | `chat.unpair` | 同上 | `provider`, `sender_id` |
-| `chat.command` | `chat/dispatch.rs` | `result` = `authorized` \| `unauthorized`（warn，按发送者限流）\| `invalid_token`；`provider`, `sender_id`, `command`（仅已知指令名，未知记 `other`；**绝不记消息正文、参数、令牌**） |
+| `chat.command` | `chat/dispatch.rs` | `result` = `authorized` \| `unauthorized`（warn，按发送者限流）\| `invalid_token` \| `invalid_confirmation`（确认码错误）；`provider`, `sender_id`, `command`（仅已知指令名，未知记 `other`；**绝不记消息正文、参数、令牌**） |
 | `chat.delivery` failure | `chat/outbox.rs` | 消息重试 8 次仍未送达而放弃：`provider`, `kind`, `attempts`, `error`（不含令牌） |
 | `auth.login` failure（用户不存在） | 同上 | `reason="unknown_user"`, `identifier` |
 | `auth.login` failure（密码错误） | 同上 | `reason="bad_password"`, `user_id`, `username` |

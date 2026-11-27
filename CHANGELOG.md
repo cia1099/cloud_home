@@ -22,6 +22,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   keep working. The web app is updated separately (R-062).
 
 ### Added
+- Admin operations in chat (R-064, Phase C): paired admins can send `/users
+  [pending|approved|rejected]`, `/status` (version, drive, account counts),
+  `/restore <email|phone>`, and the destructive `/delete <email|phone>` and
+  `/purge <email|phone>`. The destructive two reply with a short code first (`purge`
+  states that it is irreversible) and only run on `/confirm <code>`; the
+  confirmation is bound to the asking admin, the target account and the action,
+  single-use, valid for 2 minutes and kept in memory only; a wrong code cancels it,
+  `/cancel` drops it. Execution goes through the same service functions as
+  `/admin/users/delete|restore` and `/admin/trash/purge` (new
+  `services/admin_service.rs`; the audit events gain an `actor` field:
+  `admin-endpoint` or `chat:<provider>:<sender-id>`). Listings mask identifiers like
+  the registration messages; file names and contents are never sent. New audit
+  result `chat.command` `invalid_confirmation`. No new API, migration or dependency.
 - Admin chat core (R-063): new registration requests are pushed to paired
   administrators in a chat app, with **Approve / Reject** buttons.
   `CHAT_PROVIDER=none|telegram` (default `none`), `CHAT_BOT_TOKEN` (redacted in

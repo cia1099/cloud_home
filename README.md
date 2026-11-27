@@ -102,6 +102,8 @@ curl $BASE/auth/me -H "Authorization: Bearer <token>"
 curl -X POST $BASE/admin/chat/pairing -H 'X-Admin-Password: <ADMIN_PASSWORD>'
 # 2. 管理员在 Telegram 里私聊机器人：/pair <code>
 # 3. 之后：/pending 查看待批准申请，点按钮批准或拒绝；/whoami、/help
+#    运维：/users、/status、/restore <标识>；/delete <标识> 与 /purge <标识>（清空回收站，不可逆）
+#    会先回一个确认码，再发 /confirm <码> 才执行（2 分钟内有效，/cancel 放弃）
 curl $BASE/admin/chat -H 'X-Admin-Password: <ADMIN_PASSWORD>'            # 提供方、连接状态、已配对管理员
 curl -X DELETE $BASE/admin/chat/admins/<id> -H 'X-Admin-Password: <ADMIN_PASSWORD>'   # 取消配对，立即生效
 ```

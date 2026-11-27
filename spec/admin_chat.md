@@ -1,7 +1,7 @@
 # Cloud Home — Account approval and admin chat integration
 
-Status: Phases A (R-060/R-061) and B (R-063, chat core) are **implemented**; C–E are design only (see section 10 for what B
-does exactly). Tracked in `SPEC.md` as R-060 … R-068.
+Status: Phases A (R-060/R-061), B (R-063, chat core) and C (R-064, admin operations) are **implemented**; D–E are design
+only (see sections 10 and 11 for what B and C do exactly). Tracked in `SPEC.md` as R-060 … R-068.
 Code comments follow the repo convention (Chinese); this document is English so the owner can review it.
 
 ## 1. Why
@@ -216,3 +216,37 @@ before they are logged, and audit events never carry message bodies.
 
 Pairing-code and unauthorized-audit rate limits live in memory. The bot answers in one configured language
 (`CHAT_LANGUAGE`), not per user. Only Telegram is implemented (R-068 covers webhook-based providers).
+
+## 11. Phase C as built (R-064)
+
+Code: `src/chat/admin_ops.rs` (commands + confirmation), `src/services/admin_service.rs` (shared with the `/admin/*`
+endpoints), texts in `src/chat/text.rs`. No migration, no new endpoint, no new config, no new crate.
+
+| Command | Effect |
+|---|---|
+| `/users [pending\|approved\|rejected]` | up to 20 accounts: `name \| masked identifier \| status` (`, deleted` when soft-deleted) |
+| `/status` | version, drive available or not, counts of active / pending / rejected / deleted accounts |
+| `/restore <email\|phone> [email\|phone]` | restores a soft-deleted account at once (reversible, so no confirmation) |
+| `/delete <identifier> [provider]` | soft-deletes: stages a confirmation, nothing happens yet |
+| `/purge <identifier> [provider]` | empties that account's trash physically: stages a confirmation that says **IRREVERSIBLE** |
+| `/confirm <code>` / `/cancel` | execute / drop the staged operation |
+
+- **Same code as the endpoints.** Targets are resolved with `user_service::find_any` (an identifier matching several
+  accounts is refused; add `email` or `phone`), execution is `admin_service::{delete_account, restore_account,
+  purge_trash}`, which the `/admin/users/delete|restore` and `/admin/trash/purge` handlers also call. Audit events
+  (`admin.user.delete`, `admin.user.restore`, `admin.trash.purge`) carry `actor` = `admin-endpoint` or
+  `chat:<provider>:<sender-id>`. Purge checks the drive first and does nothing when it is unplugged.
+- **Confirmation.** One short code (6 chars, same unambiguous alphabet as pairing) per admin: it is bound to the admin
+  who asked, the target account id and the action; single-use; valid 2 minutes; held in memory only (a restart
+  discards it, which fails safe). A newer `/delete` or `/purge` replaces the older one. Wrong code: the staged
+  operation is cancelled, nothing runs, `chat.command` is audited as `invalid_confirmation` (no second guess). Expired
+  or missing: nothing runs and the admin is told. Another admin's `/confirm` cannot use it.
+- **Authorization** is the same as for every command: checked on each update against `admin_chat_identities`, private
+  chat only; strangers and group chats get silence (audited as `unauthorized`). Unpairing therefore also kills any
+  staged confirmation in effect.
+- **What is sent to the provider** (in addition to section 10): account display names (cleaned, max 40 chars), masked
+  identifiers (unless `CHAT_MASK_IDENTIFIERS=false`), approval status, counts, item counts and freed megabytes. Never
+  file names or contents, and the audit log never records command arguments or the confirmation code.
+- **Isolation.** These are the same cross-account operator powers as `/admin/*` (a paired admin is as powerful as the
+  shared admin password), but each operation names exactly one account id: delete/restore touch only that account's
+  rows, purge goes through `trash_service::empty(owner_id)` which filters every query by owner.
