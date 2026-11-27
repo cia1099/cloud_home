@@ -65,7 +65,6 @@ async fn harness(kind: ChatProviderKind) -> Harness {
             mode: RegistrationMode::Approval,
             rate_per_ip_per_hour: 100,
             pending_max: 100,
-            reject_cooldown_days: 7,
             pending_expire_days: 14,
         },
         chat: chat_cfg.clone(),

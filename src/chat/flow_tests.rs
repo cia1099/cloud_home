@@ -70,7 +70,6 @@ async fn pending_user(db: &Db, name: &str, email: &str) -> User {
         mode: RegistrationMode::Approval,
         rate_per_ip_per_hour: 1000,
         pending_max: 1000,
-        reject_cooldown_days: 7,
         pending_expire_days: 14,
     };
     user_service::register(

@@ -310,7 +310,8 @@ Base URL: `http://localhost:8080/api/v1`
   `rejected` → `403 ACCOUNT_REJECTED`。已软删除的账户仍是 `401`。
 - **限制**（仅 approval 模式，超限 `429 REGISTRATION_BUSY`）：`REGISTER_RATE_PER_IP_PER_HOUR`=5
   （按 `registered_ip`，计过去 1 小时内创建的账户数）、`PENDING_MAX`=20（pending 总数）。
-  被拒绝的标识在 `REJECT_COOLDOWN_DAYS`=7 天内再注册 → `409`；冷却期过后旧的 rejected 行被删除，标识让给新申请。
+  被拒绝的申请人可随时再次注册（无冷却、不限次数）：同一账户行改回 `pending`（改写名字与密码、`registered_ip`、
+  `created_at`，`is_active` 仍为 0，不签发令牌，审计 `user.register` outcome=`reapply`），按新申请处理；仍受上述限流与上限约束。
   `PENDING_EXPIRE_DAYS`=14 天仍 pending 的申请由 `tasks/pending_expirer.rs`（每小时）自动拒绝（`decided_by = expiry`）。
 - **还原**：`user_service::restore` 要求账户 `approved`，且 UPDATE 带 `approval_status = 'approved'`，
   绝不会借还原放行未通过审批的账户。
@@ -729,8 +730,8 @@ JWT 的 `Claims` 因此新增 `username` 字段（`#[serde(default)]` 兼容改�
 
 | event | 位置 | 关键字段 |
 |---|---|---|
-| `user.register` | `handlers/auth.rs` | `result` = `open` \| `bootstrap` \| `pending`；`user_id`, `username` |
-| `user.register` failure | 同上（Conflict 分支）、`user_service.rs` | `reason` = `duplicate_identifier` \| `reject_cooldown` \| `rate_limited`（含 `client_ip`）\| `pending_max` |
+| `user.register` | `handlers/auth.rs` | `result` = `open` \| `bootstrap` \| `pending`（被拒绝者重新注册另记一条 `reapply`）；`user_id`, `username` |
+| `user.register` failure | 同上（Conflict 分支）、`user_service.rs` | `reason` = `duplicate_identifier` \| `rate_limited`（含 `client_ip`）\| `pending_max` |
 | `user.approve` / `user.reject` | `services/approval_service.rs` | `target_user_id`, `target_username`, `decided_by` |
 | `user.expire` | 同上（`tasks/pending_expirer.rs` 调用） | `target_user_id`, `target_username`, `expire_days` |
 | `chat.pair` | `chat/pairing.rs` | `result` = `code_issued` \| `paired`；`provider`、`sender_id`（配对码本身绝不记） |
@@ -800,7 +801,6 @@ ADMIN_PASSWORD=
 REGISTRATION_MODE=approval
 REGISTER_RATE_PER_IP_PER_HOUR=5
 PENDING_MAX=20
-REJECT_COOLDOWN_DAYS=7
 PENDING_EXPIRE_DAYS=14
 
 # 管理员聊天集成（spec/admin_chat.md）：none（默认）| telegram

@@ -53,8 +53,8 @@ Login behaviour: wrong credentials → `401` exactly as today (no state leaks). 
 `pending` account → `403 ACCOUNT_PENDING`; on a `rejected` account → `403 ACCOUNT_REJECTED`.
 
 Abuse limits (all configurable, sane defaults): `REGISTER_RATE_PER_IP_PER_HOUR=5`, `PENDING_MAX=20`
-(beyond it `429 REGISTRATION_BUSY`), an identifier that was rejected cannot register again for `REJECT_COOLDOWN_DAYS=7`
-(its row stays, which also keeps it from being reused), and pending accounts older than `PENDING_EXPIRE_DAYS=14`
+(beyond it `429 REGISTRATION_BUSY`); a rejected applicant may register again with no cooldown and no cap on attempts
+(owner decision 2026-11-27: the same account returns to `pending` as a fresh request, never with a token), and pending accounts older than `PENDING_EXPIRE_DAYS=14`
 are auto-rejected by a background task (audited).
 
 ## 3. Private admin endpoints (single source of truth)
@@ -143,7 +143,7 @@ Phase A ships first and is useful on its own (approval via the private endpoints
 3. `pending`/`rejected` with the correct password → `403 ACCOUNT_PENDING` / `ACCOUNT_REJECTED`; wrong password → `401`; the account cannot obtain or use any token.
 4. Approve via the admin endpoint → login works; approve is idempotent; reject then approve is allowed and audited.
 5. Restore of a soft-deleted account never reactivates a `pending`/`rejected` account.
-6. `closed` mode → `403`; rate limit and `PENDING_MAX` → `429`; cooldown after rejection; expiry task auto-rejects.
+6. `closed` mode → `403`; rate limit and `PENDING_MAX` → `429`; a rejected applicant can register again at once (back to `pending`, no token); expiry task auto-rejects.
 7. With `FakeProvider`: registration notifies all paired admins with masked identifiers; a button press by a paired admin approves and edits the message; by an unpaired sender is ignored and audited; replayed, expired and wrong-bound tokens are refused; two simultaneous presses → one decision.
 8. Pairing: a code works once, expires after 10 min, wrong codes are rate-limited; `DELETE /admin/chat/admins/{id}` immediately revokes.
 9. Chat outage: registrations still succeed as `pending`, notifications are delivered later by the outbox, nothing is approved implicitly.
@@ -155,7 +155,7 @@ Phase A ships first and is useful on its own (approval via the private endpoints
 - Create a Telegram bot with @BotFather and provide its token (needed only for the live check, R-063 acceptance 11).
 - Chat language for the bot's messages (default English).
 - Single admin or several? The design supports several; the default is whoever pairs.
-- Defaults for the abuse limits above (5 registrations/hour/IP, 20 pending, 7-day cooldown, 14-day expiry).
+- Defaults for the abuse limits above (5 registrations/hour/IP, 20 pending, 14-day expiry).
 
 ## 10. Phase B as built (R-063)
 

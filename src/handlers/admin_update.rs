@@ -251,7 +251,6 @@ mod tests {
                 mode: RegistrationMode::Approval,
                 rate_per_ip_per_hour: 5,
                 pending_max: 20,
-                reject_cooldown_days: 7,
                 pending_expire_days: 14,
             },
             chat: crate::config::ChatConfig {

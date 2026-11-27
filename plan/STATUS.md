@@ -30,6 +30,8 @@ The report site (R-001) has its first edition built and published; it is in revi
 - R-072 · designer→frontend-engineer · state: directions committed (4f612c5, PNG previews missing: designer had no renderer); A-001/A-002 written in APPROVALS · next: frontend builds /decisions/brand/ and /decisions/admins/ pages in manager-site, deploy
 - R-063 · backend-engineer · merged into agent/manager from worktree-agent-a42d510a1b1e1a54b · state: review (cargo test 131 pass; clippy --all-targets: 1 pre-existing warning, `wait_idle` unused, R-070) · next: live curl check (worker could not start the server); live Telegram check waits for the owner's bot token (R-073); then R-064, R-066, R-070, R-003. Bash works for workers again.
 
+- 2026-11-27 (later session): R-060 no-cooldown VERIFIED on its branch (cargo test 84 pass; clippy only the known R-070 idle-code warnings). NOT yet merged into agent/manager: the session's shell was moved into the worktree and cannot run git in the main checkout. Next: from the main checkout run `git merge agent/R-060-no-cooldown`, re-run cargo test (expect 131+), then R-072 render/publish and report deploy. No open GitHub issues.
+
 ## Waiting on the owner
 See SPEC.md section 6 and the site's approvals queue.
 
@@ -62,6 +64,7 @@ Close each issue after you have acted on it.
 - **R-074 (new, owner asked for it): Accept button.** Until it ships, treat a `[CHG R-nnn]` or `[DEL R-nnn]` issue whose text says accepted / reviewed / well done as *accepted*: mark that requirement `done` (never delete work) and close the issue. Also: the owner reported seeing no update on the report site. Render and check the two new cloud icon variants, publish them on `/decisions/` with a fresh approval request, verify and merge R-060 (cargo is on PATH when the owner starts you from their terminal), then build and deploy the site and write the report.
 
 ## Log
+- 2026-11-27 — R-060 (no rejection cooldown) merged into agent/manager by the owner's session: 131 tests pass, clippy only the known `wait_idle` warning (R-070); live curl check of re-registration still outstanding. Earlier note that R-060 was unmerged is obsolete.
 - 2026-11-19 — team and SPEC.md created.
 - 2026-11-25 — R-020 merged; R-002 follow-up (owner decisions) delivered; R-071 added. R-002 web-app design delivered (abccdae); R-020 verified but unmerged; owner answered the 5 design questions (see Owner decisions).
 - 2026-11-25 — R-060/R-061 approval flow merged into agent/manager (84 tests, no new clippy warnings); live curl check outstanding.
