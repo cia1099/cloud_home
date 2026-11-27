@@ -19,6 +19,8 @@ interface RequestOptions {
   signal?: AbortSignal
   /** For requests that carry the current password: a 401 means "wrong password", not "session ended". */
   keepSession?: boolean
+  /** Administration endpoints use the shared admin password, not the session: a 401 there must not sign the user out. */
+  adminPassword?: string
 }
 
 let onUnauthorized: (() => void) | undefined
@@ -41,14 +43,17 @@ export function isErrorEnvelope(value: unknown): value is { error: { code: strin
 
 /** Sends a JSON request and returns the `data` of the `{ data }` envelope. */
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, signal, keepSession = false } = options
+  const { method = 'GET', body, signal, keepSession = false, adminPassword } = options
   let response: Response
   try {
     response = await fetch(API_BASE + path, {
       method,
       credentials: 'same-origin',
       signal,
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      headers: {
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(adminPassword === undefined ? {} : { 'X-Admin-Password': adminPassword }),
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch (cause) {
@@ -58,7 +63,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
 
   const payload: unknown = await response.json().catch(() => undefined)
   if (!response.ok) {
-    if (response.status === 401 && !keepSession) onUnauthorized?.()
+    if (response.status === 401 && !keepSession && adminPassword === undefined) onUnauthorized?.()
     if (isErrorEnvelope(payload)) throw new ApiError(response.status, payload.error.code, payload.error.message)
     throw new ApiError(response.status, 'UNKNOWN', response.statusText)
   }

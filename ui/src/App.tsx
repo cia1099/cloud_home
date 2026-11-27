@@ -3,6 +3,7 @@ import { PendingPage } from './auth/PendingPage'
 import { RegisterPage } from './auth/RegisterPage'
 import { SignInPage } from './auth/SignInPage'
 import { I18nProvider } from './i18n/I18nProvider'
+import { AdminPage } from './pages/AdminPage'
 import { FilesPage } from './pages/FilesPage'
 import { PublicSharePage } from './pages/PublicSharePage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -34,6 +35,7 @@ export function App() {
                   <Route path="/trash" element={<TrashPage />} />
                   <Route path="/storage" element={<StoragePage />} />
                   <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/admin" element={<AdminPage />} />
                 </Route>
               </Route>
               <Route path="*" element={<Navigate to="/files" replace />} />

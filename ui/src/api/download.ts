@@ -42,7 +42,7 @@ async function requestArchive(ids: readonly string[], format: ArchiveFormat): Pr
  * (Chromium) the body is piped straight to disk; elsewhere it is collected into a Blob first.
  * Resolves once the server accepted the request; `finished` settles when the bytes are saved.
  */
-export async function downloadArchive(ids: readonly string[], format: ArchiveFormat, name: string): Promise<{ finished: Promise<void> }> {
+async function saveArchive(ids: readonly string[], format: ArchiveFormat, name: string): Promise<{ finished: Promise<void> }> {
   const filename = `${name}.${format}`
   const { showSaveFilePicker } = window as unknown as SaveFilePicker
   if (!showSaveFilePicker) {
@@ -66,4 +66,36 @@ export async function downloadArchive(ids: readonly string[], format: ArchiveFor
     throw cause
   }
   return { finished: (response.body as ReadableStream<Uint8Array>).pipeTo(writable) }
+}
+
+let running = 0
+const watchers = new Set<() => void>()
+const changed = () => watchers.forEach((notify) => notify())
+
+/** Archive downloads in progress in this tab; a pending app update waits for them (R-027). */
+export const downloadsRunning = (): number => running
+
+export function subscribeDownloads(notify: () => void): () => void {
+  watchers.add(notify)
+  return () => {
+    watchers.delete(notify)
+  }
+}
+
+/** Counts the download from the moment it is requested until the last byte is saved (or it fails). */
+export async function downloadArchive(ids: readonly string[], format: ArchiveFormat, name: string): Promise<{ finished: Promise<void> }> {
+  running += 1
+  changed()
+  const end = () => {
+    running -= 1
+    changed()
+  }
+  try {
+    const result = await saveArchive(ids, format, name)
+    void result.finished.then(end, end)
+    return result
+  } catch (cause) {
+    end()
+    throw cause
+  }
 }

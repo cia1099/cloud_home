@@ -3,11 +3,14 @@ import { Icon, type IconName } from '../components/Icon'
 import { useI18n } from '../i18n/useI18n'
 import type { MessageKey } from '../i18n/messages/en'
 import { useStreamStatus } from '../sse/useEventStream'
+import { AdminProvider } from '../update/AdminProvider'
+import { UpdateWatcher } from '../update/UpdateWatcher'
+import { useAdmin } from '../update/useAdmin'
 import { UploadPanel } from '../upload/UploadPanel'
 import { UploadProvider } from '../upload/UploadProvider'
 import { useOnline } from './useOnline'
 
-// New destinations (Administration) are added with their screens. `tab: false` items live inside Settings on a phone.
+// `tab: false` items live inside Settings on a phone. Administration is added for callers the box lets in (see useAdmin).
 const NAV: { to: string; icon: IconName; label: MessageKey; tab: boolean }[] = [
   { to: '/files', icon: 'folder', label: 'nav.files', tab: true },
   { to: '/shared', icon: 'share', label: 'nav.shared', tab: true },
@@ -16,9 +19,13 @@ const NAV: { to: string; icon: IconName; label: MessageKey; tab: boolean }[] = [
   { to: '/settings', icon: 'sliders', label: 'nav.settings', tab: true },
 ]
 
+const ADMIN_ITEM = { to: '/admin', icon: 'shield', label: 'nav.admin', tab: false } as const
+
 function NavItems({ className, tabsOnly = false }: { className: string; tabsOnly?: boolean }) {
   const { t } = useI18n()
-  return NAV.filter((item) => item.tab || !tabsOnly).map((item) => (
+  const { access } = useAdmin()
+  const items = access.state === 'locked' || access.state === 'unlocked' ? [...NAV, ADMIN_ITEM] : NAV
+  return items.filter((item) => item.tab || !tabsOnly).map((item) => (
     <NavLink key={item.to} to={item.to} className={className}>
       <Icon name={item.icon} size={22} />
       <span>{t(item.label)}</span>
@@ -33,6 +40,7 @@ export function AppShell() {
   const stream = useStreamStatus()
   return (
     <UploadProvider>
+    <AdminProvider>
     <div className="app">
       <a className="skip" href="#content">
         {t('a11y.skip')}
@@ -67,7 +75,9 @@ export function AppShell() {
         <NavItems className="" tabsOnly />
       </nav>
       <UploadPanel />
+      <UpdateWatcher />
     </div>
+    </AdminProvider>
     </UploadProvider>
   )
 }

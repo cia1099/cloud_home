@@ -7,6 +7,7 @@ import type { MessageKey } from '../i18n/messages/en'
 import { useSession } from '../session/useSession'
 import { APPEARANCES, type Appearance } from '../theme/theme'
 import { useTheme } from '../theme/useTheme'
+import { AdminLink } from '../update/AdminLink'
 import { useToast } from '../toast/useToast'
 import { PasswordDialog } from '../settings/PasswordDialog'
 import { ProfileSection } from '../settings/ProfileSection'
@@ -92,6 +93,7 @@ export function SettingsPage() {
             <span className="lbl">{t('nav.storage')}</span>
             <Icon name="chevR" size={16} />
           </Link>
+          <AdminLink />
         </div>
       </section>
       <section>
