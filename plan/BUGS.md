@@ -49,7 +49,36 @@ Equivalent alternative: make `on_button` do the whole transition in one conditio
 and drop the read-then-check. Expiry (`expire_pending`) already only touches `pending`.
 After the fix run the flaky test in a loop (for example 200 iterations) to confirm it never fails.
 
+## B-002 (P2, data safety / disk leak) An upload interrupted midway leaves its bytes on disk with no database row
+
+**Status: fixed** (branch `agent/B-002-upload-orphan`: drop guard deletes the partial file unless the row is inserted). Found by `tests/api_http.rs::upload_interrupted_midway_leaves_no_orphan_file_on_disk`
+(the only test in the suite that fails today; it passes once the bug is fixed).
+
+**Repro (against a running server, any account, token in `$T`):**
+1. Open a TCP connection to the server and send
+   `POST /api/v1/files/upload` with `Authorization: Bearer $T`, `Content-Type: multipart/form-data; boundary=B`,
+   `Content-Length: 1000000+...`, then the multipart header of a `file` part named `half.bin` and 100 000 bytes of body.
+2. Close the connection without sending the rest (a browser tab closed or a dropped Wi-Fi link does the same).
+3. `GET /files` shows nothing and `GET /usage` shows `used_bytes: 0`, but
+   `find <drive>/cloud_home_data/users/<user_id> -type f` lists one file (the partial upload, named by its random id).
+
+**Expected:** a failed upload leaves nothing behind (the comment in `handlers/files.rs` says so: "失败时清理已写入的物理文件，避免孤儿").
+**Actual:** the partial file stays forever. It is not in `files`, so it is invisible to usage numbers, the trash cleaner and
+account purge; it only costs disk space (repeated failed uploads of large files fill the drive silently).
+
+**Where (read, not speculated about further):** `src/handlers/files.rs` `upload`. The `remove_file(&physical_path)` cleanup
+only runs when `finalize_upload` returns `Err`. Errors raised earlier, inside the `while let Some(..) = multipart.next_field()`
+loop (`field.chunk()` -> `BadRequest("文件流读取失败")`, `out.write_all(..)?`), return with `?` before that cleanup, and a client
+disconnect that drops the handler future skips it as well.
+
 ## Notes (not bugs)
+
+- Removing the last identifier (`DELETE /me/identifier` for the only email/phone) is rejected, but only after the one-time code
+  was verified and consumed, so the user must request a new code (it also counts toward the 3-per-hour limit). Harmless, listed
+  because `tests/api_http.rs` has to request a fresh code after that attempt.
+- `GET /usage/breakdown` returns every account's username and byte totals to any logged-in user. That is what the spec says
+  ("任意已登录用户可见"); the isolation test asserts it contains no file names. Flagging it in case the owner considers per-account
+  byte totals private.
 
 - `cloud_home` is a binary-only crate and `FakeProvider` exists only under `cfg(test)`, so the integration tests in
   `tests/` cannot link against it. `tests/chat_fake.rs` therefore re-compiles the same sources with `#[path]` (see the
