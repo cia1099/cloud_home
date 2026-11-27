@@ -77,7 +77,7 @@ export function UpdateWatcher() {
   const [idleMs, setIdleMs] = useState(0)
   const [overlay, setOverlay] = useState<Overlay | null>(null)
   const [probeRound, setProbeRound] = useState(0)
-  const lastInput = useRef(Date.now())
+  const lastInput = useRef(0)
   const downSince = useRef<number | null>(null)
 
   const stale = assetMissing || isStale(__APP_VERSION__, serverVersion)
@@ -132,6 +132,7 @@ export function UpdateWatcher() {
     const touch = () => {
       lastInput.current = Date.now()
     }
+    touch()
     for (const name of INPUTS) window.addEventListener(name, touch, { passive: true })
     return () => {
       for (const name of INPUTS) window.removeEventListener(name, touch)
