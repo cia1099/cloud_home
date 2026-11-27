@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cloud Home brand directions</title>
+<style>
+:root{--bg:#fbfbfd;--surface:#fff;--text:#1d1d1f;--text-2:#6e6e73;--line:rgba(0,0,0,.09);--accent:#0066cc;--focus:#0071e3}
+@media (prefers-color-scheme:dark){:root{--bg:#000;--surface:#1c1c1e;--text:#f5f5f7;--text-2:#a1a1a6;--line:rgba(255,255,255,.12);--accent:#2997ff;--focus:#64b5ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.47 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang SC","PingFang TC",system-ui,sans-serif}
+:lang(zh-Hans),:lang(zh-Hant){line-height:1.65}
+.wrap{width:min(1120px,100% - 32px);margin:0 auto;padding:40px 0 72px}
+h1{font-size:clamp(30px,5vw,48px);line-height:1.1;letter-spacing:-.03em;margin:0 0 8px;text-wrap:balance}
+h2{font-size:28px;line-height:1.15;letter-spacing:-.022em;margin:0}
+h3{font-size:13px;font-weight:600;color:var(--text-2);margin:24px 0 8px;letter-spacing:.01em}
+p{margin:0}.lede{color:var(--text-2);max-width:40em}
+.bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:20px 0 8px}
+.seg{display:inline-flex;background:var(--line);border-radius:9px;padding:2px}
+.seg button{font:inherit;font-size:14px;border:0;background:none;color:var(--text);padding:5px 14px;border-radius:7px;cursor:pointer;min-height:28px}
+.seg button[aria-pressed=true]{background:var(--surface);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+button:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+section.dir{margin-top:56px;padding-top:32px;border-top:1px solid var(--line)}
+.tag{font-size:13px;font-weight:600;color:var(--text-2)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.panel{border-radius:18px;padding:20px;border:1px solid var(--line)}
+.panel.l{background:#fff;color:#1d1d1f}.panel.d{background:#1c1c1e;color:#f5f5f7}
+.panel .cap{font-size:13px;opacity:.7;margin-bottom:12px}
+.row{display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+.row figure{margin:0;text-align:center;font-size:12px;opacity:.9}
+.row figure img{display:block;margin:0 auto 6px}
+.icon{border-radius:22.37%;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.inv{filter:invert(1)}
+.wm{display:block;max-width:100%;height:auto}
+.sw{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.sw span{font:12px ui-monospace,Menlo,monospace;padding:6px 10px;border-radius:8px;border:1px solid var(--line)}
+.sw i{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:6px;vertical-align:-1px;border:1px solid rgba(128,128,128,.4)}
+.phone{width:390px;max-width:100%;border:1px solid var(--line);border-radius:28px;overflow:hidden;margin-top:16px}
+.phone .top{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);font-weight:600}
+.phone .home{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:20px 16px;font-size:11px;text-align:center}
+.phone .home div{opacity:.8}
+.phone.l{background:#fff;color:#1d1d1f}.phone.d{background:#000;color:#f5f5f7}
+.phones{display:flex;gap:16px;flex-wrap:wrap}
+.why{margin-top:12px;max-width:46em}
+@media (max-width:720px){.cols{grid-template-columns:1fr}.wrap{padding-top:24px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="t">Cloud Home brand directions</h1>
+  <p class="lede" id="lede"></p>
+  <div class="bar" role="group" aria-label="Language">
+    <div class="seg" id="langs">
+      <button data-l="en" aria-pressed="true">English</button>
+      <button data-l="zh-Hans" aria-pressed="false">简体中文</button>
+      <button data-l="zh-Hant" aria-pressed="false">繁體中文</button>
+    </div>
+  </div>
+  <div id="out"></div>
+</div>
+<script>
+const D=[
+ {k:'a',name:{en:'A. Hearth',"zh-Hans":'A. 暖屋',"zh-Hant":'A. 暖屋'},
+  why:{en:'A house silhouette with a round window. The most literal and friendly; uses the existing UI blue. Risk: house shapes are common and resemble a Home glyph.',
+       "zh-Hans":'房屋剪影加圆形窗口。最直白亲切，沿用界面现有蓝色。风险：房屋图形常见，且与“主页”图标相近。',
+       "zh-Hant":'房屋剪影加圓形窗口。最直白親切，沿用介面現有藍色。風險：房屋圖形常見，且與「首頁」圖示相近。'},
+  sw:[['#0071e3','brand'],['#2997ff','brand dark'],['#1d1d1f','ink'],['#0066d6','icon bg']]},
+ {k:'b',name:{en:'B. Roofbox',"zh-Hans":'B. 屋顶盒',"zh-Hant":'B. 屋頂盒'},
+  why:{en:'Amber roof over a teal device with a status light. The most expressive and distinctive; adds a second brand colour. The light is under 1px at 16px.',
+       "zh-Hans":'琥珀屋顶加带指示灯的青绿设备。最有表现力、最独特；多出第二个品牌色。16px 时指示灯不足 1px。',
+       "zh-Hant":'琥珀屋頂加帶指示燈的青綠裝置。最有表現力、最獨特；多出第二個品牌色。16px 時指示燈不足 1px。'},
+  sw:[['#0d7f78','brand'],['#3cc5bb','brand dark'],['#e08a00','warm'],['#ffb340','warm dark']]},
+ {k:'c',name:{en:'C. Open Ring',"zh-Hans":'C. 开口环',"zh-Hant":'C. 開口環'},
+  why:{en:'A graphite ring open on the right with one blue dot: the home device, always on. The quietest; no new colour; crisp at 16px. Meaning is learned, not literal.',
+       "zh-Hans":'右侧开口的石墨色圆环加一个蓝点：始终在线的家用设备。最安静，不新增颜色，16px 清晰。含义需要学习而非字面。',
+       "zh-Hant":'右側開口的石墨色圓環加一個藍點：始終在線的家用裝置。最安靜，不新增顏色，16px 清晰。含義需要學習而非字面。'},
+  sw:[['#1d1d1f','ink'],['#f5f5f7','ink dark'],['#0071e3','dot'],['#2997ff','dot dark']]}
+];
+const T={
+ en:{lede:'Three candidate marks, wordmarks and app icons. Nothing is applied to the product yet. Each is shown on light and dark, at 16, 32, 64 and 180 px, in one colour, and in a phone-width frame.',
+  mark:'Mark',lm:'On light',dm:'On dark',mono:'One colour (black on light, white on dark)',icon:'App icon, light and dark (corner mask applied by the system; shown here with a 22% radius)',wm:'Wordmark',ph:'Phone width (390 px): browser header with 16 px mark, home screen with icon',app:'Cloud Home',files:'Files',rec:'Rationale',tabs:['Photos','Notes','Cloud Home','Mail']},
+ "zh-Hans":{lede:'三个候选的标志、文字标识与应用图标。尚未应用到产品中。每个方案都展示浅色与深色、16、32、64、180 px、单色版本以及手机宽度。',
+  mark:'标志',lm:'浅色背景',dm:'深色背景',mono:'单色（浅色上为黑，深色上为白）',icon:'应用图标，浅色与深色（圆角遮罩由系统处理，此处以 22% 圆角示意）',wm:'文字标识',ph:'手机宽度（390 px）：浏览器标题栏中的 16 px 标志，主屏幕中的图标',app:'Cloud Home',files:'文件',rec:'设计说明',tabs:['照片','备忘录','Cloud Home','邮件']},
+ "zh-Hant":{lede:'三個候選的標誌、文字標識與應用程式圖示。尚未套用到產品中。每個方案都展示淺色與深色、16、32、64、180 px、單色版本以及手機寬度。',
+  mark:'標誌',lm:'淺色背景',dm:'深色背景',mono:'單色（淺色上為黑，深色上為白）',icon:'應用程式圖示，淺色與深色（圓角遮罩由系統處理，此處以 22% 圓角示意）',wm:'文字標識',ph:'手機寬度（390 px）：瀏覽器標題列中的 16 px 標誌，主畫面中的圖示',app:'Cloud Home',files:'檔案',rec:'設計說明',tabs:['照片','備忘錄','Cloud Home','郵件']}
+};
+const S=[16,32,64,180];
+function fig(src,s,cls,label){return `<figure><img src="${src}" width="${s}" height="${s}" alt="" class="${cls||''}">${label||s+'px'}</figure>`}
+function render(l){
+  document.documentElement.lang=l;const t=T[l];
+  document.getElementById('lede').textContent=t.lede;
+  document.getElementById('out').innerHTML=D.map(d=>{
+    const p=`direction-${d.k}/`;
+    return `<section class="dir"><div class="tag">${d.k.toUpperCase()}</div><h2>${d.name[l]}</h2>
+    <p class="why lede">${d.why[l]}</p>
+    <div class="sw">${d.sw.map(s=>`<span><i style="background:${s[0]}"></i>${s[0]} ${s[1]}</span>`).join('')}</div>
+    <h3>${t.mark}</h3>
+    <div class="cols">
+      <div class="panel l"><div class="cap">${t.lm}</div><div class="row">${S.map(s=>fig(p+'mark.svg',s)).join('')}</div></div>
+      <div class="panel d"><div class="cap">${t.dm}</div><div class="row">${S.map(s=>fig(p+'mark-dark.svg',s)).join('')}</div></div>
+    </div>
+    <h3>${t.mono}</h3>
+    <div class="cols">
+      <div class="panel l"><div class="row">${S.map(s=>fig(p+'mark-mono.svg',s)).join('')}</div></div>
+      <div class="panel d"><div class="row">${S.map(s=>fig(p+'mark-mono.svg',s,'inv')).join('')}</div></div>
+    </div>
+    <h3>${t.icon}</h3>
+    <div class="cols">
+      <div class="panel l"><div class="row">${S.map(s=>fig(p+'app-icon.svg',s,'icon')).join('')}</div></div>
+      <div class="panel d"><div class="row">${S.map(s=>fig(p+'app-icon-dark.svg',s,'icon')).join('')}</div></div>
+    </div>
+    <h3>${t.wm}</h3>
+    <div class="cols">
+      <div class="panel l"><img class="wm" src="${p}wordmark.svg" width="320" alt="Cloud Home"><div style="margin-top:16px"><img class="wm" src="${p}wordmark.svg" width="160" alt="Cloud Home"></div></div>
+      <div class="panel d"><img class="wm" src="${p}wordmark-dark.svg" width="320" alt="Cloud Home"><div style="margin-top:16px"><img class="wm" src="${p}wordmark-dark.svg" width="160" alt="Cloud Home"></div></div>
+    </div>
+    <h3>${t.ph}</h3>
+    <div class="phones">${['l','d'].map(m=>`<div class="phone ${m}">
+      <div class="top"><img src="${p}${m=='l'?'mark.svg':'mark-dark.svg'}" width="16" height="16" alt=""><span style="font-size:13px;font-weight:500;opacity:.75">${t.app}</span></div>
+      <div class="home">${t.tabs.map((n,i)=>i==2?`<div><img class="icon" src="${p}${m=='l'?'app-icon.svg':'app-icon-dark.svg'}" width="60" height="60" alt=""><br>${n}</div>`:`<div><div class="icon" style="width:60px;height:60px;margin:0 auto 4px;background:${m=='l'?'#e8e8ed':'#2c2c2e'}"></div>${n}</div>`).join('')}</div>
+      <div class="top" style="border-top:1px solid var(--line);border-bottom:0"><img src="${p}${m=='l'?'wordmark.svg':'wordmark-dark.svg'}" height="28" alt="Cloud Home"></div>
+    </div>`).join('')}</div>
+    <p style="margin-top:16px;font-size:13px;color:var(--text-2)">${t.files}: ${p}README.md (${t.rec})</p>
+    </section>`}).join('');
+  document.querySelectorAll('#langs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.l==l));
+}
+document.getElementById('langs').addEventListener('click',e=>{const b=e.target.closest('button');if(b)render(b.dataset.l)});
+render('en');
+</script>
+</body>
+</html>

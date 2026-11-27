@@ -1,0 +1,6 @@
+{
+  "suites": [
+    { "name": "cargo test (unit)", "passed": 140, "failed": 2, "skipped": 3 },
+    { "name": "integration", "passed": 70, "failed": 0, "skipped": 0 }
+  ]
+}

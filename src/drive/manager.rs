@@ -1,6 +1,6 @@
 //! 外接硬盘管理：持有当前激活硬盘挂载点，供各处查询与写操作前校验。
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::RwLock;
@@ -46,17 +46,5 @@ impl DriveManager {
             Some(mount) => Ok(path_resolver::data_root(&mount, &self.data_dir)),
             None => Err(AppError::DriveUnavailable),
         }
-    }
-
-    /// 数据目录名（如 `cloud_home_data`）。
-    #[allow(dead_code)]
-    pub fn data_dir(&self) -> &str {
-        &self.data_dir
-    }
-
-    /// 基于给定挂载点计算数据根目录（不校验是否激活）。
-    #[allow(dead_code)]
-    pub fn data_root_of(&self, mount: &Path) -> PathBuf {
-        path_resolver::data_root(mount, &self.data_dir)
     }
 }

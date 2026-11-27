@@ -21,6 +21,8 @@ git tag vX.Y.Z ─► GitHub Actions (.github/workflows/release.yml)
 提交：服务稳定运行 2 分钟后清除 pending
 ```
 
+运行时可通过管理端点查看 / 触发 / 改设置，见 `spec/backend.md`「在线更新端点」（`/admin/update*`）。
+
 ## 安装目录
 
 ```
@@ -34,6 +36,14 @@ $UPDATE_ROOT (默认 /opt/cloud_home)
 ```
 
 **更新器仅在 `current` 是符号链接时启用**，所以开发机 `cargo run` 不会自更新。
+
+首次安装由 `packaging/linux/install.sh`（systemd，`Restart=always`，用户 `cloudhome`）与
+`packaging/macos/install.sh`（launchd LaunchDaemon，`KeepAlive`，以 `sudo` 的调用用户运行）完成：
+先用脚本内嵌的公钥（须与 `update::PUBLIC_KEY` 一致，有单元测试守护）验 `manifest.json` 签名，再按清单里本机
+目标的 sha256 校验 `cloud_home-<ver>-<target>.tar.gz`，只解出 `cloud_home`、跑 `--self-test`，然后布置上述目录并
+生成 `.env`（随机 `JWT_SECRET`）。整个安装目录归服务用户所有，因为更新器要在其中写 `versions/` 与 `update/`。
+脚本解析清单依赖 `scripts/make_manifest.py` 的 `json.dumps(indent=2)` 输出格式。已有 `current` 时脚本不覆盖。
+测试用钩子：`--no-system`、`UPDATE_ROOT`、`CLOUD_HOME_BASE_URL`、`CLOUD_HOME_PUBLIC_KEY`，生产勿设。
 数据库备份在数据盘 `backups/`（保留最近 2 份）。
 
 ## 配置（.env）
@@ -43,7 +53,7 @@ $UPDATE_ROOT (默认 /opt/cloud_home)
 | `UPDATE_MODE` | `manual` | `manual` 仅提示；`auto` 在时间窗内空闲时自动安装 |
 | `UPDATE_WINDOW` | `03:00-05:00` | 自动安装时间窗（本地时间，可跨午夜） |
 | `UPDATE_CHANNEL` | `stable` | `beta` 同时接收 `-rc` 预发布 |
-| `UPDATE_CHECK_INTERVAL_HOURS` | `6` | 检查间隔（另加 0~10% 抖动） |
+| `UPDATE_CHECK_INTERVAL_HOURS` | `6` | 检查间隔（1..=720 小时，另加 0~10% 抖动） |
 | `UPDATE_ROOT` | `/opt/cloud_home` | 安装根目录 |
 | `UPDATE_BASE_URL` | 空 | 仅测试：用本地镜像代替 GitHub，生产勿设 |
 
@@ -63,7 +73,7 @@ $UPDATE_ROOT (默认 /opt/cloud_home)
 二进制，所以**更新二进制就是同时更新后端与 UI**——没有独立的 UI 制品，也就不会出现版本错位，回滚时两者一起回退。
 
 - 发布构建必须先构建 `ui/`，且 UI 内置的版本号等于 `CARGO_PKG_VERSION`，否则编译失败（不可能发出过期或缺失的 UI）。
-- `--self-test`（更新器在切换前对新二进制运行）同时校验内嵌 UI：`index.html` 与资源齐全、版本一致；不通过则拒绝安装。
+- `--self-test`（更新器在切换前对新二进制运行）同时校验内嵌 UI：`index.html`、其引用的 `/assets/*` 齐全，`version.json` 版本等于二进制版本；任一不满足即非零退出，更新器拒绝安装。实现见 `src/ui.rs`，路由与缓存规则见 `spec/backend.md`「Web UI 的提供」。
 - 已打开的浏览器标签页持有旧 UI：更新重启后，页面通过 `/health` 的版本号发现变化并提示/自动重新加载（R-027），
   上传/下载进行中绝不强制刷新。
 - 端到端脚本（R-031）要证明：更新后 `GET /` 返回的是新 UI，回滚后是旧 UI。

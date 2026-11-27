@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-l="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>The first working UI (sample milestone report) · Cloud Home Report</title>
+<link rel="stylesheet" href="../../assets/site.css">
+<script src="../../assets/boot.js"></script>
+</head>
+<body data-sample data-page="reports" data-root="../../" data-path="/reports/m1-first-ui/" data-title-zh="第一个能用的界面（里程碑报告示例）· Cloud Home 报告">
+<!-- BESPOKE MILESTONE PAGE (template). A milestone report is a hand-built page in manager-site/src/reports/<id>/ that
+     still uses the shared header, footer, tokens and components. Everything here is sample data and placeholder art. -->
+<div class="ms">
+<main id="main">
+  <section class="ms-hero">
+    <div class="wrap">
+      <span class="badge-ms" data-ic="tag"><span data-zh="里程碑 1 · 示例模板">Milestone 1 · sample template</span></span>
+      <h1 data-zh="第一个能用的界面">The first working UI</h1>
+      <p class="lede" data-zh="登录、浏览、上传和预览，浅色与深色，三种语言。家庭云盘第一次在浏览器里打开。">Sign in, browse, upload and preview, in light and dark, in three languages. Cloud Home opens in a browser for the first time.</p>
+      <div class="device" aria-hidden="true">
+        <div class="dev-bar"><i></i><i></i><i></i><span data-zh="占位窗口 · 不是真实截图">Placeholder window · not a real screenshot</span></div>
+        <div class="dev-body"><div class="dev-side"><b></b><b class="on"></b><b></b><b></b></div>
+          <div class="dev-main"><div class="dev-crumb"><b data-zh="占位">Placeholder</b></div><div class="dev-files"><div class="fo"><i></i></div><div class="fo"><i></i></div><div><i></i></div><div><i></i></div><div><i></i></div><div><i></i></div><div><i></i></div><div><i></i></div></div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <nav class="ms-nav" aria-label="On this page"><div class="wrap">
+    <a href="#numbers" data-zh="数字">By the numbers</a><a href="#tour" data-zh="导览">Walkthrough</a><a href="#compare" data-zh="前后对比">Before and after</a><a href="#matrix" data-zh="外观与语言">Looks and languages</a><a href="#learned" data-zh="心得">What we learned</a>
+  </div></nav>
+
+  <section class="ms-sec wrap" id="numbers">
+    <p class="eyebrow" data-zh="用数字说话">By the numbers</p>
+    <h2 class="title" data-zh="一个能用的界面，是这样堆起来的。">What it took to get a first usable screen.</h2>
+    <div class="bignums">
+      <div class="io"><b data-count="14">14</b><span data-zh="个界面">screens designed</span></div>
+      <div class="io"><b data-count="3">3</b><span data-zh="种语言">languages, with real wording</span></div>
+      <div class="io"><b data-count="2">2</b><span data-zh="种外观">appearances, one tap apart</span></div>
+      <div class="io"><b data-count="212">212</b><span data-zh="项测试通过">tests passing</span></div>
+    </div>
+  </section>
+
+  <section class="ms-sec wrap" id="tour">
+    <p class="eyebrow" data-zh="逐步导览">Walkthrough</p>
+    <h2 class="title" data-zh="随着滚动，看一遍完整流程。">Scroll to follow one complete visit.</h2>
+    <div class="walk">
+      <div class="walk-dev"><div class="device" aria-hidden="true">
+        <div class="dev-bar"><i></i><i></i><i></i><span data-zh="占位窗口">Placeholder window</span></div>
+        <div class="screens">
+          <div class="screen on" data-i="0"><div class="sc-pad"><i class="sc-dot"></i><i class="sc-line"></i><i class="sc-line s"></i><i class="sc-pill"></i></div></div>
+          <div class="screen" data-i="1"><div class="sc-pad grid-t"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+          <div class="screen" data-i="2"><div class="sc-pad"><i class="sc-card"></i><div class="prog" style="width:70%"><i></i></div></div></div>
+          <div class="screen" data-i="3"><div class="sc-pad"><i class="sc-big"></i></div></div>
+        </div></div></div>
+      <div class="walk-steps">
+        <div class="wstep" data-i="0"><span class="eyebrow" data-zh="第 1 步">Step 1</span><h3 data-zh="登录">Sign in</h3><p data-zh="用邮箱或手机号登录；新账户会看到“等待批准”的说明，而不是一个报错。">Sign in with an email or phone. A new account sees a calm “waiting for approval” screen, not an error.</p></div>
+        <div class="wstep" data-i="1"><span class="eyebrow" data-zh="第 2 步">Step 2</span><h3 data-zh="浏览文件">Browse your files</h3><p data-zh="网格或列表，面包屑随时指明你在哪儿。">Grid or list, with a breadcrumb that always says where you are.</p></div>
+        <div class="wstep" data-i="2"><span class="eyebrow" data-zh="第 3 步">Step 3</span><h3 data-zh="上传">Upload</h3><p data-zh="把文件拖进来，每个文件都有自己的进度，随时可以取消。">Drop files in. Each one has its own progress and can be cancelled.</p></div>
+        <div class="wstep" data-i="3"><span class="eyebrow" data-zh="第 4 步">Step 4</span><h3 data-zh="预览">Preview</h3><p data-zh="图片、音频和视频在浏览器里直接打开，用键盘或滑动切换。">Photos, audio and video open right in the browser; move on with the keyboard or a swipe.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="ms-sec wrap" id="compare">
+    <p class="eyebrow" data-zh="前后对比">Before and after</p>
+    <h2 class="title" data-zh="从线框到真正能点的界面。">From a wireframe to something you can click.</h2>
+    <div class="ba" style="margin-top:40px">
+      <div class="layer before"><div class="art abs wire flat"><i></i><i></i><i></i><span class="cmp-name" data-zh="线框">Wireframe</span></div></div>
+      <div class="layer after"><div class="art abs p4"><i></i><i></i><i></i><span class="cmp-name" style="color:rgba(0,0,0,.6)" data-zh="已构建">Built</span></div></div>
+      <input type="range" min="0" max="100" step="2" value="50" aria-label="Compare before and after" data-al-en="Compare before and after" data-al-zh="对比前后效果">
+      <div class="handle" aria-hidden="true"></div>
+      <span class="lab l" aria-hidden="true" data-zh="之前：设计原型">Before: design mockup</span><span class="lab r" aria-hidden="true" data-zh="之后：浏览器中运行">After: running in a browser</span>
+    </div>
+    <p class="cap" style="color:var(--text-2)" data-zh="拖动滑块，或聚焦后用左右方向键。占位图，非真实截图。">Drag the handle, or focus it and use the arrow keys. Placeholder art, not real screenshots.</p>
+  </section>
+
+  <section class="ms-sec wrap" id="matrix">
+    <p class="eyebrow" data-zh="外观与语言">Looks and languages</p>
+    <h2 class="title" data-zh="同一个界面，六种样子。">One interface, six ways to look at it.</h2>
+    <div class="matrix">
+      <div class="mcell card"><div class="art abs"><i></i><i></i><i></i></div><div class="lbl"><span>English</span><span data-zh="浅色">Light</span></div></div>
+      <div class="mcell card"><div class="art abs p2"><i></i><i></i><i></i></div><div class="lbl"><span>简体中文</span><span data-zh="浅色">Light</span></div></div>
+      <div class="mcell card"><div class="art abs p3"><i></i><i></i><i></i></div><div class="lbl"><span>繁體中文</span><span data-zh="浅色">Light</span></div></div>
+      <div class="mcell card dk"><div class="art abs dark"><i></i><i></i><i></i></div><div class="lbl"><span>English</span><span data-zh="深色">Dark</span></div></div>
+      <div class="mcell card dk"><div class="art abs dark"><i></i><i></i><i></i></div><div class="lbl"><span>简体中文</span><span data-zh="深色">Dark</span></div></div>
+      <div class="mcell card dk"><div class="art abs dark"><i></i><i></i><i></i></div><div class="lbl"><span>繁體中文</span><span data-zh="深色">Dark</span></div></div>
+    </div>
+  </section>
+
+  <section class="ms-sec wrap" id="learned">
+    <p class="eyebrow" data-zh="心得">What we learned</p>
+    <h2 class="title" data-zh="三件值得记下来的事。">Three things worth writing down.</h2>
+    <div class="learn">
+      <article class="card"><h3 class="h3" data-zh="中文并不比英文短">Chinese is not shorter</h3><p class="sub" data-zh="繁体和简体的按钮文字常常和英文一样长，所以每个组件都按最长文案检查。">Button labels in both Chinese scripts are often as long as English, so every component is checked with the longest copy.</p></article>
+      <article class="card"><h3 class="h3" data-zh="空状态也是设计">Empty states are design</h3><p class="sub" data-zh="第一次打开时什么都没有，所以这一屏要邀请你做第一件事。">On first launch there is nothing yet, so that screen invites the first action.</p></article>
+      <article class="card"><h3 class="h3" data-zh="更新要悄悄地完成">Updates should be quiet</h3><p class="sub" data-zh="界面和后端一起更新；你只会看到“正在重新连接”，不会看到坏掉的页面。">The UI and backend update together; you see “reconnecting”, never a broken page.</p></article>
+    </div>
+    <nav class="pager" style="margin-top:72px" aria-label="Other reports"><a href="../"><small data-zh="全部报告">All reports</small><b data-zh="返回报告列表">Back to the reports index</b></a><a class="nx" href="../2026-11-24-backend-foundation/"><small data-zh="真实的第一期报告">The first real report</small><b data-zh="后端基础与会自我更新的盒子">Backend foundation and the self-updating box</b></a></nav>
+  </section>
+</main>
+</div>
+<script src="../../assets/site.js" defer></script>
+</body>
+</html>

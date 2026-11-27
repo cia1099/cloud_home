@@ -1,0 +1,21 @@
+{
+  "name": "manager-site",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "bun scripts/serve.ts --watch",
+    "build": "vite build && bun src/build/generate.ts",
+    "build:examples": "REPORTS_DIR=examples OUT_DIR=report_web_examples bun run build",
+    "preview": "bun scripts/serve.ts",
+    "preview:examples": "OUT_DIR=report_web_examples PORT=4174 bun scripts/serve.ts",
+    "check": "tsc --noEmit",
+    "test": "bun test",
+    "check:links": "bun scripts/check-links.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.5",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6"
+  }
+}

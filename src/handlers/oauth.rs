@@ -5,16 +5,19 @@
 
 use axum::Json;
 use axum::extract::{Path as AxumPath, Query, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::StatusCode;
+use axum::http::request::Parts;
+use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use crate::auth::AuthUser;
 use crate::error::{AppResult, ErrorResponse};
 use crate::handlers::auth::issue_auth_response;
-use crate::models::user::{AuthResponse, UserResponse};
+use crate::models::user::{AuthResponse, RegisterPendingResponse, UserResponse};
 use crate::openapi::ApiResponse;
-use crate::services::{oauth_service, user_service};
+use crate::services::oauth_service::{self, OAuthLogin};
+use crate::services::user_service::{self, RegisterSource};
 use crate::state::AppState;
 
 /// `GET /auth/providers` 响应体。
@@ -94,18 +97,22 @@ pub async fn authorize(
     params(("provider" = String, Path, description = "google | apple")),
     request_body = OAuthCodeDto,
     responses(
-        (status = 200, description = "登录成功（新建或关联账户），设置 auth_token Cookie", body = ApiResponse<AuthResponse>),
+        (status = 200, description = "登录成功（既有账户，或按注册模式新建并启用），设置 auth_token Cookie", body = ApiResponse<AuthResponse>),
+        (status = 202, description = "新账户已创建、等待管理员批准（`REGISTRATION_MODE=approval`）；不签发 token、不设 Cookie", body = ApiResponse<RegisterPendingResponse>),
         (status = 400, description = "第三方未提供已验证的邮箱", body = ErrorResponse),
-        (status = 401, description = "授权码无效，或账户已停用", body = ErrorResponse),
+        (status = 401, description = "授权码无效，或账户已被运维删除", body = ErrorResponse),
+        (status = 403, description = "REGISTRATION_CLOSED；或账户 ACCOUNT_PENDING / ACCOUNT_REJECTED", body = ErrorResponse),
         (status = 404, description = "第三方登录未启用，或该 provider 未配置", body = ErrorResponse),
-        (status = 409, description = "邮箱已属于一个未验证邮箱的账户，无法并入", body = ErrorResponse),
+        (status = 409, description = "OAUTH_EMAIL_UNVERIFIED_LINK：邮箱已属于一个本地邮箱尚未验证的账户，无法并入", body = ErrorResponse),
+        (status = 429, description = "REGISTRATION_BUSY：待批准队列已满或同一来源注册过于频繁", body = ErrorResponse),
     )
 )]
 pub async fn login(
     State(state): State<AppState>,
     AxumPath(provider): AxumPath<String>,
+    parts: Parts,
     Json(dto): Json<OAuthCodeDto>,
-) -> AppResult<(StatusCode, HeaderMap, ApiResponse<AuthResponse>)> {
+) -> AppResult<Response> {
     let p = state.oauth.get(&provider)?;
     let profile = p
         .exchange(&dto.code, &dto.redirect_uri)
@@ -120,17 +127,44 @@ pub async fn login(
                 "第三方登录失败：授权码换取资料失败"
             );
         })?;
-    let user = oauth_service::login(&state.db, p.name(), &profile).await?;
+    let ip = crate::logging::client_ip(
+        &parts.headers,
+        &parts.extensions,
+        state.config.trust_proxy_headers,
+    );
+    let source = RegisterSource {
+        ip: ip.map(|i| i.to_string()),
+        is_local: ip.is_some_and(super::admin::is_local),
+    };
+    let OAuthLogin { user, created } = oauth_service::login(
+        &state.db,
+        &state.config.registration,
+        p.name(),
+        &profile,
+        source,
+    )
+    .await?;
     crate::audit!(
         info,
         "auth.oauth_login",
-        "success",
+        if created { "created" } else { "success" },
         provider = %provider,
         user_id = %user.id,
         username = %user.username,
         "第三方登录成功"
     );
-    issue_auth_response(&state, user, StatusCode::OK).await
+
+    if user.is_active == 0 {
+        // 只有「刚新建且待批准」会走到这里（既有未批准账户已在 service 里 403）。
+        state.chat.notify_registration(&user).await;
+        let body = ApiResponse::new(RegisterPendingResponse {
+            status: "pending_approval",
+        });
+        return Ok((StatusCode::ACCEPTED, body).into_response());
+    }
+    Ok(issue_auth_response(&state, user, StatusCode::OK)
+        .await?
+        .into_response())
 }
 
 /// POST /auth/oauth/{provider}/link
@@ -144,7 +178,7 @@ pub async fn login(
         (status = 200, description = "已绑定，返回最新的当前用户信息", body = ApiResponse<UserResponse>),
         (status = 401, description = "认证失败，或授权码无效", body = ErrorResponse),
         (status = 404, description = "第三方登录未启用，或该 provider 未配置", body = ErrorResponse),
-        (status = 409, description = "该第三方账号已绑定到别的账户，或当前账户已绑了另一个", body = ErrorResponse),
+        (status = 409, description = "OAUTH_ACCOUNT_ALREADY_LINKED：该第三方账号已绑定到别的账户；OAUTH_PROVIDER_ALREADY_LINKED：当前账户已绑了同一家的另一个账号", body = ErrorResponse),
     ),
     security(("cookie_auth" = []), ("bearer_auth" = []))
 )]

@@ -1,0 +1,24 @@
+{
+  "kind": "weekly",
+  "title": { "en": "Accept buttons and clear A/B choices", "zh": "“验收”按钮与清晰的 A/B 选择" },
+  "summary": {
+    "en": "Requirements in review now have an Accept button on the Requirements page (it opens a [OK R-nnn] issue; your note is quoted in the next report). Decision cards with named options, like A-003, now show Choose A / Choose B instead of Approve / Deny. Verified: type check, 11 site tests, build of 12 pages and link check pass. Not looked at in a browser. The chat admin commands (R-064) did not start: workers were denied shell access this session.",
+    "zh": "处于“待验收”的需求现在在“需求”页有“验收”按钮（会打开 [OK R-nnn] 议题，你的备注会在下一份报告中引用）。像 A-003 这样有命名选项的决策卡现在显示“选 A / 选 B”，不再是批准/拒绝。已验证：类型检查、11 项网站测试、12 页构建与链接检查均通过。尚未在浏览器中查看。聊天管理命令（R-064）未能开始：本次工作者没有获得命令行权限。"
+  },
+  "chip": { "tone": "accent", "icon": "check", "text": { "en": "A-003 waits for your choice", "zh": "A-003 等你选择" } },
+  "cover": { "style": "c1", "icon": "heart" },
+  "sections": [
+    {
+      "id": "changes",
+      "title": { "en": "What changed", "zh": "有什么变化" },
+      "component": "text",
+      "data": {
+        "bullets": [
+          { "en": "**R-074 (review):** Accept button on /requirements/ for every requirement in review.", "zh": "**R-074（待验收）：**“需求”页上每个待验收需求都有“验收”按钮。" },
+          { "en": "**A-003:** now answered with Choose A or Choose B buttons.", "zh": "**A-003：**现在用“选 A / 选 B”按钮回答。" },
+          { "en": "**R-064:** blocked this session (workers had no shell access); it restarts next session.", "zh": "**R-064：**本次受阻（工作者没有命令行权限），下次会话重启。" }
+        ]
+      }
+    }
+  ]
+}

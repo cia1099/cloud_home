@@ -5,3 +5,8 @@ Cargo.lock
 /manager-site/node_modules
 /manager-site/report_web
 /logs
+/design/.tmp
+/.claude/worktrees
+/.verify
+/ui/dist
+/ui/node_modules

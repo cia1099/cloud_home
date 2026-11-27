@@ -1,0 +1,21 @@
+import './style.css';
+import { initBurndown } from './burndown.ts';
+import { initSheet } from './chrome.ts';
+import { initCompare } from './compare.ts';
+import { initLightbox } from './lightbox.ts';
+import { initRequirements, initTimeline } from './lists.ts';
+import { initPlayers } from './player.ts';
+import { initPrefs } from './prefs.ts';
+import { initReveal } from './reveal.ts';
+import { initScroll } from './scroll.ts';
+
+initPrefs();
+initSheet();
+initReveal();
+initBurndown();
+initRequirements();
+initTimeline();
+initLightbox();
+initCompare();
+initPlayers();
+initScroll();

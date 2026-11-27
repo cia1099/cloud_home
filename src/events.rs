@@ -11,10 +11,29 @@ pub struct Change {
     pub payload: FileChangeEvent,
 }
 
+/// 站内分享通知的类型。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShareNoticeKind {
+    /// 有人把东西分享给了你（SSE `share.received`）。
+    Received,
+    /// 分享被撤销或你被移出收件人（SSE `share.revoked`）。
+    Revoked,
+}
+
+/// 发给某个收件人账户的分享通知。
+#[derive(Debug, Clone)]
+pub struct ShareNotice {
+    pub user_id: String,
+    pub kind: ShareNoticeKind,
+    pub share_id: String,
+}
+
 /// 广播到所有 SSE 连接的事件。
 #[derive(Debug, Clone)]
 pub enum ChangeEvent {
     Changed(Box<Change>),
+    /// 站内分享通知，只有 `user_id` 对应账户的连接会转发。
+    Share(Box<ShareNotice>),
     /// 全局失效：跨账户批量操作（如回收站定时清理）后使用，不逐个通知。
     RefreshAll,
     /// 发现了新版本（载荷为版本号）。
@@ -39,6 +58,15 @@ impl ChangeNotifier {
         let _ = self.tx.send(ChangeEvent::Changed(Box::new(Change {
             owner_id: owner_id.into(),
             payload,
+        })));
+    }
+
+    /// 通知某个收件人：分享到达或被收回。
+    pub fn notify_share(&self, user_id: &str, kind: ShareNoticeKind, share_id: &str) {
+        let _ = self.tx.send(ChangeEvent::Share(Box::new(ShareNotice {
+            user_id: user_id.to_string(),
+            kind,
+            share_id: share_id.to_string(),
         })));
     }
 

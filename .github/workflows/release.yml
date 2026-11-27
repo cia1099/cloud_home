@@ -32,6 +32,15 @@ jobs:
           fi
           echo "VERSION=$tag" >> "$GITHUB_ENV"
 
+      # UI 先构建：发布构建会把 ui/dist 嵌入二进制，且校验其版本等于 Cargo.toml 版本。
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Build UI
+        working-directory: ui
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}

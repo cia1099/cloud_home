@@ -8,20 +8,15 @@ pub const FILE_TYPE_FOLDER: &str = "folder";
 
 /// 数据库中的文件/资料夹行。
 #[derive(Debug, Clone, FromRow)]
-#[allow(dead_code)]
 pub struct FileEntry {
     pub id: String,
-    pub owner_id: String,
     pub parent_id: Option<String>,
-    pub drive_id: String,
     pub name: String,
     pub file_type: String,
     pub size_bytes: i64,
     pub mime_type: Option<String>,
-    pub physical_path: Option<String>,
     pub created_at: String,
     pub updated_at: String,
-    pub is_deleted: i64,
 }
 
 impl FileEntry {
@@ -139,13 +134,40 @@ pub struct DownloadRequest {
 
 /// 文档专用：描述 `POST /files/upload` 的 multipart/form-data 请求体形状。
 ///
-/// handler 实际使用 axum 的 `Multipart` 提取器手动解析字段，并不直接反序列化此结构体——
+/// handler 实际使用 axum 的 `Multipart` 提取器手动解析字段，没有对应的数据结构，
+/// 所以这里是不带字段的标记类型，schema 手写——
 /// 若日后修改 `files::upload` 手动匹配的字段名（`file` / `name` / `parent_id`），需同步更新此处。
-#[derive(Debug, ToSchema)]
-#[allow(dead_code)]
-pub struct UploadForm {
-    #[schema(value_type = String, format = Binary)]
-    pub file: Vec<u8>,
-    pub name: Option<String>,
-    pub parent_id: Option<String>,
+pub struct UploadForm;
+
+impl utoipa::PartialSchema for UploadForm {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::Schema> {
+        use utoipa::openapi::schema::{KnownFormat, ObjectBuilder, SchemaFormat, Type};
+        let text = || ObjectBuilder::new().schema_type(Type::String);
+        ObjectBuilder::new()
+            .property(
+                "file",
+                text().format(Some(SchemaFormat::KnownFormat(KnownFormat::Binary))),
+            )
+            .required("file")
+            .property("name", text())
+            .property("parent_id", text())
+            .into()
+    }
+}
+
+impl ToSchema for UploadForm {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use utoipa::PartialSchema;
+
+    #[test]
+    fn upload_form_schema_documents_multipart_fields() {
+        let json = serde_json::to_value(UploadForm::schema()).unwrap();
+        assert_eq!(json["properties"]["file"]["format"], "binary");
+        assert_eq!(json["required"][0], "file");
+        assert!(json["properties"]["name"].is_object());
+        assert!(json["properties"]["parent_id"].is_object());
+    }
 }

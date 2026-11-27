@@ -11,17 +11,18 @@
 use std::net::IpAddr;
 
 use axum::Json;
-use axum::extract::{FromRequestParts, State};
+use axum::extract::{FromRequestParts, Query, State};
 use axum::http::request::Parts;
 
 use crate::error::{AppError, AppResult, ErrorResponse};
-use crate::models::event::{ChangeKind, FileChangeEvent};
 use crate::models::user::{
-    AdminActionResponse, AdminPurgeResponse, AdminTargetDto, AdminUserItem, AdminUserListResponse,
-    IdentityResponse, PROVIDER_PASSWORD,
+    APPROVAL_APPROVED, APPROVAL_PENDING, APPROVAL_REJECTED, AdminActionResponse,
+    AdminApproveDto, AdminDecisionResponse, AdminPurgeResponse, AdminRejectDto, AdminTargetDto,
+    AdminUserItem, AdminUserListQuery, AdminUserListResponse, IdentityResponse, PROVIDER_PASSWORD,
 };
 use crate::openapi::ApiResponse;
-use crate::services::{trash_service, user_service};
+use crate::services::approval_service::{self, Decision};
+use crate::services::{admin_service, user_service};
 use crate::state::AppState;
 
 /// 管理端点守卫：功能开关 → 来源网段 → 共享口令，任一不过即拒。
@@ -93,7 +94,7 @@ impl FromRequestParts<AppState> for AdminGuard {
 }
 
 /// 回环或 RFC1918 / ULA 私有地址。
-fn is_local(ip: IpAddr) -> bool {
+pub(crate) fn is_local(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => v4.is_loopback() || v4.is_private() || v4.is_link_local(),
         IpAddr::V6(v6) => {
@@ -118,14 +119,19 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     diff == 0
 }
 
-/// GET /admin/users — 列出所有账户（含已停用），用于定位要删除 / 还原的对象。
+/// GET /admin/users — 列出账户（含已停用），用于定位要删除 / 还原 / 审批的对象。
+/// `?status=pending|approved|rejected|all` 按审批状态过滤，默认 `all`。
 #[utoipa::path(
     get,
     path = "/admin/users",
     tag = "admin",
-    params(("X-Admin-Password" = String, Header, description = "共享运维口令（ADMIN_PASSWORD）")),
+    params(
+        AdminUserListQuery,
+        ("X-Admin-Password" = String, Header, description = "共享运维口令（ADMIN_PASSWORD）"),
+    ),
     responses(
-        (status = 200, description = "账户列表", body = ApiResponse<AdminUserListResponse>),
+        (status = 200, description = "账户列表（含 approval_status、registered_ip）", body = ApiResponse<AdminUserListResponse>),
+        (status = 400, description = "status 取值无效", body = ErrorResponse),
         (status = 401, description = "口令缺失或错误", body = ErrorResponse),
         (status = 403, description = "非本机 / 内网调用", body = ErrorResponse),
         (status = 404, description = "未配置 ADMIN_PASSWORD，功能未启用", body = ErrorResponse),
@@ -134,8 +140,18 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 pub async fn list_users(
     State(state): State<AppState>,
     _guard: AdminGuard,
+    Query(q): Query<AdminUserListQuery>,
 ) -> AppResult<ApiResponse<AdminUserListResponse>> {
-    let rows = user_service::list_all(&state.db).await?;
+    let status = match q.status.as_deref() {
+        None | Some("all") => None,
+        Some(s @ (APPROVAL_PENDING | APPROVAL_APPROVED | APPROVAL_REJECTED)) => Some(s),
+        Some(_) => {
+            return Err(AppError::BadRequest(
+                "status 只能是 pending|approved|rejected|all".into(),
+            ));
+        }
+    };
+    let rows = user_service::list_all(&state.db, status).await?;
     let items = rows
         .into_iter()
         .map(|(u, ids)| AdminUserItem {
@@ -143,6 +159,12 @@ pub async fn list_users(
             username: u.username,
             is_active: u.is_active != 0,
             deleted_at: u.deleted_at,
+            created_at: u.created_at,
+            approval_status: u.approval_status,
+            approval_decided_at: u.approval_decided_at,
+            approval_decided_by: u.approval_decided_by,
+            approval_note: u.approval_note,
+            registered_ip: u.registered_ip,
             identities: ids
                 .iter()
                 .filter(|i| i.provider != PROVIDER_PASSWORD)
@@ -151,6 +173,80 @@ pub async fn list_users(
         })
         .collect();
     Ok(ApiResponse::new(AdminUserListResponse { items }))
+}
+
+/// 运维端点作为操作发起者记入审计的名字。
+const ADMIN_ENDPOINT: &str = "admin-endpoint";
+
+/// 管理端点调用审批服务时记在 `approval_decided_by` 里的决定者。
+const DECIDED_BY: &str = ADMIN_ENDPOINT;
+
+/// POST /admin/users/approve — 批准待批准（或改判已拒绝）的账户；已批准则幂等返回。
+#[utoipa::path(
+    post,
+    path = "/admin/users/approve",
+    tag = "admin",
+    request_body = AdminApproveDto,
+    params(("X-Admin-Password" = String, Header, description = "共享运维口令（ADMIN_PASSWORD）")),
+    responses(
+        (status = 200, description = "已批准（`changed=false` 表示本来就是已批准）", body = ApiResponse<AdminDecisionResponse>),
+        (status = 401, description = "口令缺失或错误", body = ErrorResponse),
+        (status = 403, description = "非本机 / 内网调用", body = ErrorResponse),
+        (status = 404, description = "账户不存在，或未配置 ADMIN_PASSWORD", body = ErrorResponse),
+        (status = 409, description = "标识命中多个账户，请用 provider 指定；或账户状态不允许批准（含先前决定者）", body = ErrorResponse),
+    )
+)]
+pub async fn approve_user(
+    State(state): State<AppState>,
+    _guard: AdminGuard,
+    Json(dto): Json<AdminApproveDto>,
+) -> AppResult<ApiResponse<AdminDecisionResponse>> {
+    decide(&state, &dto.identifier, dto.provider.as_deref(), Decision::Approve, dto.note.as_deref())
+        .await
+}
+
+/// POST /admin/users/reject — 拒绝待批准的账户；已拒绝则幂等返回，已批准则 409。
+#[utoipa::path(
+    post,
+    path = "/admin/users/reject",
+    tag = "admin",
+    request_body = AdminRejectDto,
+    params(("X-Admin-Password" = String, Header, description = "共享运维口令（ADMIN_PASSWORD）")),
+    responses(
+        (status = 200, description = "已拒绝（`changed=false` 表示本来就是已拒绝）", body = ApiResponse<AdminDecisionResponse>),
+        (status = 401, description = "口令缺失或错误", body = ErrorResponse),
+        (status = 403, description = "非本机 / 内网调用", body = ErrorResponse),
+        (status = 404, description = "账户不存在，或未配置 ADMIN_PASSWORD", body = ErrorResponse),
+        (status = 409, description = "标识命中多个账户，请用 provider 指定；或账户已被批准（含先前决定者）", body = ErrorResponse),
+    )
+)]
+pub async fn reject_user(
+    State(state): State<AppState>,
+    _guard: AdminGuard,
+    Json(dto): Json<AdminRejectDto>,
+) -> AppResult<ApiResponse<AdminDecisionResponse>> {
+    decide(&state, &dto.identifier, dto.provider.as_deref(), Decision::Reject, dto.reason.as_deref())
+        .await
+}
+
+async fn decide(
+    state: &AppState,
+    identifier: &str,
+    provider: Option<&str>,
+    decision: Decision,
+    note: Option<&str>,
+) -> AppResult<ApiResponse<AdminDecisionResponse>> {
+    let target = user_service::find_any(&state.db, identifier.trim(), provider).await?;
+    let decided = approval_service::decide(&state.db, &target.id, decision, DECIDED_BY, note, true).await?;
+    let u = decided.user;
+    Ok(ApiResponse::new(AdminDecisionResponse {
+        user_id: u.id,
+        username: u.username,
+        approval_status: u.approval_status,
+        changed: decided.changed,
+        decided_at: u.approval_decided_at,
+        decided_by: u.approval_decided_by,
+    }))
 }
 
 /// POST /admin/users/delete — 软删除账户：文件全部进回收站，账户停用。
@@ -177,18 +273,13 @@ pub async fn delete_user(
 ) -> AppResult<ApiResponse<AdminActionResponse>> {
     let target = user_service::find_any(&state.db, dto.identifier.trim(), dto.provider.as_deref())
         .await?;
-    let (user, affected) =
-        user_service::soft_remove(&state.db, state.config.trash_retention_days, &target.id).await?;
-
-    crate::audit!(
-        info,
-        "admin.user.delete",
-        "success",
-        target_user_id = %user.id,
-        target_username = %user.username,
-        affected_items = affected,
-        "运维删除账户"
-    );
+    let (user, affected) = admin_service::delete_account(
+        &state.db,
+        state.config.trash_retention_days,
+        &target,
+        ADMIN_ENDPOINT,
+    )
+    .await?;
 
     Ok(ApiResponse::new(AdminActionResponse {
         user_id: user.id,
@@ -222,17 +313,8 @@ pub async fn restore_user(
 ) -> AppResult<ApiResponse<AdminActionResponse>> {
     let target = user_service::find_any(&state.db, dto.identifier.trim(), dto.provider.as_deref())
         .await?;
-    let (user, affected) = user_service::restore(&state.db, &target.id).await?;
-
-    crate::audit!(
-        info,
-        "admin.user.restore",
-        "success",
-        target_user_id = %user.id,
-        target_username = %user.username,
-        affected_items = affected,
-        "运维还原账户"
-    );
+    let (user, affected) =
+        admin_service::restore_account(&state.db, &target, ADMIN_ENDPOINT).await?;
 
     Ok(ApiResponse::new(AdminActionResponse {
         user_id: user.id,
@@ -271,31 +353,14 @@ pub async fn purge_trash(
     let target =
         user_service::find_any(&state.db, dto.identifier.trim(), dto.provider.as_deref()).await?;
 
-    // 先确认盘在：物理删除做不了就不该动数据库，否则会留下指向不存在文件的空记录。
-    let data_root = state.drive_manager.require_data_root().await?;
-    let (count, bytes) = trash_service::empty(&state.db, &data_root, &target.id).await?;
-
-    crate::audit!(
-        info,
-        "admin.trash.purge",
-        "success",
-        target_user_id = %target.id,
-        target_username = %target.username,
-        deleted_count = count,
-        freed_bytes = bytes,
-        "运维清空账户回收站"
-    );
-
-    if count > 0 {
-        state.events.notify(
-            &target.id,
-            FileChangeEvent {
-                kind: ChangeKind::Purged,
-                file: None,
-                parent_ids: Vec::new(),
-            },
-        );
-    }
+    let (count, bytes) = admin_service::purge_trash(
+        &state.db,
+        &state.drive_manager,
+        &state.events,
+        &target,
+        ADMIN_ENDPOINT,
+    )
+    .await?;
 
     Ok(ApiResponse::new(AdminPurgeResponse {
         user_id: target.id,

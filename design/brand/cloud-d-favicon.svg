@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Cloud Home">
+  <title>Cloud Home, variant D (Roofline), favicon</title>
+  <defs>
+    <mask id="df-door" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <path d="M476 890V690A36 36 0 0 1 548 690V890Z" fill="#000"/>
+    </mask>
+  </defs>
+  <path d="M512 0C880 0 1024 144 1024 512C1024 880 880 1024 512 1024C144 1024 0 880 0 512C0 144 144 0 512 0Z" fill="#1668e0"/>
+  <g fill="#fff">
+    <g mask="url(#df-door)">
+      <path d="M344 731H680A132 132 0 0 0 698 468A197 197 0 0 0 318 501A117 117 0 0 0 344 731Z" transform="translate(512 630) scale(1.05) translate(-520 -510)"/>
+    </g>
+    <path d="M170 410L512 190L854 410" fill="none" stroke="#fff" stroke-width="84" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

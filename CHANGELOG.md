@@ -17,6 +17,127 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   accepted, an existing account is joined only when its local email is already
   verified, and a third-party account is never moved between accounts. Tested
   with an in-process fake provider, no network.
+- **Device packaging (R-021).** `packaging/linux/install.sh` (creates the
+  `cloudhome` user, installs a systemd unit with `Restart=always`) and
+  `packaging/macos/install.sh` (launchd LaunchDaemon with `KeepAlive`) install
+  the latest release: the manifest signature is verified with the `minisign`
+  CLI against the public key embedded in the binary, the tarball sha256 is
+  checked, and `/opt/cloud_home` is laid out with the `current` symlink so the
+  updater is enabled. A unit test keeps the scripts' embedded key in sync with
+  `update::PUBLIC_KEY`.
+- **Shared with you (backend, R-071).** Shares can now be addressed to specific
+  family members: `POST /shares` accepts `recipient_ids` (approved, active
+  users other than the owner); such a share has no public link. New endpoints:
+  `GET /shares/received` (newest first, with `seen_at`), `POST /shares/:id/seen`,
+  `PATCH /shares/:id` (replace the recipients), read-only recipient access by
+  session to the shared item and, for folders, its whole subtree
+  (`/shares/received/:id/files[/:file_id[/raw|/thumbnail|/download]]`, Range
+  supported, 404 for everyone who is not a recipient), and `GET /users/directory`
+  (only `id` and `display_name`). `GET /shares` now lists each share's
+  `recipients`; `token`/`url` are `null` for user-addressed shares. SSE gains
+  `share.received` and `share.revoked`. New table `share_recipients` (migration
+  `20240101000010`). Existing public links are unchanged.
+
+### Changed
+- Internal cleanup, no behavior change: removed every `#[allow(dead_code)]` and
+  the code behind it (unused `PayloadTooLarge` error variant, unused drive
+  helpers, `ActivityTracker::wait_idle`, unread row fields); the upload form
+  OpenAPI schema is now hand-written instead of a never-read struct.
+
+### Fixed
+- **Interrupted uploads no longer leave orphan files on disk (B-002).** A client
+  disconnecting mid-upload, a multipart error, or a cancelled request now deletes
+  the partially written file; it is kept only once the database row is inserted.
+- Two admins pressing Approve and Reject in chat at the same moment could both
+  "win" (the approval silently overturned the rejection). A chat button can no
+  longer overturn a rejection; only the admin endpoint can.
+
+### Changed
+- **Breaking:** new accounts now need administrator approval. With the new
+  default `REGISTRATION_MODE=approval`, `POST /auth/register` answers
+  `202 {"data":{"status":"pending_approval"}}` and issues **no token and no
+  cookie**; the account stays inactive until approved. `REGISTRATION_MODE=open`
+  keeps the old behaviour (`201` + token), `closed` answers
+  `403 REGISTRATION_CLOSED`. The very first account is approved automatically
+  (and gets `201` + token) only when the `users` table is completely empty and
+  the caller is on loopback / a private network; the check and the insert run in
+  one transaction. Logging in with the correct password on a pending or rejected
+  account returns `403 ACCOUNT_PENDING` / `403 ACCOUNT_REJECTED` (a wrong
+  password is still `401`). Existing accounts are migrated to `approved` and
+  keep working. The web app is updated separately (R-062).
+
+### Added
+- Admin operations in chat (R-064, Phase C): paired admins can send `/users
+  [pending|approved|rejected]`, `/status` (version, drive, account counts),
+  `/restore <email|phone>`, and the destructive `/delete <email|phone>` and
+  `/purge <email|phone>`. The destructive two reply with a short code first (`purge`
+  states that it is irreversible) and only run on `/confirm <code>`; the
+  confirmation is bound to the asking admin, the target account and the action,
+  single-use, valid for 2 minutes and kept in memory only; a wrong code cancels it,
+  `/cancel` drops it. Execution goes through the same service functions as
+  `/admin/users/delete|restore` and `/admin/trash/purge` (new
+  `services/admin_service.rs`; the audit events gain an `actor` field:
+  `admin-endpoint` or `chat:<provider>:<sender-id>`). Listings mask identifiers like
+  the registration messages; file names and contents are never sent. New audit
+  result `chat.command` `invalid_confirmation`. No new API, migration or dependency.
+- Admin chat core (R-063): new registration requests are pushed to paired
+  administrators in a chat app, with **Approve / Reject** buttons.
+  `CHAT_PROVIDER=none|telegram` (default `none`), `CHAT_BOT_TOKEN` (redacted in
+  `Config`'s `Debug`, never logged), `CHAT_LANGUAGE=en|zh-Hans|zh-Hant`,
+  `CHAT_MASK_IDENTIFIERS=true`. Telegram uses outbound-only HTTPS long polling (no
+  webhook, no inbound port, no new dependency); the provider is a trait with an
+  in-memory fake used by all tests. Pairing via `POST /admin/chat/pairing` (8-char
+  one-time code, 10 minutes, stored hashed) and `/pair <code>`; `GET /admin/chat`
+  and `DELETE /admin/chat/admins/{id}` (revokes immediately). Commands `/start
+  /help /pair /pending /whoami`. Button payloads are opaque single-use tokens
+  (24 h, bound to admin + account + action); the decision goes through the same
+  `approval_service::decide` as the admin endpoints and the original messages are
+  edited afterwards. Unpaired senders are silently ignored and audited
+  (`chat.command`, rate-limited). Notifications go through a persistent outbox with
+  exponential-backoff retries (chat outages never block or imply an approval), bursts
+  (more than 5 in 10 minutes) collapse into one summary, and a daily reminder covers
+  requests pending for over 24 hours. Migration `…0009_add_admin_chat.sql`
+  (additive). What is sent to the provider is documented in `spec/admin_chat.md`.
+- OTA admin API behind the existing `AdminGuard` (shared password, local
+  network), listed in `/docs`: `GET /admin/update` (current version, available
+  version + notes URL, phase `idle|checking|downloading|installing|restarting|failed`,
+  settings, last error), `POST /admin/update/check`, `POST /admin/update/install`
+  (`202`, runs in the background; `409 UPDATE_TRANSFERS_ACTIVE` while uploads or
+  downloads are running unless `{"force": true}`; other `409` codes
+  `UPDATE_DISABLED`, `UPDATE_NOT_AVAILABLE`, `UPDATE_IN_PROGRESS`) and
+  `PUT /admin/update/settings` (partial update of mode, window, channel,
+  check interval; validated, persisted to `update/settings.json`). Audit events
+  `admin.update.check|install|settings`. `check_interval_hours` is now limited
+  to 1..=720. CORS now allows `PUT`.
+- Account approval via the private admin endpoints: `GET /admin/users` gains
+  `?status=pending|approved|rejected|all` and returns `approval_status`,
+  `approval_decided_*`, `approval_note`, `registered_ip` and `created_at`;
+  new `POST /admin/users/approve` and `POST /admin/users/reject` (idempotent;
+  reject-then-approve is allowed; rejecting an approved account is `409` naming
+  the earlier decider). Audit events `user.register`, `user.approve`,
+  `user.reject`, `user.expire` (the registration audit event `auth.register`
+  is renamed `user.register`).
+- Registration abuse limits: `REGISTER_RATE_PER_IP_PER_HOUR` (5) and
+  `PENDING_MAX` (20) answer `429 REGISTRATION_BUSY`; a rejected applicant may
+  register again at any time, with no cooldown and no cap on attempts: the same
+  account goes back to `pending` (new password and name, still inactive, no
+  token) and counts as a new request; pending requests
+  older than `PENDING_EXPIRE_DAYS` (14) are rejected automatically by an hourly
+  background task. Restoring a soft-deleted account never reactivates one that
+  is not approved.
+- One binary serves the API and the web UI. The built `ui/dist` is embedded in
+  the `cloud_home` binary and served from the same origin as `/api/v1`, with
+  SPA fallback to `index.html`. `/api/v1`, `/docs` and `/openapi.json` are never
+  shadowed, unknown `/api/*` paths stay a JSON 404, and a missing `/assets/*`
+  file is a 404 rather than `index.html`. `index.html` is `no-cache`, hashed
+  assets are `immutable`, and every response carries
+  `X-Robots-Tag: noindex, nofollow`. Debug builds read `ui/dist` from disk and
+  compile without it; release builds fail unless `ui/dist/index.html` exists and
+  the UI's baked-in version equals the crate version.
+- `cloud_home --self-test` also verifies the embedded UI (index, referenced
+  assets, version), so an update package with a broken UI is refused before it
+  is installed. Updating the binary now updates the UI with it.
+- The release workflow builds the UI first (frozen lockfile), then the binaries.
 - `POST /admin/trash/purge` empties a single account's trash immediately,
   reclaiming the disk space without waiting out the retention window. This is
   the only way to clear a removed account's files: deactivating an account

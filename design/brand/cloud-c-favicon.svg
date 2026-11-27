@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Cloud Home">
+  <title>Cloud Home, variant C (Hearth), favicon</title>
+  <path d="M512 0C880 0 1024 144 1024 512C1024 880 880 1024 512 1024C144 1024 0 880 0 512C0 144 144 0 512 0Z" fill="#1668e0"/>
+  <g transform="translate(512 512) scale(1.3) translate(-520 -510)">
+    <path d="M344 731H680A132 132 0 0 0 698 468A197 197 0 0 0 318 501A117 117 0 0 0 344 731Z" fill="#fff"/>
+    <path d="M520 482L598 556V664H442V556Z" fill="#1668e0" stroke="#1668e0" stroke-width="28" stroke-linejoin="round"/>
+  </g>
+</svg>

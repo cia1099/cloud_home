@@ -35,12 +35,32 @@ openssl rand -base64 64
 
 > 注意：`DATABASE_URL` 无需配置，程序会在运行时根据侦测到的硬盘路径自动构造。
 
+### 一体机安装（发布版，无需 Rust）
+
+脚本会取最新发布的清单并用内置 minisign 公钥验签（验不过即中止），再下载匹配本机架构的安装包、校验 sha256，
+布置 `/opt/cloud_home`（`versions/<ver>/` + `current` 符号链接，在线更新随即可用），并注册开机自启、退出即重启的服务。
+首次安装会生成 `/opt/cloud_home/.env`（随机 `JWT_SECRET`），按需修改后 `systemctl restart cloud_home`（macOS 见下）。
+
+```sh
+# Linux（需要 curl、minisign、systemd；创建 cloudhome 用户与 systemd 服务）
+sudo bash packaging/linux/install.sh
+
+# macOS（Apple 芯片；brew install minisign；服务以当前登录用户运行，launchd LaunchDaemon）
+sudo bash packaging/macos/install.sh
+# 修改 .env 后：sudo launchctl kickstart -k system/com.cloudhome.server
+```
+
 ## 构建
 
 ```sh
-cargo build            # 开发构建
+# 先构建 UI（需要 bun）；发布构建会把 ui/dist 嵌入二进制
+(cd ui && bun install --frozen-lockfile && bun run build)
+
+cargo build            # 开发构建（运行时读磁盘上的 ui/dist；没有 ui/dist 也能编译）
 cargo build --release  # 发布构建（产物在 target/release/cloud_home）
 ```
+
+发布构建要求 `ui/dist/index.html` 存在，且 UI 内置版本等于 `Cargo.toml` 的 `version`，否则编译失败。
 
 ## 运行
 
@@ -72,16 +92,47 @@ BASE=http://127.0.0.1:8080/api/v1
 # 健康检查
 curl $BASE/health
 
-# 注册（返回 token，并设置 auth_token Cookie）
+# 注册。默认 REGISTRATION_MODE=approval：
+#   - 全新数据库里，来自本机/内网的第一个账户自动批准，返回 token 并设置 auth_token Cookie；
+#   - 之后的账户返回 202 {"data":{"status":"pending_approval"}}，没有 token，须管理员批准。
+#   REGISTRATION_MODE=open 则注册即启用并返回 token。
 curl -X POST $BASE/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"username":"alice","email":"alice@example.com","password":"password123"}'
+
+# 管理员批准（需设置 ADMIN_PASSWORD，且从本机/内网调用）
+curl "$BASE/admin/users?status=pending" -H 'X-Admin-Password: <ADMIN_PASSWORD>'
+curl -X POST $BASE/admin/users/approve -H 'X-Admin-Password: <ADMIN_PASSWORD>' \
+  -H 'Content-Type: application/json' -d '{"identifier":"bob@example.com"}'
 
 # 用返回的 token 访问当前用户信息
 curl $BASE/auth/me -H "Authorization: Bearer <token>"
 ```
 
 完整 API 列表见 [`spec/backend.md`](spec/backend.md)。
+
+## 在聊天里批准注册（可选）
+
+默认 `CHAT_PROVIDER=none`，审批只走上面的 `/admin/*` 端点。设置 `CHAT_PROVIDER=telegram` 与 `CHAT_BOT_TOKEN`
+（向 @BotFather 申请的机器人令牌，属于密钥，只放 `.env`）后，新的注册申请会推送给已配对的管理员，
+消息上有 **批准 / 拒绝** 按钮。机器人用长轮询，只发起出站 HTTPS 连接，不需要开放任何入站端口。
+
+```sh
+# 1. 运维签发一次性配对码（需 ADMIN_PASSWORD，本机/内网；8 位，10 分钟，单次有效）
+curl -X POST $BASE/admin/chat/pairing -H 'X-Admin-Password: <ADMIN_PASSWORD>'
+# 2. 管理员在 Telegram 里私聊机器人：/pair <code>
+# 3. 之后：/pending 查看待批准申请，点按钮批准或拒绝；/whoami、/help
+#    运维：/users、/status、/restore <标识>；/delete <标识> 与 /purge <标识>（清空回收站，不可逆）
+#    会先回一个确认码，再发 /confirm <码> 才执行（2 分钟内有效，/cancel 放弃）
+curl $BASE/admin/chat -H 'X-Admin-Password: <ADMIN_PASSWORD>'            # 提供方、连接状态、已配对管理员
+curl -X DELETE $BASE/admin/chat/admins/<id> -H 'X-Admin-Password: <ADMIN_PASSWORD>'   # 取消配对，立即生效
+```
+
+只有已配对的管理员能操作；其他人给机器人发任何消息都得不到回应（仅写入审计日志）。
+聊天服务不可用时注册照常进入待批准状态，消息留在队列里等恢复后补发，不会隐式批准任何人。
+**发给聊天提供方的内容**：申请人的显示名、打码后的邮箱/手机号（`CHAT_MASK_IDENTIFIERS=false` 才发全文）、申请时间、
+来源 IP，以及 批准/拒绝 按钮；绝不包含密码、令牌、文件名或文件内容。完整说明与令牌轮换见
+[`spec/admin_chat.md`](spec/admin_chat.md) 第 10 节。
 
 ## 开发命令
 
@@ -111,5 +162,7 @@ curl /api/v1/files/upload \
 
 ## 前端
 
-`ui/`（Vite + React + TypeScript）稍后实现，当前阶段后端优先。
+`ui/`（Vite + React + TypeScript）构建后嵌入 `cloud_home` 二进制，与 API 同源提供：打开 `http://<host>:<port>/` 即是 Web UI，
+`/api/v1`、`/docs`、`/openapi.json` 不受影响，未知的 `/api/*` 仍返回 JSON 404。开发时用 `bun run dev`（Vite 代理 `/api` 到后端），
+或 `bun run build` 后直接 `cargo run`（调试构建读磁盘上的 `ui/dist`）。
   

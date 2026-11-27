@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Cloud Home">
+  <title>Cloud Home, variant D (Roofline), dark</title>
+  <defs>
+    <linearGradient id="dd-tile" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#3a3a3c"/>
+      <stop offset="1" stop-color="#1c1c1e"/>
+    </linearGradient>
+    <linearGradient id="dd-glyph" gradientUnits="userSpaceOnUse" x1="0" y1="200" x2="0" y2="830">
+      <stop offset="0" stop-color="#6cb8ff"/>
+      <stop offset="1" stop-color="#2a7af0"/>
+    </linearGradient>
+    <mask id="dd-door" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <path d="M488 830V692A24 24 0 0 1 536 692V830Z" fill="#000"/>
+    </mask>
+  </defs>
+  <path d="M512 0C880 0 1024 144 1024 512C1024 880 880 1024 512 1024C144 1024 0 880 0 512C0 144 144 0 512 0Z" fill="url(#dd-tile)"/>
+  <g fill="url(#dd-glyph)">
+    <g mask="url(#dd-door)">
+      <path d="M344 731H680A132 132 0 0 0 698 468A197 197 0 0 0 318 501A117 117 0 0 0 344 731Z" transform="translate(512 608) scale(.92) translate(-520 -510)"/>
+    </g>
+    <path d="M196 440L512 230L828 440" fill="none" stroke="url(#dd-glyph)" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

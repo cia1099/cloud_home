@@ -118,6 +118,17 @@ mod tests {
     }
 
     #[test]
+    fn install_scripts_embed_the_same_public_key() {
+        // 安装脚本验签用的是它自己嵌入的公钥副本，必须与编进二进制的一致。
+        for script in [
+            include_str!("../../packaging/linux/install.sh"),
+            include_str!("../../packaging/macos/install.sh"),
+        ] {
+            assert!(script.contains(crate::update::PUBLIC_KEY));
+        }
+    }
+
+    #[test]
     fn garbage_signature_fails() {
         assert!(verify(TEST_PK, TEST_MSG, "not a signature").is_err());
     }

@@ -1,0 +1,8 @@
+[
+  { "match": "Report site", "key": "site", "name": { "en": "Report site", "zh": "报告网站" } },
+  { "match": "Web app", "key": "web", "name": { "en": "Web app", "zh": "网页应用" } },
+  { "match": "Backend", "key": "backend", "name": { "en": "Backend", "zh": "后端" } },
+  { "match": "Private access", "key": "private", "name": { "en": "Private access", "zh": "私有访问" } },
+  { "match": "Quality", "key": "quality", "name": { "en": "Quality", "zh": "质量" } },
+  { "match": "Release", "key": "release", "name": { "en": "Release", "zh": "发布" } }
+]

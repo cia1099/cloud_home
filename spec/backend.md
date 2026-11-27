@@ -77,13 +77,17 @@ cloud_home/
 │   ├── 20240101000002_create_drives.sql
 │   ├── 20240101000003_create_files.sql
 │   ├── 20240101000004_create_trash.sql
-│   └── 20240101000005_create_shares.sql
+│   ├── 20240101000005_create_shares.sql
+│   ├── …                                 # 0006–0008（索引、媒体 MIME、账户审批）
+│   ├── 20240101000009_add_admin_chat.sql # 管理员聊天：身份 / 配对码 / 按钮令牌 / 发送队列
+│   └── 20240101000010_add_share_recipients.sql # 站内定向分享的收件人
 └── src/
     ├── main.rs           # 入口：组装 AppState、启动服务和 trash_cleaner 任务
     ├── config.rs         # 从 .env 加载的配置结构体
     ├── error.rs          # AppError 枚举，实现 IntoResponse
     ├── logging.rs        # 日志初始化（双路输出）、audit! 宏、git 风格改名记法
     ├── state.rs          # AppState { db, config, drive_manager }
+    ├── ui.rs             # 内嵌 Web UI：静态文件 + SPA 回退、缓存头、noindex、--self-test 的 UI 校验
     ├── db/
     │   └── mod.rs        # SqlitePool 初始化，运行 sqlx migrate
     ├── models/
@@ -104,6 +108,7 @@ cloud_home/
     │   ├── auth.rs       # /auth/*
     │   ├── me.rs         # /me/*（显示名、密码、标识增改删与验证）
     │   ├── admin.rs      # /admin/users*（共享口令 + 内网限制，AdminGuard 提取器）
+    │   ├── admin_chat.rs # /admin/chat*（配对码、状态、取消配对）
     │   ├── files.rs      # /files/*
     │   ├── folders.rs    # /folders
     │   ├── search.rs     # /search
@@ -111,6 +116,7 @@ cloud_home/
     │   ├── shares.rs     # /shares/*
     │   ├── public.rs     # /public/shares/:token（无 auth）
     │   └── drives.rs     # /drives
+    ├── chat/             # 管理员聊天集成：provider(trait+Fake)、telegram、pairing、outbox、dispatch、admin_ops、text
     ├── services/
     │   ├── file_service.rs   # 文件业务逻辑（上传/下载/移动）
     │   ├── user_service.rs   # 用户与身份（凭证/标识）、账户软删除与还原
@@ -120,6 +126,23 @@ cloud_home/
     └── tasks/
         └── trash_cleaner.rs  # tokio::spawn 定时任务，每小时清理过期文件
 ```
+
+### Web UI 的提供（R-026）
+
+`ui/dist`（Vite 构建产物）在发布构建时由 `build.rs` 生成 `include_bytes!` 表编进二进制；调试构建（`debug_assertions`）
+运行时直接读磁盘上的 `ui/dist`，`cargo build` 不要求它存在。取字节之外的逻辑（`src/ui.rs`）两种构建完全共用。
+
+- 路由：`/api/v1/*`、`/docs`、`/openapi.json` 先匹配；其余请求进入 router 的 fallback。
+  `/api` 与 `/api/*` 未匹配时返回 JSON 404（`{"error":{"code":"NOT_FOUND",...}}`），绝不回退为 `index.html`。
+- 文件命中则返回；未命中且路径在 `/assets/` 下或末段带扩展名（如 `/favicon.ico`）→ 404（缺失资源不会被 `index.html` 掩盖）；
+  其余（前端路由如 `/files/photos`）→ `index.html`。仅 GET/HEAD，其他方法 405；含 `..` 的路径 404。
+- 缓存：`assets/*`（文件名带内容哈希）`public, max-age=31536000, immutable`；`index.html` 与其他根文件 `no-cache`。
+- 所有响应（含 API、文档）带 `X-Robots-Tag: noindex, nofollow`。
+- 发布构建守卫：`ui/dist/index.html` 缺失，或 `ui/dist/version.json`（UI 构建时写入 `Cargo.toml` 版本）与 `CARGO_PKG_VERSION`
+  不一致，则 `cargo build --release` 失败。
+- `cloud_home --self-test` 额外校验 UI：`index.html` 存在、其引用的 `/assets/*` 都存在、`version.json` 版本等于二进制版本；
+  任一不满足则非零退出，更新器据此拒绝安装（见 `spec/update.md`）。
+- 发布流水线先构建 UI（`bun install --frozen-lockfile && bun run build`）再构建 Rust 二进制。
 
 ---
 
@@ -278,14 +301,59 @@ Base URL: `http://localhost:8080/api/v1`
 
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
-| POST | /auth/register | 无 | 注册账户（`email` 与 `phone` 至少给一个），设置 auth_token Cookie，同时返回 token 字段 |
-| POST | /auth/login    | 无 | 登录，`identifier` 可为邮箱或手机号，设置 auth_token Cookie，同时返回 token + expires_at |
+| POST | /auth/register | 无 | 注册账户（`email` 与 `phone` 至少给一个）。结果取决于 `REGISTRATION_MODE`，见下方「账户审批」 |
+| POST | /auth/login    | 无 | 登录，`identifier` 可为邮箱或手机号，设置 auth_token Cookie，同时返回 token + expires_at；密码正确但账户未获批准 → `403 ACCOUNT_PENDING` / `ACCOUNT_REJECTED` |
 | POST | /auth/logout   | JWT | 清除 auth_token Cookie（`Set-Cookie: auth_token=; Max-Age=0`） |
 | GET  | /auth/me       | JWT | 获取当前用户信息（含各标识的 verified / managed_by 与 has_password） |
 | GET  | /auth/providers | 无 | 报告第三方登录是否开启与已配置的 provider：`{"data":{"enabled":bool,"providers":["google"]}}`；前端据此显隐「用 Google / Apple 继续」按钮 |
 | GET  | /auth/oauth/{provider}/authorize?redirect_uri=&state= | 无 | 返回 `{"data":{"url":"..."}}`，前端把浏览器导向该地址；`state` 由前端生成并在回调时自行核对 |
 | POST | /auth/oauth/{provider}/login | 无 | body `{code, redirect_uri}`；200，响应同 `/auth/login`（token + Cookie + user） |
 | POST | /auth/oauth/{provider}/link  | JWT | body 同上；为当前账户绑定第三方账号，返回 `UserResponse`；幂等 |
+
+#### 账户审批（`users.approval_status`，迁移 `…0008_add_user_approval.sql`）
+
+新账户须经管理员批准才能登录。状态 `pending → approved | rejected`，与软删除（`deleted_at`）互不相干；
+迁移把所有已有账户置为 `approved`。**fail closed**：`pending` / `rejected` 恒为 `is_active = 0`，
+`AuthUser` 与登录路径本就拒绝 `is_active = 0`，批准才置 1。附带列：`approval_decided_at`、
+`approval_decided_by`（`open` | `bootstrap` | `admin-endpoint` | `expiry` | 之后的 `chat:<provider>:<id>`）、
+`approval_note`、`registered_ip`（个人数据，仅管理端可见）。
+
+| `REGISTRATION_MODE` | `POST /auth/register` |
+|---|---|
+| `open` | `201`，已启用，返回 token + Cookie（旧行为） |
+| `approval`（默认） | `202 {"data":{"status":"pending_approval"}}`，**无 token、无 Cookie** |
+| `closed` | `403 REGISTRATION_CLOSED` |
+
+- **引导规则**（approval 模式）：仅当 `users` 表**完全为空**（软删除行也算）且调用方为回环 / 内网
+  （与 `AdminGuard` 同一判定 `is_local`）时，首个账户自动批准（`approval_decided_by = bootstrap`），
+  响应同 `open`（`201` + token）。判定与插入在同一事务内：事务首条语句即 INSERT（取得写锁），
+  随后 `UPDATE … WHERE (SELECT COUNT(*) FROM users) = 1`，并发的两个首次注册不会都胜出。
+  远程调用方首注册 → `pending`。
+- **登录**：错误凭证一律 `401`，不泄露状态；**密码正确**时 `pending` → `403 ACCOUNT_PENDING`，
+  `rejected` → `403 ACCOUNT_REJECTED`。已软删除的账户仍是 `401`。
+- **限制**（仅 approval 模式，超限 `429 REGISTRATION_BUSY`）：`REGISTER_RATE_PER_IP_PER_HOUR`=5
+  （按 `registered_ip`，计过去 1 小时内创建的账户数）、`PENDING_MAX`=20（pending 总数）。
+  被拒绝的申请人可随时再次注册（无冷却、不限次数）：同一账户行改回 `pending`（改写名字与密码、`registered_ip`、
+  `created_at`，`is_active` 仍为 0，不签发令牌，审计 `user.register` outcome=`reapply`），按新申请处理；仍受上述限流与上限约束。
+  `PENDING_EXPIRE_DAYS`=14 天仍 pending 的申请由 `tasks/pending_expirer.rs`（每小时）自动拒绝（`decided_by = expiry`）。
+- **还原**：`user_service::restore` 要求账户 `approved`，且 UPDATE 带 `approval_status = 'approved'`，
+  绝不会借还原放行未通过审批的账户。
+- **管理端审批**见下方运维端点；决策逻辑在 `services/approval_service.rs`，聊天机器人调用同一组函数（`decided_by = chat:<provider>:<sender-id>`）。
+
+#### 管理员聊天集成（`src/chat/`，迁移 `…0009_add_admin_chat.sql`，设计见 `spec/admin_chat.md`）
+
+`CHAT_PROVIDER=none`（默认）时整个模块是空操作。四张表（只追加）：`admin_chat_identities`
+（已配对管理员，`UNIQUE(provider, sender_id)`，sender 是提供方的不可变数字 id）、`chat_pairing_codes`
+（只存哈希）、`chat_action_tokens`（按钮令牌：只存哈希，绑定 管理员 + 账户 + 动作，24 小时、单次）、
+`chat_outbox`（待发 / 已发消息，`state` = `queued|sent|failed|suppressed|decided`）。
+令牌与账户、管理员外键级联：取消配对或账户被物理删除（冷却期后重注册的 rejected 旧行）时随之清理。
+
+运维指令（R-064，`chat/admin_ops.rs`，无新表、无新端点）：`/users [pending|approved|rejected]`、`/status`、
+`/restore <标识> [email|phone]` 直接执行；`/delete`、`/purge` 两步走——先登记待确认并回 6 位短码（`purge`
+明确写出「不可逆」），再 `/confirm <码>` 才执行，`/cancel` 放弃。待确认只存内存，绑定 发起管理员 + 目标账户 + 操作，
+单次有效、2 分钟过期、码错一次即作废。执行都走 `services/admin_service.rs`（`/admin/users/delete|restore`、
+`/admin/trash/purge` 端点用的是同一组函数，审计的 `actor` 为 `admin-endpoint` 或 `chat:<provider>:<sender-id>`）。
+这些表只含管理员身份与待批准申请的摘要，**不含任何用户的文件数据，也没有按账户隔离的数据路径**。
 
 **用户名不唯一**，它只是可随时修改的显示名；登录一律靠邮箱或手机号。
 JWT 的 Claims 里**不带用户名**——`AuthUser` 提取时本就要查库确认账户仍启用，
@@ -458,9 +526,24 @@ LIMIT ? OFFSET ?
 
 | 方法 | 路径 | 认证 | 说明 |
 |------|------|------|------|
-| POST   | /shares          | JWT | 创建分享链接（body: `{ "file_id", "can_download", "expires_at" }`） |
-| GET    | /shares          | JWT | 列出自己创建的所有分享链接 |
-| DELETE | /shares/:id      | JWT | 撤销分享链接（设 is_active=0） |
+| POST   | /shares          | JWT | 创建分享（body: `{ "file_id", "can_download", "expires_at", "recipient_ids" }`）。`recipient_ids` 省略或为空 = 公开链接；非空 = 站内定向分享（见下） |
+| GET    | /shares          | JWT | 列出自己创建的所有分享；每条带 `recipients: [{id, display_name}]`，定向分享的 `token`/`url` 为 null |
+| PATCH  | /shares/:id      | JWT | 整组替换定向分享的收件人（body: `{ "recipient_ids": [...] }`，不能为空，也不能用于公开链接）；新增者收 SSE `share.received`，移除者收 `share.revoked` |
+| DELETE | /shares/:id      | JWT | 撤销分享（设 is_active=0）；收件人收 SSE `share.revoked`，其列表立即不再包含它 |
+| GET    | /shares/received | JWT | 分享给我的项目，最新在前；已撤销、已过期、文件已入回收站的不返回。每项：`id`, `file_id`, `name`, `file_type`, `mime_type`, `size_bytes`, `child_count`（仅资料夹）, `owner {id, display_name}`, `created_at`, `expires_at`, `can_download`, `seen_at`（null = 未读） |
+| POST   | /shares/:id/seen | JWT | 收件人标记已读，`seen_at` 只记第一次；非收件人 404 |
+| GET    | /shares/received/:id/files?parent_id= | JWT | 列出被分享资料夹（省略 `parent_id`）或其子资料夹的内容，只读 |
+| GET    | /shares/received/:id/files/:file_id            | JWT | 被分享项目或其后代的元数据 |
+| GET    | /shares/received/:id/files/:file_id/raw        | JWT | 内联预览/播放，支持 Range |
+| GET    | /shares/received/:id/files/:file_id/thumbnail  | JWT | 图片缩略图 |
+| GET    | /shares/received/:id/files/:file_id/download   | JWT | 强制另存，支持 Range；分享 `can_download=false` 时 403 |
+| GET    | /users/directory | JWT | 人员目录：除自己外已批准、启用账户的 `id` + `display_name`，不含邮箱/手机/管理员标记 |
+
+**站内定向分享（R-071）：** 表 `share_recipients(share_id, user_id, created_at, seen_at)`（主键 `(share_id, user_id)`，随分享或用户删除级联），迁移 `20240101000010_add_share_recipients.sql`。有收件人行的分享只能由这些账户凭登录会话访问：`/public/shares/:token` 对它一律 404（`resolve_public` 排除有收件人的分享；数据库里仍有随机 token，但从不返回）。创建时每个 `recipient_ids` 必须是已批准、启用、未删除且不是分享者本人的账户，任一不合格整体 `400`（不透露是哪一个）。
+
+收件人访问是只读的，且由 `share_service::resolve_received` 统一把关：调用者必须是该分享的收件人、分享 `is_active`、未过期，且请求的 `file_id` 是被分享项目本身或其未删除的后代（沿分享者名下的父链向上必须经过被分享项目）。任何一项不满足一律 `404`（不区分「不存在」与「无权」）。`can_download=false` 时预览/缩略图仍可，`download` 返回 403。物理文件按分享者的目录读取。
+
+SSE（`GET /events/stream`）新增 `share.received` 与 `share.revoked` 事件，载荷 `{ "share_id": "..." }`，只发给对应收件人的连接。未读红点由 `GET /shares/received` 的 `seen_at` 得出。
 
 ### 公开访问（无需认证）
 
@@ -553,10 +636,19 @@ LIMIT ? OFFSET ?
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET  | /admin/users         | 列出所有账户（含已停用）及其标识 |
+| GET  | /admin/users         | 列出账户（含已停用）及其标识；`?status=pending\|approved\|rejected\|all`（默认 all）；含 `approval_status`、`approval_decided_at/by`、`approval_note`、`registered_ip`、`created_at` |
+| POST | /admin/users/approve | 批准账户：`{identifier, provider?, note?}` |
+| POST | /admin/users/reject  | 拒绝账户：`{identifier, provider?, reason?}` |
 | POST | /admin/users/delete  | 软删除账户 |
 | POST | /admin/users/restore | 还原账户 |
 | POST | /admin/trash/purge   | 立即清空某账户的回收站（物理删除，**不可逆**） |
+| POST | /admin/chat/pairing  | 签发一次性聊天配对码 `{code, expires_at}`（8 位，10 分钟，单次；`CHAT_PROVIDER=none` 时 `409`） |
+| GET  | /admin/chat          | `{provider, connected, admins:[{id, label, paired_at}]}`；`connected` = 最近一次拉取更新成功 |
+| DELETE | /admin/chat/admins/{id} | 取消某管理员的配对，立即生效；返回 `{id, label}`，不存在 `404` |
+| GET  | /admin/update           | 在线更新状态：当前版本、可用新版本、阶段、设置、最近错误 |
+| POST | /admin/update/check     | 立即检查一次更新 |
+| POST | /admin/update/install   | 安装已发现的新版本（有传输在进行时 409，除非 `force`） |
+| PUT  | /admin/update/settings  | 修改更新设置并持久化 |
 
 **这不是权限系统**：没有管理员角色，只有一个共享口令加一层来源限制。三道关卡按序执行，
 且都在读取请求体之前（`AdminGuard` 提取器）：
@@ -567,9 +659,46 @@ LIMIT ? OFFSET ?
 
 口令与请求头的值**绝不写入日志**，`Config` 的手写 `Debug` 也对其脱敏。
 
+**在线更新端点**（`handlers/admin_update.rs`，同一道 `AdminGuard`；机制见 `spec/update.md`）。
+它们只读写进程级更新器状态与 `update/settings.json`，不碰用户数据，故无账户隔离问题。
+所有成功响应体都是 `{"data": <status>}`，`<status>` 为：
+
+```json
+{
+  "enabled": true,                 // false = 非安装目录运行（开发机），check/install/settings 一律 409
+  "target": "aarch64-apple-darwin",
+  "phase": "idle",                 // idle|checking|downloading|installing|restarting|failed
+  "current_version": "0.3.1",      // 后端与内嵌 UI 同一个产品版本
+  "available": {"version": "0.4.0", "notes_url": "https://…", "size": 12345678},  // 无则 null
+  "last_checked_at": "2025-01-01T00:00:00Z",   // 或 null
+  "last_error": null,              // 最近一次检查/安装失败的原因
+  "settings": {"mode": "manual", "window": "03:00-05:00", "channel": "stable", "check_interval_hours": 6}
+}
+```
+
+- `POST /admin/update/check`：同步检查（最长约一分钟）。检查本身失败（网络、验签）仍是 `200`，
+  原因在 `last_error`；`UPDATE_DISABLED` / `UPDATE_IN_PROGRESS` 为 `409`。
+- `POST /admin/update/install`，体可省略或 `{"force": bool}`：前置检查同步完成，通过则 `202`，
+  安装在后台任务里进行（不绑在请求上，客户端断开不会留下半截状态），用 `GET /admin/update` 观察
+  `phase`：downloading → installing → restarting（进程随后重启），失败为 `failed` 并带 `last_error`。
+  `409` 的错误码：`UPDATE_DISABLED`、`UPDATE_NOT_AVAILABLE`（还没检查到新版本）、
+  `UPDATE_IN_PROGRESS`、`UPDATE_TRANSFERS_ACTIVE`（有上传 / 下载在进行；`force: true` 可强制，会中断它们）。
+- `PUT /admin/update/settings`：字段 `mode`(`manual|auto`)、`window`(`HH:MM-HH:MM`，可跨午夜，起止不同)、
+  `channel`(`stable|beta`)、`check_interval_hours`(1..=720)，**只改给出的字段**，未知字段拒绝；
+  校验失败 `400`；通过后原子写入 `update/settings.json` 并立即生效（覆盖 `.env` 默认值）。
+- 审计事件：`admin.update.check`、`admin.update.install`（`accepted`，含 `version`、`force`）、
+  `admin.update.settings`；更新器自身另记 `update.check` / `update.install`。
+- 状态变化也通过 SSE `update` 事件（发现新版本）推送，但阶段进度需轮询 `GET /admin/update`。
+
 > 来源限制的局限要正视：反向代理在前时，对端 IP 就是网关自己的回环地址，内网判定会
 > 形同虚设，除非开启 `TRUST_PROXY_HEADERS` 并信任 `X-Forwarded-For`。它是给局域网机器
 > 加的一层防护，不能替代口令本身。
+
+**审批语义**（`approval_service::decide`，一条带条件的 UPDATE，两人同时操作恰好一个生效）：
+`pending` → 批准 / 拒绝；`rejected` → 批准（允许改判）；与当前状态相同 → `200` 且 `changed=false`
+（幂等，不覆盖先前的决定者，响应里带 `decided_by` / `decided_at`）；拒绝一个已批准的账户 → `409`，
+消息写明先前的决定时间与决定者（已批准账户可能已有数据，要停用请用 `/admin/users/delete`）。
+批准不会复活已软删除账户。审计事件 `user.approve` / `user.reject`（`target_user_id`、`decided_by`）。
 
 **定位账户**用请求体里的 `identifier`（匹配**任意** provider：邮箱、手机号，
 或 Google/Apple subject——纯第三方账户既无邮箱也无手机号，必须够得着），
@@ -656,10 +785,17 @@ JWT 的 `Claims` 因此新增 `username` 字段（`#[serde(default)]` 兼容改�
 
 | event | 位置 | 关键字段 |
 |---|---|---|
-| `auth.register` success | `handlers/auth.rs` | `user_id`, `username` |
-| `auth.register` failure | 同上（Conflict 分支） | `reason="duplicate_username_or_email"`, `username` |
+| `user.register` | `handlers/auth.rs` | `result` = `open` \| `bootstrap` \| `pending`（被拒绝者重新注册另记一条 `reapply`）；`user_id`, `username` |
+| `user.register` failure | 同上（Conflict 分支）、`user_service.rs` | `reason` = `duplicate_identifier` \| `rate_limited`（含 `client_ip`）\| `pending_max` |
+| `user.approve` / `user.reject` | `services/approval_service.rs` | `target_user_id`, `target_username`, `decided_by` |
+| `user.expire` | 同上（`tasks/pending_expirer.rs` 调用） | `target_user_id`, `target_username`, `expire_days` |
+| `chat.pair` | `chat/pairing.rs` | `result` = `code_issued` \| `paired`；`provider`、`sender_id`（配对码本身绝不记） |
+| `chat.unpair` | 同上 | `provider`, `sender_id` |
+| `chat.command` | `chat/dispatch.rs` | `result` = `authorized` \| `unauthorized`（warn，按发送者限流）\| `invalid_token` \| `invalid_confirmation`（确认码错误）；`provider`, `sender_id`, `command`（仅已知指令名，未知记 `other`；**绝不记消息正文、参数、令牌**） |
+| `chat.delivery` failure | `chat/outbox.rs` | 消息重试 8 次仍未送达而放弃：`provider`, `kind`, `attempts`, `error`（不含令牌） |
 | `auth.login` failure（用户不存在） | 同上 | `reason="unknown_user"`, `identifier` |
 | `auth.login` failure（密码错误） | 同上 | `reason="bad_password"`, `user_id`, `username` |
+| `auth.login` failure（未获批准） | 同上 | `reason="pending_approval"` \| `"rejected"`, `user_id` |
 | `auth.login` success | 同上 | `user_id`, `username` |
 | `auth.logout` | 同上 | `user_id` |
 | `auth.oauth_login` | `handlers/oauth.rs`、`services/oauth_service.rs` | success：`provider`, `user_id`, `username`；failure：`reason`（`exchange_failed` / `user_inactive`） |
@@ -677,8 +813,11 @@ JWT 的 `Claims` 因此新增 `username` 字段（`#[serde(default)]` 兼容改�
 | `trash.restore` | `handlers/trash.rs` | `file_id`, `file_name`, `file_path` |
 | `trash.delete`（永久删除） | 同上 | `trash_id`, `freed_bytes` |
 | `trash.empty` | 同上 | `count`, `freed_bytes` |
-| `share.create` | `handlers/shares.rs` | `share_id`, `file_id`, `share_token_prefix`, `expires_at`, `can_download` |
-| `share.revoke` | 同上 | `share_id` |
+| `share.create` | `handlers/shares.rs` | `share_id`, `file_id`, `share_token_prefix`（定向分享为空）, `recipient_count`, `expires_at`, `can_download` |
+| `share.update` | 同上 | `share_id`, `added_count`, `removed_count` |
+| `share.revoke` | 同上 | `share_id`, `recipient_count` |
+| `share.received_view`（收件人，span 带其 `user_id`） | 同上 | `share_id`, `owner_id`, `file_id`, `what`（`list`/`metadata`/`raw`/`thumbnail`） |
+| `share.received_download` | 同上 | `share_id`, `owner_id`, `file_id`, `size_bytes`；失败 `reason="download_disabled"` |
 | `public.share_view` | `handlers/public.rs`（访问者匿名） | `share_token_prefix`, `owner_id`, `file_id` + span 的 `client_ip` |
 | `public.share_download` | 同上 | 同上 + `size_bytes`；失败 `reason="download_disabled"` |
 | `drive.attached` / `drive.detached` | `tasks/drive_monitor.rs` | `mount` |
@@ -720,6 +859,18 @@ TRUST_PROXY_HEADERS=false
 ADMIN_PASSWORD=
 # 第三方登录总开关，默认关闭（目前只有接口层，真实 provider 未接入）。
 OAUTH_ENABLED=false
+
+# 注册模式：open（注册即启用）| approval（默认，须管理员批准）| closed（关闭注册）
+REGISTRATION_MODE=approval
+REGISTER_RATE_PER_IP_PER_HOUR=5
+PENDING_MAX=20
+PENDING_EXPIRE_DAYS=14
+
+# 管理员聊天集成（spec/admin_chat.md）：none（默认）| telegram
+CHAT_PROVIDER=none
+CHAT_BOT_TOKEN=              # 密钥；Config 的 Debug 脱敏，绝不写日志
+CHAT_LANGUAGE=en             # en | zh-Hans | zh-Hant
+CHAT_MASK_IDENTIFIERS=true
 ```
 
 > `DATABASE_URL` 由程序在运行时根据侦测到的硬盘路径自动构造，无需在 .env 中写死。

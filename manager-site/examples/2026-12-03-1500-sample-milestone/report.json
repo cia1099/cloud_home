@@ -1,0 +1,8 @@
+{
+  "kind": "milestone",
+  "title": { "en": "Sample: a bespoke milestone page", "zh": "示例：专属里程碑页面" },
+  "summary": { "en": "A report that ships its own design in page.ts. Never published.", "zh": "在 page.ts 中自带设计的报告，不会发布。" },
+  "chip": { "tone": "warn", "icon": "warn", "text": { "en": "Sample", "zh": "示例" } },
+  "cover": { "style": "c-ms", "icon": "cloud" },
+  "page": "page.ts"
+}

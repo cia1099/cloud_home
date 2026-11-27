@@ -7,7 +7,7 @@
 # The server serves ~/report_web with `python3 -m http.server` behind nginx +
 # Cloudflare. The folder is replaced as a whole (the owner's rule: "override"),
 # so manager-site/report_web must always be a COMPLETE build including every
-# past report. The previous version is kept as ~/report_web.prev for rollback.
+# past report. No backup is kept: the old folder is deleted on every deploy.
 set -euo pipefail
 
 HOST="berton.home"
@@ -30,12 +30,12 @@ echo "deploying $SRC (${SIZE_MB} MB) -> $HOST:~/report_web"
 
 run ssh -o BatchMode=yes "$HOST" 'rm -rf ~/report_web.new'
 run scp -rq "$SRC" "$HOST:~/report_web.new"
-# swap: keep the old one as .prev (first deploy preserves the owner's sample site there)
-run ssh -o BatchMode=yes "$HOST" 'rm -rf ~/report_web.prev && mv ~/report_web ~/report_web.prev && mv ~/report_web.new ~/report_web'
+# swap: delete the old folder, then move the new one into place (no backup)
+run ssh -o BatchMode=yes "$HOST" 'rm -rf ~/report_web && mv ~/report_web.new ~/report_web'
 
 if [ "${DRY_RUN:-0}" != "1" ]; then
   code=$(curl -sS -m 20 -o /dev/null -w '%{http_code}' "$URL/" || true)
   echo "live check: $URL/ -> HTTP $code"
-  [ "$code" = "200" ] || { echo "error: site did not answer 200 after deploy; roll back with: ssh $HOST 'rm -rf ~/report_web && mv ~/report_web.prev ~/report_web'" >&2; exit 1; }
+  [ "$code" = "200" ] || { echo "error: site did not answer 200 after deploy; fix the build and deploy again" >&2; exit 1; }
 fi
 echo "done: $URL/"

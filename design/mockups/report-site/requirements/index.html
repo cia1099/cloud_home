@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en" data-l="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Requirements · Cloud Home Report</title>
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/boot.js"></script>
+</head>
+<body data-page="requirements" data-root="../" data-path="/requirements/" data-title-zh="需求 · Cloud Home 报告">
+<main id="main" class="wrap">
+  <header style="padding-block:56px 24px;display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap">
+    <div style="max-width:640px">
+      <h1 class="display" data-zh="需求">Requirements</h1>
+      <p class="lede" style="margin-top:12px" data-zh="来自 SPEC.md 的只读视图，状态实时更新。想改什么，用按钮提交一个预填好的 GitHub 议题。">A read-only view of SPEC.md with live status. To change anything, use a button to open a pre-filled GitHub issue.</p>
+    </div>
+    <a class="btn btn-sec btn-lg" id="newReq" target="_blank" rel="noopener" data-ic="plus"><span data-zh="新需求">New requirement</span></a>
+  </header>
+
+  <div class="card" style="padding:14px 18px;margin-bottom:20px"><div id="reqSummary" class="summary-chips" role="group" aria-label="Status totals"></div></div>
+
+  <div class="row" style="justify-content:space-between;gap:12px;position:sticky;top:var(--hdr);z-index:5;padding-block:10px;background:var(--bg)">
+    <div class="filters" id="reqFilters" role="group" aria-label="Filter by status"></div>
+    <label class="search"><span class="vh" data-zh="搜索需求">Search requirements</span><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg><input id="reqSearch" type="search" placeholder="R-012, upload…" data-ph-en="R-012, upload…" data-ph-zh="R-012、上传…" autocomplete="off"></label>
+  </div>
+
+  <p class="small m-only" style="margin:4px 0 0" data-zh="点一行即可展开，使用“修改”或“移除”。">Tap a row to reveal Change and Remove.</p>
+  <div id="reqs"></div>
+  <p class="small" style="margin-top:20px" data-zh="“修改”和“移除”会在新标签页打开预填好的 GitHub 议题，标题带 [CHG R-nnn] 或 [DEL R-nnn]；你点“Submit new issue”后才会发送。">“Change” and “Remove” open a pre-filled GitHub issue in a new tab, titled [CHG R-nnn] or [DEL R-nnn]. Nothing is sent until you press Submit new issue.</p>
+</main>
+<script src="../assets/site.js" defer></script>
+</body>
+</html>

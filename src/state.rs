@@ -25,4 +25,6 @@ pub struct AppState {
     pub oauth: crate::auth::oauth::OAuthRegistry,
     /// 在线更新器。
     pub updater: crate::update::Updater,
+    /// 管理员聊天集成（`CHAT_PROVIDER=none` 时为空操作）。
+    pub chat: crate::chat::ChatService,
 }

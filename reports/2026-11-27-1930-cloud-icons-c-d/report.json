@@ -1,0 +1,24 @@
+{
+  "kind": "weekly",
+  "title": { "en": "Cloud icons C and D are ready for your choice", "zh": "云图标 C 和 D 等你选择" },
+  "summary": {
+    "en": "Two new cloud-drive-at-home icons in the SF Symbols style are now on the Decisions page (/decisions/brand/), with approval request A-004: C Hearth (a house inside the cloud) and D Roofline (a cloud wearing a roof). Approve means “I choose the variant named in my note”, so write C or D in the issue note. Decision cards now have only Approve and Deny: the Choose A / Choose B buttons are gone, as you asked. Verified: type check, 11 site tests, build of 13 pages and a link check of 347 links pass. The page has not been looked at in a browser by the team; your session rendered C and D earlier.",
+    "zh": "两个 SF Symbols 风格、表达“家里的云盘”的新图标已放到“决策”页（/decisions/brand/），对应审批请求 A-004：C Hearth（云里有一座房子）和 D Roofline（戴着屋顶的云）。批准表示“我选备注里写的那个方案”，请在议题备注里写 C 或 D。决策卡现在只有“批准”和“拒绝”，按你的要求去掉了“选 A / 选 B”。已验证：类型检查、11 项网站测试、13 页构建和 347 个链接检查均通过。团队尚未在浏览器中查看该页面；你的会话此前已渲染过 C 和 D。"
+  },
+  "chip": { "tone": "accent", "icon": "check", "text": { "en": "A-004 waits for your decision", "zh": "A-004 等你决定" } },
+  "cover": { "style": "c1", "icon": "heart" },
+  "sections": [
+    {
+      "id": "changes",
+      "title": { "en": "What changed", "zh": "有什么变化" },
+      "component": "text",
+      "data": {
+        "bullets": [
+          { "en": "**A-004:** pick icon C or D on /decisions/brand/. C is recommended for large sizes (logo, sign-in), D reads better at 16 px.", "zh": "**A-004：**在 /decisions/brand/ 选图标 C 或 D。大尺寸（标志、登录）推荐 C，16 px 时 D 更清楚。" },
+          { "en": "**Decision cards:** Approve and Deny only; Choose A / Choose B removed from the site, the docs and the request format.", "zh": "**决策卡：**只有“批准”和“拒绝”；“选 A / 选 B”已从网站、文档和请求格式中移除。" },
+          { "en": "**Open item:** the manager's agent file still mentions Choose X; the manager could not edit it, please change `.claude/agents/manager.md` lines 17 and 22.", "zh": "**待办：**经理的 agent 文件里仍提到“选 X”，经理无权编辑它，请修改 `.claude/agents/manager.md` 第 17、22 行。" }
+        ]
+      }
+    }
+  ]
+}

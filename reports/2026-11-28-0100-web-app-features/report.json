@@ -1,0 +1,32 @@
+{
+  "kind": "weekly",
+  "title": { "en": "The web app takes shape: files, upload, preview, download, trash, sharing", "zh": "网页应用成形：文件、上传、预览、下载、回收站、分享" },
+  "summary": {
+    "en": "Six pieces of the web app were built and checked in a real browser against the real backend: the file browser (R-007), upload with progress, cancel and folders (R-008), preview with gallery, audio and video (R-009), batch download as ZIP or tar.gz (R-010), trash, sharing and storage usage (R-011). A backend bug that rejected every upload over 2 MB was found by the upload work and fixed (B-003). After merging everything: web app build, lint and 81 tests pass; Rust clippy clean, 156 + 30 + 12 + 7 tests pass. In progress: account settings (R-012) and the admin/update page with the reload-after-update behaviour (R-013, R-027). Not done: a download test in non-Chromium browsers, a 400 MB upload test, and the Shared-with-me folder view. A-004 (cloud icon C or D) still waits for you.",
+    "zh": "网页应用的六个部分已建成，并在真实浏览器中对真实后端检查过：文件浏览（R-007）、带进度/取消/文件夹的上传（R-008）、带图集与音视频的预览（R-009）、ZIP 或 tar.gz 批量下载（R-010）、回收站、分享与存储用量（R-011）。上传开发中发现并修复了后端的一个缺陷：超过 2 MB 的上传全部被拒绝（B-003）。全部合并后：网页应用构建、静态检查与 81 项测试通过；Rust clippy 无警告，156 + 30 + 12 + 7 项测试通过。进行中：账户设置（R-012）、管理/更新页与更新后自动刷新（R-013、R-027）。未完成：非 Chromium 浏览器的下载测试、400 MB 上传测试、「与我共享」的文件夹浏览。A-004（云图标 C 或 D）仍等你决定。"
+  },
+  "chip": { "tone": "accent", "icon": "check", "text": { "en": "A-004 still waits for you", "zh": "A-004 仍等你决定" } },
+  "cover": { "style": "c1", "icon": "heart" },
+  "sections": [
+    { "id": "changes", "title": { "en": "What changed", "zh": "有什么变化" }, "component": "text", "data": { "bullets": [
+      { "en": "**R-007, R-008, R-009, R-010, R-011 (review):** built and exercised in a real browser; screenshots below.", "zh": "**R-007、R-008、R-009、R-010、R-011（待验收）：**已建成并在真实浏览器中操作过；截图见下。" },
+      { "en": "**B-003 (fixed):** uploads over 2 MB returned 400; now only `MAX_UPLOAD_SIZE_MB` applies and an over-limit upload gets a JSON 413. New integration test.", "zh": "**B-003（已修复）：**超过 2 MB 的上传返回 400；现在只受 `MAX_UPLOAD_SIZE_MB` 限制，超限返回 JSON 413。新增集成测试。" },
+      { "en": "Merge fixes I made: duplicate error keys in the language files and two copies of the single-file download helper were removed.", "zh": "合并时我修掉的问题：语言文件中重复的错误键，以及两份重复的单文件下载函数。" }
+    ] } },
+    { "id": "shots", "title": { "en": "The running app", "zh": "运行中的应用" },
+      "intro": { "en": "Real screenshots from the running product (not mockups).", "zh": "来自运行中产品的真实截图（不是原型）。" },
+      "caption": { "en": "Trash, shared by you, storage, upload progress, upload menu in Traditional Chinese, image gallery, phone preview.", "zh": "回收站、我的分享、存储、上传进度、繁体中文上传菜单、图集、手机预览。" },
+      "component": "gallery", "data": { "shots": [
+        { "src": "shots/R-011-trash.png", "alt": { "en": "Trash", "zh": "回收站" }, "title": { "en": "Trash with days left", "zh": "回收站与剩余天数" } },
+        { "src": "shots/R-011-shared-by-you.png", "alt": { "en": "Shared by you", "zh": "我的分享" }, "title": { "en": "Shared by you", "zh": "我的分享" } },
+        { "src": "shots/R-011-storage.png", "alt": { "en": "Storage", "zh": "存储" }, "title": { "en": "Storage usage", "zh": "存储用量" } },
+        { "src": "shots/R-008-upload-03-progress.png", "alt": { "en": "Upload progress", "zh": "上传进度" }, "title": { "en": "Upload progress", "zh": "上传进度" } },
+        { "src": "shots/R-008-upload-12-zh-Hant-menu.png", "alt": { "en": "Upload menu, Traditional Chinese", "zh": "繁体中文上传菜单" }, "title": { "en": "Upload menu · 繁體中文", "zh": "上传菜单 · 繁體中文" } },
+        { "src": "shots/R-009-preview-03-gallery-strip.png", "alt": { "en": "Image gallery", "zh": "图集" }, "title": { "en": "Image gallery", "zh": "图集" } },
+        { "src": "shots/R-009-preview-08-phone-image.png", "alt": { "en": "Phone preview", "zh": "手机预览" }, "title": { "en": "Preview on a phone", "zh": "手机上的预览" } }
+      ] } },
+    { "id": "next", "title": { "en": "What is next", "zh": "接下来" }, "component": "text", "data": { "bullets": [
+      { "en": "Finish R-012, R-013, R-027; then an independent tester pass over the UI journeys (R-032) and the integration suite (R-030).", "zh": "完成 R-012、R-013、R-027；然后由独立测试员检查界面流程（R-032）和集成测试套件（R-030）。" }
+    ] } }
+  ]
+}

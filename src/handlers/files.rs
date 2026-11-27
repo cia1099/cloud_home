@@ -86,6 +86,7 @@ pub async fn get_metadata(
         (status = 201, description = "上传成功；若同名已存在会自动追加 (1)/(2)…… 后缀", body = ApiResponse<FileResponse>),
         (status = 400, description = "参数校验失败", body = ErrorResponse),
         (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 413, description = "请求体超过 MAX_UPLOAD_SIZE_MB（code=PAYLOAD_TOO_LARGE）", body = ErrorResponse),
         (status = 503, description = "外接硬盘不可用", body = ErrorResponse),
     ),
     security(("cookie_auth" = []), ("bearer_auth" = []))
@@ -101,6 +102,9 @@ pub async fn upload(
 
     let file_id = uuid::Uuid::new_v4().to_string();
     let physical_path = path_resolver::file_path(&data_root, &user.user_id, &file_id);
+    // 任何提前返回（解析/写盘/校验失败）或 handler future 被丢弃（客户端中途断线）
+    // 都会删除已写入的部分文件；仅在落库成功后解除。
+    let mut guard = PartialFileGuard(Some(physical_path.clone()));
 
     let mut parent_id: Option<String> = None;
     let mut name: Option<String> = None;
@@ -110,7 +114,7 @@ pub async fn upload(
     while let Some(mut field) = multipart
         .next_field()
         .await
-        .map_err(|_| AppError::BadRequest("multipart 解析失败".into()))?
+        .map_err(|e| multipart_error(e, "multipart 解析失败"))?
     {
         match field.name() {
             Some("parent_id") => {
@@ -143,7 +147,7 @@ pub async fn upload(
                 while let Some(chunk) = field
                     .chunk()
                     .await
-                    .map_err(|_| AppError::BadRequest("文件流读取失败".into()))?
+                    .map_err(|e| multipart_error(e, "文件流读取失败"))?
                 {
                     out.write_all(&chunk).await?;
                     size_bytes += chunk.len() as i64;
@@ -155,7 +159,7 @@ pub async fn upload(
         }
     }
 
-    // 校验与落库；失败时清理已写入的物理文件，避免孤儿。
+    // 校验与落库；失败时由 guard 清理已写入的物理文件，避免孤儿。
     let result = finalize_upload(
         &state,
         &user.user_id,
@@ -170,6 +174,7 @@ pub async fn upload(
 
     match result {
         Ok(entry) => {
+            guard.0 = None;
             let response = FileResponse::from(entry);
             let file_path = file_service::full_path(
                 &state.db,
@@ -199,9 +204,28 @@ pub async fn upload(
             );
             Ok((StatusCode::CREATED, ApiResponse::new(response)))
         }
-        Err(e) => {
-            let _ = tokio::fs::remove_file(&physical_path).await;
-            Err(e)
+        Err(e) => Err(e),
+    }
+}
+
+/// multipart 读取失败的错误映射：请求体超过大小限制（分块上传无 Content-Length 时
+/// 在流中途触发）返回 413，其余为 400。
+fn multipart_error(e: axum::extract::multipart::MultipartError, msg: &str) -> AppError {
+    if e.status() == StatusCode::PAYLOAD_TOO_LARGE {
+        AppError::PayloadTooLarge
+    } else {
+        AppError::BadRequest(msg.into())
+    }
+}
+
+/// 上传中的物理文件守卫：drop 时删除文件（同步删除，保证 future 被取消时也会执行）。
+/// 落库成功后将内部路径置为 `None` 解除。
+struct PartialFileGuard(Option<std::path::PathBuf>);
+
+impl Drop for PartialFileGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.take() {
+            let _ = std::fs::remove_file(path);
         }
     }
 }
@@ -389,8 +413,19 @@ pub async fn thumbnail(
     Query(q): Query<ThumbnailQuery>,
 ) -> AppResult<Response> {
     let entry = file_service::get_owned(&state.db, &user.user_id, &id).await?;
+    thumbnail_response(&state, &user.user_id, &entry, q.size).await
+}
+
+/// 生成（或取缓存）缩略图响应。供本人访问与收件人访问共用；
+/// `owner_id` 是文件所有者，决定物理路径与缓存目录。
+pub async fn thumbnail_response(
+    state: &AppState,
+    owner_id: &str,
+    entry: &FileEntry,
+    size: u32,
+) -> AppResult<Response> {
     let data_root = state.drive_manager.require_data_root().await?;
-    let bytes = thumbnail_service::get_or_create(&data_root, &user.user_id, &entry, q.size).await?;
+    let bytes = thumbnail_service::get_or_create(&data_root, owner_id, entry, size).await?;
 
     let response = Response::builder()
         .status(StatusCode::OK)
@@ -681,7 +716,7 @@ pub async fn download_archive(
 }
 
 /// 从请求头中取出 `Range` 值（若存在）。
-fn range_header(headers: &HeaderMap) -> Option<&str> {
+pub fn range_header(headers: &HeaderMap) -> Option<&str> {
     headers.get(RANGE).and_then(|v| v.to_str().ok())
 }
 

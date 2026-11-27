@@ -1,0 +1,3 @@
+{
+  "suites": [{ "name": "cargo test (unit)", "passed": 63, "failed": 0, "skipped": 0 }]
+}

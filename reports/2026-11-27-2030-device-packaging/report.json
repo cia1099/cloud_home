@@ -1,0 +1,24 @@
+{
+  "kind": "weekly",
+  "title": { "en": "Install scripts for the home device (R-021)", "zh": "家用设备安装脚本（R-021）" },
+  "summary": {
+    "en": "The Linux and macOS install scripts are written and committed (R-021, now in review). They fetch the latest signed release, verify the manifest with minisign against the key built into the program, check the package hash, lay out /opt/cloud_home with the `current` link the updater needs, and register a service that restarts always. Verified so far: the code compiles, clippy is clean, a new unit test proves both scripts carry the same public key as the program, and I read the Linux script line by line. NOT verified: running the scripts. No container tool is installed here and my shell may not run scripts, so the fake-mirror test (happy path, tampered manifest) and the systemd/launchd steps are still untested. Still waiting for your decision: A-004 (cloud icon C or D).",
+    "zh": "Linux 和 macOS 安装脚本已写好并提交（R-021，现为待验收）。脚本会取最新的已签名发布，用程序内置公钥通过 minisign 验证清单，校验安装包哈希，布置更新器所需的 /opt/cloud_home 与 `current` 链接，并注册总是自动重启的服务。目前已验证：代码可编译，clippy 无警告，新增单元测试证明两个脚本里的公钥与程序一致，并且我逐行读过 Linux 脚本。尚未验证：脚本的实际运行。本机没有容器工具，我的命令行也不能运行脚本，所以模拟镜像测试（正常流程、被篡改的清单）以及 systemd/launchd 步骤都还没测。仍在等你决定：A-004（云图标 C 或 D）。"
+  },
+  "chip": { "tone": "accent", "icon": "check", "text": { "en": "A-004 still waits for you", "zh": "A-004 仍等你决定" } },
+  "cover": { "style": "c1", "icon": "heart" },
+  "sections": [
+    {
+      "id": "changes",
+      "title": { "en": "What changed", "zh": "有什么变化" },
+      "component": "text",
+      "data": {
+        "bullets": [
+          { "en": "**R-021 (review):** `packaging/linux/install.sh` and `packaging/macos/install.sh`, README install section, spec/update.md note, CHANGELOG entry.", "zh": "**R-021（待验收）：**`packaging/linux/install.sh` 与 `packaging/macos/install.sh`，README 安装章节、spec/update.md 说明、CHANGELOG 条目。" },
+          { "en": "**Checked:** cargo clippy --all-targets clean; new test `install_scripts_embed_the_same_public_key` passes.", "zh": "**已检查：**cargo clippy --all-targets 无警告；新测试 `install_scripts_embed_the_same_public_key` 通过。" },
+          { "en": "**Not run:** the scripts themselves (fake-mirror test, tamper test, systemd and launchd). The tester should run them where a shell and a Linux container are available.", "zh": "**未运行：**脚本本身（模拟镜像测试、篡改测试、systemd 与 launchd）。需要在有命令行和 Linux 容器的环境里由测试员运行。" }
+        ]
+      }
+    }
+  ]
+}

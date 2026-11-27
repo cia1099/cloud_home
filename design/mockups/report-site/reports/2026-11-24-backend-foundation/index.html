@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en" data-l="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Backend foundation and the self-updating box · Cloud Home Report</title>
+<link rel="stylesheet" href="../../assets/site.css">
+<script src="../../assets/boot.js"></script>
+</head>
+<body data-real data-page="reports" data-root="../../" data-path="/reports/2026-11-24-backend-foundation/" data-title-zh="后端基础与会自我更新的盒子 · Cloud Home 报告">
+<!-- The first real report: built only from the project's true state on 24 Nov 2026. It has no web UI, so it has no screenshots. -->
+<main id="main">
+  <!-- report hero (standard template) -->
+  <header class="wrap rhero">
+    <nav class="small" aria-label="Breadcrumb"><a href="../" data-zh="报告">Reports</a> › <span data-zh="2026 年 11 月 24 日">24 Nov 2026</span></nav>
+    <div class="row" style="margin-top:18px"><span class="chip accent" data-ic="check" data-zh="后端已就绪 · 界面尚未开始">Backend built · UI not started</span><span class="chip neutral" data-zh="周报">Weekly</span></div>
+    <h1 class="display" data-zh="后端基础与会自我更新的盒子">Backend foundation and the self-updating box</h1>
+    <p class="lede" data-zh="账户、文件、回收站、分享、搜索与带签名的在线更新已经就绪。还没有网页界面，所以这一期只展示真实的架构与进度，不放任何示意截图。">Accounts, files, trash, sharing, search and signed online updates are in place. There is no web UI yet, so this report shows real architecture and progress only. No stand-in screenshots.</p>
+  </header>
+
+  <div class="wrap rlayout">
+    <nav class="toc" aria-label="On this page">
+      <a href="#summary" data-zh="概要">Summary</a><a href="#architecture" data-zh="架构">Architecture</a><a href="#ota" data-zh="更新如何运作">How updates work</a><a href="#progress" data-zh="进度">Progress</a><a href="#tests" data-zh="测试">Tests</a><a href="#history" data-zh="提交历史">Git history</a><a href="#risks" data-zh="风险与阻塞">Risks and blockers</a><a href="#next" data-zh="下一步">What is next</a>
+    </nav>
+    <div>
+      <!-- component: kpis -->
+      <section class="rsec" id="summary">
+        <div class="grid g4" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+          <div class="card kpi rv"><div class="k-l" data-zh="单元测试">Unit tests</div><div class="k-v"><span data-count="63">63</span></div><div class="k-s" data-zh="全部通过">all passing</div></div>
+          <div class="card kpi rv" style="--rd:1"><div class="k-l" data-zh="最新版本">Latest build</div><div class="k-v" style="font-size:26px;letter-spacing:-.02em">v0.3.1-rc.2</div><div class="k-s" data-zh="已作为预发布版发布">published as a pre-release</div></div>
+          <div class="card kpi rv" style="--rd:2"><div class="k-l" data-zh="计划内需求">Planned requirements</div><div class="k-v"><span data-count="35">35</span></div><div class="k-s" data-zh="0 项已完成 · 3 项等你">0 done · 3 wait for you</div></div>
+          <div class="card kpi rv" style="--rd:3"><div class="k-l" data-zh="网页界面">Web UI</div><div class="k-v" style="font-size:26px;letter-spacing:-.02em" data-zh="尚未开始">Not started</div><div class="k-s" data-zh="先做设计（R-002）">design first (R-002)</div></div>
+        </div>
+        <!-- component: text -->
+        <h2 class="title" style="margin:40px 0 14px" data-zh="已经建好的">What is built</h2>
+        <ul>
+          <li data-zh="账户与隔离：注册、登录、资料，每个人只看得到自己的文件。">Accounts and isolation: register, sign in, profile. Everyone sees only their own files.</li>
+          <li data-zh="文件、文件夹、回收站（保留 7 天）、分享链接、搜索、批量下载与预览。">Files, folders, trash (7-day retention), share links, search, batch download and previews.</li>
+          <li data-zh="实时事件（SSE）、存储用量与管理端点。">Live events (SSE), storage usage and admin endpoints.</li>
+          <li data-zh="带签名的在线自更新，失败时自动回滚，已端到端测试。发布流水线已产出 v0.3.1-rc.2。">Signed online self-update with automatic rollback, tested end to end. The release pipeline has produced v0.3.1-rc.2.</li>
+        </ul>
+      </section>
+
+      <!-- component: diagram (architecture) -->
+      <section class="rsec" id="architecture">
+        <h2 class="title" data-zh="一个程序，装下全部">One program holds everything</h2>
+        <p class="sub" data-zh="家庭云盘是一个名为 cloud_home 的程序：接口和网页界面同源提供，数据库与文件都在外接硬盘上。网页界面这一块还没有建，所以画成虚线。">Cloud Home is a single program called <span class="mono">cloud_home</span>. The API and the web app are served from the same address, and the database and files live on the external drive. The web app is not built yet, so it is drawn dashed.</p>
+        <figure class="diagram rv" style="margin:20px 0 0" data-diagram="arch"></figure>
+        <p class="cap" data-zh="示意图。小圆点表示请求与更新的流向；开启“减弱动态效果”时，圆点静止隐藏。">Diagram. The moving dots show requests and updates flowing; with Reduce Motion on, they are hidden and the diagram is still.</p>
+      </section>
+
+      <!-- component: diagram (OTA flow) -->
+      <section class="rsec" id="ota">
+        <h2 class="title" data-zh="更新如何安全地到达这台盒子">How an update safely reaches the box</h2>
+        <p class="sub" data-zh="每个版本都包含后端和网页界面，一起替换、一起回滚。三个环节会拒绝或撤销有问题的更新。">Every version contains the backend and the web app. They are replaced together and roll back together. Three of the steps can refuse or undo a bad update.</p>
+        <figure class="diagram rv io" style="margin:20px 0 0">
+          <div data-diagram="ota"></div>
+          <div class="rollback"><span data-ic="warn"></span><span data-zh="<b>任何一步失败：</b>保持旧版本运行，并恢复更新前的数据库副本。"><b>If any step fails:</b> the old version keeps running and the database copy from before the update is restored.</span></div>
+          <figcaption class="cap" data-zh="示意图。动画循环演示一次顺利的更新；开启“减弱动态效果”时静止显示完成状态。带签名的自更新及自动回滚已端到端测试；可重复运行的脚本（R-031）还在计划中。">Diagram. The animation loops through one successful update; with Reduce Motion on it shows the finished state. The signed self-update and its automatic rollback have been tested end to end; the repeatable script (R-031) is still planned.</figcaption>
+        </figure>
+      </section>
+
+      <!-- component: area chart -->
+      <section class="rsec" id="progress">
+        <h2 class="title" data-zh="进度">Progress</h2>
+        <article class="card rv" style="margin-top:16px"><h3 class="h3" style="margin-bottom:6px" data-zh="按领域看需求">Requirements by area</h3><p class="sub" style="margin:0 0 20px" data-zh="计划是今天才开始的，所以计划内需求都还没有完成；绿色文字是计划之前就已建成的能力。">The plan started today, so no planned requirement is done yet. Green text counts what was built before the plan began.</p><div id="areas" class="bars" data-built="1"></div>
+          <div class="legend" style="justify-content:flex-start"><span><i style="background:var(--c-todo);box-shadow:inset 0 0 0 1px var(--line-strong)"></i><span data-zh="待办">To do</span></span><span><i style="background:var(--c-blocked)"></i><span data-zh="受阻（等你）">Blocked (waiting on you)</span></span></div></article>
+      </section>
+
+      <!-- component: tests -->
+      <section class="rsec" id="tests">
+        <h2 class="title" data-zh="测试">Tests</h2>
+        <article class="card rv io" style="margin-top:16px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:24px;align-items:center">
+          <div class="waffle" data-pass="63"></div>
+          <div><p class="num" style="margin:0;font-size:44px;font-weight:700;letter-spacing:-.035em;line-height:1">63</p><p class="sub" style="margin:6px 0 0" data-zh="项单元测试全部通过">unit tests, all passed</p><p class="small" style="margin:10px 0 0" data-zh="0 失败 · 0 跳过">0 failed · 0 skipped</p></div>
+        </article>
+        <p class="small" style="margin-top:12px" data-zh="集成测试（R-030）与界面端到端测试（R-032）尚未开始。">Integration tests (R-030) and UI end-to-end tests (R-032) have not started.</p>
+      </section>
+
+      <!-- component: timeline (compact) -->
+      <section class="rsec" id="history">
+        <h2 class="title" data-zh="提交历史">Git history</h2>
+        <p class="sub" data-zh="仓库里真实的提交与发布，最新的在最上面。">Real commits and releases from the repository, newest first.</p>
+        <ol class="tl" id="tl" style="margin-top:8px"></ol>
+        <p class="small"><a href="../../timeline/" data-zh="查看完整时间线 ›">See the full timeline ›</a></p>
+      </section>
+
+      <!-- component: callouts -->
+      <section class="rsec" id="risks">
+        <h2 class="title" style="margin-bottom:16px" data-zh="风险与阻塞">Risks and blockers</h2>
+        <div class="stack">
+          <div class="callout risk rv"><span data-ic="warn"></span><div><h4 data-zh="还没有网页界面">No web UI yet</h4><p data-zh="产品截图与演示会从第一个界面里程碑开始出现。在那之前本站不会放示意图冒充。">Product screenshots and walkthroughs start with the first UI milestone. Until then this site will not show stand-ins.</p></div></div>
+          <div class="callout block rv" style="--rd:1"><span data-ic="lock"></span><div><h4 data-zh="等待主人：验证码服务商（R-022）">Waiting on the owner: one-time-code provider (R-022)</h4><p data-zh="真实的邮件或短信验证码需要你选择服务商并提供凭据。另有两项也在等你：谷歌 / 苹果登录的账号凭据（R-023）、聊天提醒如何接入（R-068）。">Real email or SMS codes need you to choose a provider and supply credentials. Two more items wait on you: developer-account credentials for Google / Apple sign-in (R-023) and how chat alerts reach the box (R-068).</p></div></div>
+        </div>
+      </section>
+
+      <section class="rsec" id="next">
+        <h2 class="title" data-zh="下一步">What is next</h2>
+        <ul><li data-zh="R-002：设计系统与界面原型，然后开始网页应用（R-003）。">R-002: design system and screens, then the web app (R-003).</li><li data-zh="R-060 / R-061：新账户需管理员批准。">R-060 / R-061: new accounts need administrator approval.</li><li data-zh="R-020：把更新器暴露为管理员接口。">R-020: expose the updater as an admin API.</li></ul>
+      </section>
+
+      <nav class="pager" aria-label="Other reports"><a href="../"><small data-zh="全部报告">All reports</small><b data-zh="返回报告列表">Back to the reports index</b></a><a class="nx" href="../m1-first-ui/"><small data-zh="示例模板">Sample template</small><b data-zh="里程碑报告长什么样">What a milestone report can look like</b></a></nav>
+    </div>
+  </div>
+</main>
+<script src="../../assets/site.js" defer></script>
+</body>
+</html>

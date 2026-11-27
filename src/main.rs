@@ -1,4 +1,5 @@
 mod auth;
+mod chat;
 mod config;
 mod db;
 mod drive;
@@ -12,6 +13,7 @@ mod openapi;
 mod services;
 mod state;
 mod tasks;
+mod ui;
 mod update;
 mod util;
 mod version;
@@ -40,7 +42,9 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         Some("--self-test") => {
-            // 能走到这里，说明二进制在本机 CPU/OS 上可执行、动态依赖齐全。
+            // 能走到这里，说明二进制在本机 CPU/OS 上可执行、动态依赖齐全；再校验内嵌 UI，
+            // 有问题就非零退出，更新器据此拒绝安装。
+            ui::self_test().context("内嵌 UI 自检失败")?;
             println!("ok {} {}", version::VERSION, version::TARGET);
             return Ok(());
         }
@@ -100,6 +104,17 @@ async fn main() -> anyhow::Result<()> {
         events.clone(),
     )?;
 
+    let chat = chat::ChatService::from_config(
+        pool.clone(),
+        &config.chat,
+        chat::AdminEnv {
+            drive_manager: drive_manager.clone(),
+            events: events.clone(),
+            trash_retention_days: config.trash_retention_days,
+        },
+    )
+    .context("初始化聊天集成失败")?;
+
     let state = AppState {
         db: pool.clone(),
         config: config.clone(),
@@ -110,6 +125,7 @@ async fn main() -> anyhow::Result<()> {
         shutdown: shutdown.clone(),
         oauth: auth::oauth::OAuthRegistry::new(config.oauth_enabled),
         updater: updater.clone(),
+        chat: chat.clone(),
     };
 
     // 6. 启动后台任务：回收站清理 + 硬盘监控。
@@ -119,8 +135,10 @@ async fn main() -> anyhow::Result<()> {
         config.trash_cleanup_interval_hours,
         events.clone(),
     );
+    tasks::pending_expirer::spawn(pool.clone(), config.registration.pending_expire_days);
     tasks::drive_monitor::spawn(config.clone(), drive_manager.clone(), mount.clone());
     update::start(&updater);
+    chat.spawn(shutdown.clone());
 
     // 7. 启动 HTTP 服务。
     let app = handlers::build_router(state);

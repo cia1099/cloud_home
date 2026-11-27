@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex">
+<title>Cloud Home</title>
+<link rel="stylesheet" href="assets/app.css">
+<script>
+/* before paint: language and theme, so there is no flash (same rules as ui/: ?lang, stored choice, browser language) */
+(function () {
+  var q = new URLSearchParams(location.search), s = function (k) { try { return localStorage.getItem('chapp.' + k); } catch (e) { return null; } };
+  var l = q.get('lang') || s('lang'), n = (navigator.language || 'en').toLowerCase();
+  if (l === 'zh') l = 'zh-Hans';
+  if (['en', 'zh-Hans', 'zh-Hant'].indexOf(l) < 0) l = /^zh-(tw|hk|mo|hant)/.test(n) ? 'zh-Hant' : /^zh/.test(n) ? 'zh-Hans' : 'en';
+  var t = q.get('theme') || s('theme') || 'auto';
+  if (t === 'auto') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  var d = document.documentElement; d.lang = l; d.setAttribute('data-theme', t);
+})();
+</script>
+</head>
+<body>
+<svg class="defs" aria-hidden="true" focusable="false"><defs>
+  <linearGradient id="fg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--folder-2)"/><stop offset="1" style="stop-color:var(--folder)"/></linearGradient>
+</defs></svg>
+<div id="stage-wrap" data-dev="auto"><div id="stage"></div></div>
+<button id="dock-btn" aria-expanded="false" aria-controls="dock"></button>
+<div id="dock" hidden></div>
+<script src="assets/icons.js"></script>
+<script src="assets/i18n.js"></script>
+<script src="assets/app.js"></script>
+<noscript>Cloud Home needs JavaScript.</noscript>
+</body>
+</html>

@@ -1,0 +1,59 @@
+/* Administration / update page and the "follow updates" banner and overlay (design/mockups/app: adminPage, banner, updating). */
+.upd-stack { display: grid; gap: 14px; }
+.upd-card { background: var(--surface); border-radius: var(--r-l); box-shadow: var(--sh-1); padding: 18px; }
+.upd-hero { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.upd-hero-text { flex: 1 1 200px; min-width: 0; }
+.upd-hero-text h2 { font-size: 19px; font-weight: 700; letter-spacing: -.015em; overflow-wrap: anywhere; }
+.upd-hero-text .hint { margin-top: 2px; overflow-wrap: anywhere; }
+.upd-logo { width: 56px; height: 56px; border-radius: 16px; display: grid; place-items: center; flex: none; background: var(--accent-fill); color: #fff; }
+.upd-logo.warn { background: var(--warn-bg); color: var(--warn-dot); }
+.upd-logo.big { width: 72px; height: 72px; border-radius: 20px; }
+.upd-spin { color: var(--accent-fill); }
+.upd-notes, .upd-progress { display: grid; gap: 12px; }
+.upd-notes a { display: inline-flex; align-items: center; gap: 4px; font-weight: 600; justify-self: start; }
+.upd-grow { flex: 1 1 200px; min-width: 0; }
+.upd-block { display: block; }
+.upd-select { width: 170px; height: 40px; font-size: 15px; }
+
+.upd-indet { width: 100%; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; position: relative; }
+.upd-indet::after { content: ""; position: absolute; inset-block: 0; width: 40%; background: var(--accent-fill); border-radius: 2px; animation: upd-indet 1.5s ease-in-out infinite; }
+@keyframes upd-indet { from { inset-inline-start: -40%; } to { inset-inline-start: 100%; } }
+
+.upd-steps { list-style: none; display: grid; gap: 10px; padding: 0; margin: 0; }
+.upd-steps li { display: flex; align-items: center; gap: 12px; color: var(--text-3); font-weight: 500; }
+.upd-steps li.now { color: var(--text); }
+.upd-steps li.done { color: var(--text-2); }
+.upd-steps .n { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; background: var(--surface-2); flex: none; }
+.upd-steps .now .n { background: var(--accent-fill); color: #fff; }
+.upd-steps .done .n { background: var(--ok-bg); color: var(--ok); }
+
+.upd-gate { display: grid; gap: 14px; max-width: 420px; justify-items: stretch; }
+.upd-gate .upd-logo { justify-self: start; }
+.upd-gate h2 { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+
+.upd-banner { position: fixed; z-index: 80; top: 12px; inset-inline: 0; margin-inline: auto; width: min(560px, calc(100% - 24px)); display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; border-radius: 18px; background: var(--glass-pop); -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px); box-shadow: var(--sh-2); animation: upd-slide var(--d2) var(--ease); }
+@keyframes upd-slide { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+.upd-banner-text { flex: 1; min-width: 0; }
+.upd-banner-text b { display: block; font-size: 14.5px; font-weight: 600; }
+.upd-banner-text span { display: block; font-size: 13px; color: var(--text-2); }
+.upd-banner-icon { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-tint-2); color: var(--accent-fill); flex: none; }
+
+.upd-overlay { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--bg) 70%, transparent); -webkit-backdrop-filter: blur(14px) saturate(160%); backdrop-filter: blur(14px) saturate(160%); animation: upd-fade var(--d2) var(--ease); }
+@keyframes upd-fade { from { opacity: 0; } to { opacity: 1; } }
+.upd-overlay-box { max-width: 380px; text-align: center; display: grid; gap: 12px; justify-items: center; }
+.upd-overlay-box h2 { font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+.upd-overlay-box p { color: var(--text-2); font-size: 16px; }
+.upd-overlay-box .upd-indet { width: 220px; }
+
+@media (max-width: 700px) {
+  .upd-banner { top: 8px; }
+  .upd-select { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .upd-indet::after { animation: none; inset-inline-start: 0; width: 100%; opacity: .55; }
+  .upd-banner, .upd-overlay { animation: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .upd-banner, .upd-overlay { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .upd-overlay { background: var(--bg); }
+}

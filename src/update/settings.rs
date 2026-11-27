@@ -4,8 +4,9 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, bail};
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Mode {
     /// 只检查并提示，由人点击安装。
@@ -14,7 +15,7 @@ pub enum Mode {
     Auto,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Channel {
     /// 仅正式版（GitHub 的 `latest`，不含预发布）。
@@ -89,12 +90,16 @@ fn parse_hm(s: &str) -> anyhow::Result<u32> {
     Ok(h * 60 + m)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// 检查间隔上限（30 天）：既防止配置笔误，也避免 `hours * 3600` 溢出。
+pub const MAX_CHECK_INTERVAL_HOURS: u64 = 24 * 30;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct Settings {
     pub mode: Mode,
-    /// `HH:MM-HH:MM`，本地时间。
+    /// 自动安装时间窗 `HH:MM-HH:MM`，本地时间，可跨午夜。
     pub window: String,
     pub channel: Channel,
+    /// 检查间隔（小时），1..=720。
     pub check_interval_hours: u64,
 }
 
@@ -106,8 +111,8 @@ impl Settings {
     /// 校验（保存前调用，避免把坏值写盘后每次启动都失败）。
     pub fn validate(&self) -> anyhow::Result<()> {
         self.window()?;
-        if self.check_interval_hours == 0 {
-            bail!("check_interval_hours 必须 >= 1");
+        if !(1..=MAX_CHECK_INTERVAL_HOURS).contains(&self.check_interval_hours) {
+            bail!("check_interval_hours 必须在 1..={MAX_CHECK_INTERVAL_HOURS} 之间");
         }
         Ok(())
     }
@@ -170,6 +175,24 @@ mod tests {
             "03:00",
         ] {
             assert!(Window::parse(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn validate_bounds_check_interval() {
+        let ok = Settings {
+            mode: Mode::Manual,
+            window: "03:00-05:00".into(),
+            channel: Channel::Stable,
+            check_interval_hours: 6,
+        };
+        assert!(ok.validate().is_ok());
+        for bad in [0, MAX_CHECK_INTERVAL_HOURS + 1, u64::MAX] {
+            let s = Settings {
+                check_interval_hours: bad,
+                ..ok.clone()
+            };
+            assert!(s.validate().is_err(), "{bad}");
         }
     }
 

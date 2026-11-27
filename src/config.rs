@@ -1,5 +1,133 @@
 use std::path::PathBuf;
 
+/// 注册模式（`REGISTRATION_MODE`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistrationMode {
+    /// 注册即启用，签发令牌。
+    Open,
+    /// 注册后处于 pending，须管理员批准；不签发令牌。
+    Approval,
+    /// 关闭注册。
+    Closed,
+}
+
+impl std::str::FromStr for RegistrationMode {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "open" => Ok(Self::Open),
+            "approval" => Ok(Self::Approval),
+            "closed" => Ok(Self::Closed),
+            other => anyhow::bail!("REGISTRATION_MODE 只能是 open|approval|closed，收到 {other:?}"),
+        }
+    }
+}
+
+/// 注册策略与滥用限制。
+#[derive(Debug, Clone, Copy)]
+pub struct RegistrationPolicy {
+    pub mode: RegistrationMode,
+    /// 同一来源 IP 每小时最多提交的注册数（仅 approval 模式）。
+    pub rate_per_ip_per_hour: i64,
+    /// pending 账户总数上限，超出返回 429（仅 approval 模式）。
+    pub pending_max: i64,
+    /// 被拒绝的标识在此天数内不得重新注册。
+    /// pending 超过此天数自动拒绝。
+    pub pending_expire_days: i64,
+}
+
+/// 聊天提供方（`CHAT_PROVIDER`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatProviderKind {
+    /// 不接聊天：审批只走 `/admin/*` 端点。
+    None,
+    Telegram,
+}
+
+impl ChatProviderKind {
+    /// 配对身份与审计里使用的提供方名。
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Telegram => "telegram",
+        }
+    }
+}
+
+impl std::str::FromStr for ChatProviderKind {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "none" => Ok(Self::None),
+            "telegram" => Ok(Self::Telegram),
+            other => anyhow::bail!("CHAT_PROVIDER 只能是 none|telegram，收到 {other:?}"),
+        }
+    }
+}
+
+/// 机器人消息语言（`CHAT_LANGUAGE`）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChatLanguage {
+    En,
+    ZhHans,
+    ZhHant,
+}
+
+impl std::str::FromStr for ChatLanguage {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "en" => Ok(Self::En),
+            "zh-hans" => Ok(Self::ZhHans),
+            "zh-hant" => Ok(Self::ZhHant),
+            other => anyhow::bail!("CHAT_LANGUAGE 只能是 en|zh-Hans|zh-Hant，收到 {other:?}"),
+        }
+    }
+}
+
+/// 聊天集成配置。机器人令牌是密钥：`Debug` 脱敏，且绝不写日志。
+#[derive(Clone)]
+pub struct ChatConfig {
+    pub provider: ChatProviderKind,
+    pub bot_token: Option<String>,
+    pub language: ChatLanguage,
+    /// 发给聊天提供方的邮箱 / 手机号是否打码（默认是）。
+    pub mask_identifiers: bool,
+}
+
+impl std::fmt::Debug for ChatConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ChatConfig")
+            .field("provider", &self.provider)
+            .field("bot_token", &self.bot_token.as_ref().map(|_| "<redacted>"))
+            .field("language", &self.language)
+            .field("mask_identifiers", &self.mask_identifiers)
+            .finish()
+    }
+}
+
+impl ChatConfig {
+    fn from_env() -> anyhow::Result<Self> {
+        let provider: ChatProviderKind = env_or("CHAT_PROVIDER", "none").parse()?;
+        let bot_token = std::env::var("CHAT_BOT_TOKEN")
+            .ok()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        if provider == ChatProviderKind::Telegram && bot_token.is_none() {
+            anyhow::bail!("CHAT_PROVIDER=telegram 需要设置 CHAT_BOT_TOKEN");
+        }
+        Ok(Self {
+            provider,
+            bot_token,
+            language: env_or("CHAT_LANGUAGE", "en").parse()?,
+            mask_identifiers: env_parse("CHAT_MASK_IDENTIFIERS", true)?,
+        })
+    }
+}
+
 /// 全局配置，从 .env / 环境变量加载。
 ///
 /// 注意：`DATABASE_URL` 不在此处，它由程序在运行时根据侦测到的硬盘路径构造。
@@ -46,6 +174,10 @@ pub struct Config {
     pub update_root: PathBuf,
     /// 覆盖清单所在 URL 前缀——仅供测试用本地镜像，生产不要设置。
     pub update_base_url: Option<String>,
+    /// 注册模式与限流。
+    pub registration: RegistrationPolicy,
+    /// 管理员聊天集成。
+    pub chat: ChatConfig,
 }
 
 impl std::fmt::Debug for Config {
@@ -78,6 +210,8 @@ impl std::fmt::Debug for Config {
             .field("update_check_interval_hours", &self.update_check_interval_hours)
             .field("update_root", &self.update_root)
             .field("update_base_url", &self.update_base_url)
+            .field("registration", &self.registration)
+            .field("chat", &self.chat)
             .finish()
     }
 }
@@ -127,6 +261,13 @@ impl Config {
             update_base_url: std::env::var("UPDATE_BASE_URL")
                 .ok()
                 .filter(|s| !s.trim().is_empty()),
+            registration: RegistrationPolicy {
+                mode: env_or("REGISTRATION_MODE", "approval").parse()?,
+                rate_per_ip_per_hour: env_parse("REGISTER_RATE_PER_IP_PER_HOUR", 5)?,
+                pending_max: env_parse("PENDING_MAX", 20)?,
+                pending_expire_days: env_parse("PENDING_EXPIRE_DAYS", 14)?,
+            },
+            chat: ChatConfig::from_env()?,
         })
     }
 
@@ -150,5 +291,37 @@ where
             .parse::<T>()
             .map_err(|e| anyhow::anyhow!("环境变量 {key} 解析失败: {e}")),
         Err(_) => Ok(default),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chat_config_debug_redacts_the_bot_token() {
+        let cfg = ChatConfig {
+            provider: ChatProviderKind::Telegram,
+            bot_token: Some("123456:SECRET-TOKEN".into()),
+            language: ChatLanguage::En,
+            mask_identifiers: true,
+        };
+        let shown = format!("{cfg:?}");
+        assert!(!shown.contains("SECRET-TOKEN"), "{shown}");
+        assert!(shown.contains("<redacted>"));
+    }
+
+    #[test]
+    fn chat_enums_parse() {
+        assert_eq!(
+            "telegram".parse::<ChatProviderKind>().unwrap(),
+            ChatProviderKind::Telegram
+        );
+        assert!("line".parse::<ChatProviderKind>().is_err());
+        assert_eq!(
+            "zh-Hant".parse::<ChatLanguage>().unwrap(),
+            ChatLanguage::ZhHant
+        );
+        assert!("fr".parse::<ChatLanguage>().is_err());
     }
 }

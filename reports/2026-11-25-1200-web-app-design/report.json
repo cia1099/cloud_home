@@ -1,0 +1,355 @@
+{
+  "kind": "weekly",
+  "title": {
+    "en": "The web app now has a design, and the update API is live",
+    "zh": "网页应用有了设计，更新接口也已就绪"
+  },
+  "summary": {
+    "en": "The designer delivered the full web-app design: clickable mockups in English, 简体中文 and 繁體中文, light and dark, phone to desktop, plus a design system and glossary. You answered the five open design questions and they are in the design. On the backend, the update admin API (R-020) is merged. Nothing of the real web app is built yet; the screenshots below are of the design mockup, not of working software.",
+    "zh": "设计师交付了完整的网页应用设计：可点击的原型（英文、简体中文、繁體中文，浅色与深色，手机到桌面），以及设计系统和术语表。你回答的五个设计问题已经落实到设计中。后端方面，更新管理接口（R-020）已合并。真正的网页应用还没有开始开发；下面的截图来自设计原型，而不是可运行的软件。"
+  },
+  "chip": {
+    "tone": "accent",
+    "icon": "check",
+    "text": {
+      "en": "Design delivered · UI build next",
+      "zh": "设计已交付 · 下一步开发界面"
+    }
+  },
+  "cover": {
+    "style": "c1",
+    "icon": "window"
+  },
+  "sections": [
+    {
+      "id": "summary",
+      "title": {
+        "en": "Summary",
+        "zh": "概要"
+      },
+      "component": "kpis",
+      "data": {
+        "items": [
+          {
+            "label": {
+              "en": "Web-app design (R-002)",
+              "zh": "网页应用设计（R-002）"
+            },
+            "value": {
+              "en": "Delivered",
+              "zh": "已交付"
+            },
+            "sub": {
+              "en": "in review by you",
+              "zh": "待你审阅"
+            }
+          },
+          {
+            "label": {
+              "en": "Update admin API (R-020)",
+              "zh": "更新管理接口（R-020）"
+            },
+            "value": {
+              "en": "Merged",
+              "zh": "已合并"
+            },
+            "sub": {
+              "en": "live check still outstanding",
+              "zh": "实机检查尚未完成"
+            }
+          },
+          {
+            "label": {
+              "en": "Unit tests",
+              "zh": "单元测试"
+            },
+            "value": 94,
+            "sub": {
+              "en": "reported at merge, not re-run for this report",
+              "zh": "合并时报告，本期未重新运行"
+            }
+          },
+          {
+            "label": {
+              "en": "Design questions answered",
+              "zh": "已回答的设计问题"
+            },
+            "value": 5,
+            "sub": {
+              "en": "all five applied",
+              "zh": "五项均已落实"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "design",
+      "title": {
+        "en": "What the design looks like",
+        "zh": "设计长什么样"
+      },
+      "intro": {
+        "en": "These are screenshots of the clickable design mockup, taken now. They show the intended look of the app. The mockup uses sample data, so mixed-language file names are expected.",
+        "zh": "以下是可点击设计原型的截图，刚刚拍摄，展示应用预期的样子。原型使用示例数据，所以文件名里出现中英混排是正常的。"
+      },
+      "caption": {
+        "en": "Design mockup, not the running product. The sign-in screen in English (light), 简体中文 (dark) and 繁體中文 (phone).",
+        "zh": "设计原型，不是运行中的产品。登录界面：英文（浅色）、简体中文（深色）、繁體中文（手机）。"
+      },
+      "component": "gallery",
+      "data": {
+        "shots": [
+          {
+            "src": "shots/desktop-light-en.png",
+            "alt": {
+              "en": "Sign-in screen mockup, English, light",
+              "zh": "设计原型截图：Sign in · English · light"
+            },
+            "title": {
+              "en": "Sign in · English · light",
+              "zh": "登录 · 英文 · 浅色"
+            },
+            "build": "设计原型 design mockup",
+            "theme": "light",
+            "language": "en"
+          },
+          {
+            "src": "shots/desktop-dark-zh-hans.png",
+            "alt": {
+              "en": "Sign-in screen mockup, Simplified Chinese, dark",
+              "zh": "设计原型截图：Sign in · 简体中文 · dark"
+            },
+            "title": {
+              "en": "Sign in · 简体中文 · dark",
+              "zh": "登录 · 简体中文 · 深色"
+            },
+            "build": "设计原型 design mockup",
+            "theme": "dark",
+            "language": "zh-Hans"
+          },
+          {
+            "src": "shots/phone-light-zh-hant.png",
+            "alt": {
+              "en": "Sign-in screen mockup on a phone, Traditional Chinese",
+              "zh": "设计原型截图：Sign in · 繁體中文 · phone"
+            },
+            "title": {
+              "en": "Sign in · 繁體中文 · phone",
+              "zh": "登录 · 繁體中文 · 手机"
+            },
+            "build": "设计原型 design mockup",
+            "theme": "light",
+            "language": "zh-Hant"
+          },
+          {
+            "src": "shots/files-grid-light-en.png",
+            "alt": {
+              "en": "File browser mockup, grid view, English, light",
+              "zh": "设计原型截图：File browser · grid"
+            },
+            "title": {
+              "en": "File browser · grid",
+              "zh": "文件浏览 · 网格"
+            },
+            "build": "设计原型 design mockup",
+            "theme": "light",
+            "language": "en",
+            "wide": true
+          },
+          {
+            "src": "shots/files-dark-zh-hans.png",
+            "alt": {
+              "en": "File browser mockup, Simplified Chinese, dark",
+              "zh": "设计原型截图：File browser · 简体中文 · dark"
+            },
+            "title": {
+              "en": "File browser · 简体中文 · dark",
+              "zh": "文件浏览 · 简体中文 · 深色"
+            },
+            "build": "设计原型 design mockup",
+            "theme": "dark",
+            "language": "zh-Hans",
+            "wide": true
+          },
+          {
+            "src": "shots/files-phone-zh-hant.png",
+            "alt": {
+              "en": "File browser mockup on a phone, Traditional Chinese",
+              "zh": "设计原型截图：File browser · 繁體中文 · phone"
+            },
+            "title": {
+              "en": "File browser · 繁體中文 · phone",
+              "zh": "文件浏览 · 繁體中文 · 手机"
+            },
+            "build": "设计原型 design mockup",
+            "theme": "light",
+            "language": "zh-Hant"
+          },
+          {
+            "src": "shots/shared-light-en.png",
+            "alt": {
+              "en": "Shared screen mockup with Shared by You and Shared with You tabs",
+              "zh": "设计原型截图：Shared by you / with you"
+            },
+            "title": {
+              "en": "Shared by you / with you",
+              "zh": "你分享的 / 与你共享"
+            },
+            "build": "设计原型 design mockup",
+            "theme": "light",
+            "language": "en",
+            "wide": true
+          },
+          {
+            "src": "shots/upload-light-en.png",
+            "alt": {
+              "en": "Upload progress mockup",
+              "zh": "设计原型截图：Uploading"
+            },
+            "title": {
+              "en": "Uploading",
+              "zh": "上传中"
+            },
+            "build": "设计原型 design mockup",
+            "theme": "light",
+            "language": "en",
+            "wide": true
+          },
+          {
+            "src": "shots/preview-dark-en.png",
+            "alt": {
+              "en": "Image preview mockup, dark",
+              "zh": "设计原型截图：Preview"
+            },
+            "title": {
+              "en": "Preview",
+              "zh": "预览"
+            },
+            "build": "设计原型 design mockup",
+            "theme": "dark",
+            "language": "en",
+            "wide": true
+          }
+        ]
+      }
+    },
+    {
+      "id": "decisions-applied",
+      "title": {
+        "en": "Your five design decisions, applied",
+        "zh": "你的五项设计决定，已落实"
+      },
+      "component": "text",
+      "data": {
+        "bullets": [
+          {
+            "en": "File extensions are **shown**, not hidden.",
+            "zh": "文件扩展名**显示**，不隐藏。"
+          },
+          {
+            "en": "Settings keeps the Automatic / Light / Dark control; the default is Automatic (follows the system).",
+            "zh": "设置中保留“自动 / 浅色 / 深色”切换，默认自动（跟随系统）。"
+          },
+          {
+            "en": "A **Shared with you** tab is added next to Shared by you (visible in the screenshot above). It needs new backend work, tracked as R-071.",
+            "zh": "在“你分享的”旁边新增**与你共享**标签页（见上方截图）。它需要新的后端工作，记为 R-071。"
+          },
+          {
+            "en": "The public share page gets a language switch.",
+            "zh": "公开分享页增加语言切换。"
+          },
+          {
+            "en": "Phone number fields get a country picker. This needs E.164 storage and validation on the backend, and any SMS provider with a running cost will need your approval first.",
+            "zh": "手机号输入增加国家/地区选择器。后端需要按 E.164 存储与校验；任何有运行成本的短信服务商都需要先经你批准。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "backend",
+      "title": {
+        "en": "Backend progress",
+        "zh": "后端进展"
+      },
+      "component": "text",
+      "data": {
+        "bullets": [
+          {
+            "en": "**R-020 update admin API** is merged into the manager branch: current and latest version, check, install, and settings, all behind the admin guard.",
+            "zh": "**R-020 更新管理接口**已合并到经理分支：当前与最新版本、检查、安装、设置，全部受管理员权限保护。"
+          },
+          {
+            "en": "**R-060 / R-061 account approval** is merged (new accounts wait for an administrator). HTTP-level tests come with R-066.",
+            "zh": "**R-060 / R-061 账户审批**已合并（新账户需管理员批准）。HTTP 层测试在 R-066 中补上。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "risks",
+      "title": {
+        "en": "Risks and what was not verified",
+        "zh": "风险与未验证的内容"
+      },
+      "component": "callouts",
+      "data": {
+        "items": [
+          {
+            "tone": "risk",
+            "title": {
+              "en": "Tests not re-run for this report",
+              "zh": "本期未重新运行测试"
+            },
+            "text": {
+              "en": "The 94 unit tests are the count reported when R-020 was merged. This session could not run the test suite, so the number is not freshly confirmed.",
+              "zh": "94 项单元测试是 R-020 合并时报告的数字。本次会话无法运行测试，所以这个数字并非刚刚确认。"
+            }
+          },
+          {
+            "tone": "risk",
+            "title": {
+              "en": "No live check of the new APIs",
+              "zh": "新接口尚未实机检查"
+            },
+            "text": {
+              "en": "R-020 and the approval flow have not yet been exercised with curl against a running instance.",
+              "zh": "R-020 和审批流程还没有在运行实例上用 curl 实测。"
+            }
+          },
+          {
+            "tone": "info",
+            "title": {
+              "en": "Mockup only",
+              "zh": "仅为原型"
+            },
+            "text": {
+              "en": "The design was checked by its own smoke test and in screenshots, but has not been tried on a real phone.",
+              "zh": "设计通过了自带的冒烟测试并拍了截图，但还没有在真实手机上试过。"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "next",
+      "title": {
+        "en": "What is next",
+        "zh": "接下来"
+      },
+      "component": "text",
+      "data": {
+        "bullets": [
+          {
+            "en": "Start the web-app foundation (R-003), and the backend for Shared with you (R-071).",
+            "zh": "开始网页应用基础（R-003）以及“与你共享”的后端（R-071）。"
+          },
+          {
+            "en": "Device packaging (R-021), the HTTP integration tests (R-030, R-066) and the idle-code sweep (R-070).",
+            "zh": "设备打包（R-021）、HTTP 集成测试（R-030、R-066）以及闲置代码清理（R-070）。"
+          }
+        ]
+      }
+    }
+  ]
+}

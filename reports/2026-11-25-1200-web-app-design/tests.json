@@ -1,0 +1,3 @@
+{
+  "suites": [{ "name": "cargo test (unit, count reported at the R-020 merge)", "passed": 94, "failed": 0, "skipped": 0 }]
+}
