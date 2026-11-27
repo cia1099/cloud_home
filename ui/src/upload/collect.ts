@@ -41,8 +41,11 @@ async function walk(entry: FileSystemEntry, dirs: string[], out: Picked[]): Prom
  * (the list is cleared afterwards), so this reads them first and only then awaits.
  */
 export async function fromDrop(items: DataTransferItemList): Promise<Picked[]> {
-  const entries: (FileSystemEntry | null)[] = [...items].filter((item) => item.kind === 'file').map((item) => item.webkitGetAsEntry())
+  const taken = [...items].filter((item) => item.kind === 'file').map((item) => ({ entry: item.webkitGetAsEntry(), file: item.getAsFile() }))
   const out: Picked[] = []
-  for (const entry of entries) if (entry) await walk(entry, [], out)
+  for (const { entry, file } of taken) {
+    if (entry) await walk(entry, [], out)
+    else if (file) out.push({ file, dirs: [] }) // no entry API: plain files only
+  }
   return out
 }
