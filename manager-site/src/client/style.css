@@ -529,3 +529,10 @@ html[data-l=zh] .ms-hero h1 { letter-spacing:-.01em; line-height:1.15; }
 .why { margin:0; padding-left:1.2em; display:grid; gap:10px; } .why li { text-wrap:pretty; }
 @media (max-width:860px) { .stages { grid-template-columns:minmax(0,1fr); } }
 @media (max-width:860px) { .tests-card { grid-template-columns:minmax(0,1fr); } .filter-bar { position:static; } }
+.gsteps { list-style:none; margin:0; padding:0; counter-reset:g; display:grid; gap:12px; }
+.gsteps > li { counter-increment:g; background:var(--surface); border-radius:var(--r-l); box-shadow:var(--sh-1); padding:20px 22px 20px 64px; position:relative; }
+.gsteps > li::before { content:counter(g); position:absolute; left:20px; top:20px; width:28px; height:28px; display:grid; place-items:center; border-radius:50%; background:var(--accent-tint); color:var(--accent); font-weight:700; font-size:.875rem; }
+.gsteps > li p, .guide .sec p { margin:8px 0 0; color:var(--text-2); text-wrap:pretty; overflow-wrap:anywhere; }
+.gcode { margin:12px 0 0; padding:14px 16px; border-radius:var(--r-m, 12px); background:var(--bg-alt); color:var(--text); font:.8125rem/1.55 var(--mono); overflow-x:auto; white-space:pre; }
+.gcard { display:block; color:inherit; text-decoration:none; transition:box-shadow .2s; } .gcard:hover { box-shadow:var(--sh-2, var(--sh-1)); }
+@media (max-width:860px) { .gsteps > li { padding:18px 16px 18px 56px; } .gsteps > li::before { left:14px; top:18px; } }

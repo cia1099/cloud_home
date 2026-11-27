@@ -47,3 +47,14 @@ A decision card has only *Approve* and *Deny*. For a choice between named varian
 - Why: you asked for an SF Symbols style that says "cloud drive at home". C is the more explicit picture and the one the owner's session recommends; D is a bolder silhouette that reads better at 16 px.
 - Risk: low. Nothing is applied to the product until you answer.
 - If approved: approve means "I choose the variant named in my note". I produce the final SVG set (app icon, maskable, favicon, light/dark, one-colour), usage rules, and apply it to the mockup, sign-in, share page and report-site header.   If denied: the note says what to change and the designer does another round.
+
+### A-005 [ ] Credentials ready? — 2026-11-28 — requested by manager
+- What: tell the manager you have put the credentials from the guides on the box, in files readable only by you: the Telegram bot token, the Google OAuth client, and the Apple key with its ids. Step-by-step guides: report site /decisions/guides/.
+- Why: the Telegram approval bot can be checked live as soon as its token is in place; the real Google and Apple sign-in is wired only after you confirm.
+- Risk: low. You never send a secret to the team; the files stay on your machine (mode 600). Until you approve, nothing is wired and the box ships only the sign-in interface.
+- If approved: the backend engineer wires the real providers, runs the live checks (a real approval message on your phone, a real Google and Apple sign-in) and reports the result.   If denied: say in the note what is missing or unclear; the guides are updated.
+- zh title: 凭证准备好了吗？
+- zh What: 告诉经理：你已把指南里的凭证放到设备上，文件只有你能读。包括 Telegram 机器人令牌、Google OAuth 客户端、Apple 密钥及其标识。分步指南见报告网站 /decisions/guides/。
+- zh Why: Telegram 审批机器人的令牌一就位就能现场验证；真正的 Google、Apple 登录要等你确认之后才接入。
+- zh Risk: 低。你无需把任何秘密发给团队，文件留在你自己的机器上（权限 600）。你批准之前不会接入任何东西，设备只带登录接口。
+- zh If approved: 后端工程师接入真实登录提供方，做现场验证（手机上收到真实的审批消息、真实的 Google 和 Apple 登录），并汇报结果。   zh If denied: 在备注里写明缺什么或哪里不清楚，指南会更新。
