@@ -19,12 +19,10 @@ pub const APPROVAL_REJECTED: &str = "rejected";
 
 /// 数据库中的用户行——仅剩个人资料，凭证与标识都在 `user_identities`。
 #[derive(Debug, Clone, FromRow)]
-#[allow(dead_code)]
 pub struct User {
     pub id: String,
     pub username: String,
     pub created_at: String,
-    pub updated_at: String,
     pub is_active: i64,
     pub deleted_at: Option<String>,
     /// `pending` | `approved` | `rejected`；非 approved 时 `is_active` 必为 0。
@@ -37,18 +35,13 @@ pub struct User {
 
 /// 一条身份记录：凭证（password）或标识（email/phone/google/apple）。
 #[derive(Debug, Clone, FromRow)]
-#[allow(dead_code)]
 pub struct UserIdentity {
-    pub id: String,
-    pub user_id: String,
     pub provider: String,
     pub identifier: String,
     pub secret: Option<String>,
     pub verified_at: Option<String>,
     /// `None` 表示用户自有、可编辑；`Some("google")` 等表示第三方托管、本地只读。
     pub managed_by: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
 }
 
 impl UserIdentity {

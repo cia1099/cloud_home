@@ -2,17 +2,12 @@ use serde::Serialize;
 use sqlx::FromRow;
 use utoipa::ToSchema;
 
-/// 数据库中的回收站行。
+/// 数据库中的回收站行（只含被读取的列；查询用 `SELECT *`，多余列由 sqlx 忽略）。
 #[derive(Debug, Clone, FromRow)]
-#[allow(dead_code)]
 pub struct TrashEntry {
-    pub id: String,
     pub file_id: String,
-    pub owner_id: String,
     pub original_parent_id: Option<String>,
     pub original_name: String,
-    pub deleted_at: String,
-    pub expires_at: String,
 }
 
 /// 回收站列表项（联接 files 取得类型与大小）。

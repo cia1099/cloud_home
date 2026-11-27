@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Internal cleanup, no behavior change: removed every `#[allow(dead_code)]` and
+  the code behind it (unused `PayloadTooLarge` error variant, unused drive
+  helpers, `ActivityTracker::wait_idle`, unread row fields); the upload form
+  OpenAPI schema is now hand-written instead of a never-read struct.
+
 ### Fixed
 - Two admins pressing Approve and Reject in chat at the same moment could both
   "win" (the approval silently overturned the rejection). A chat button can no

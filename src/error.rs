@@ -53,10 +53,6 @@ pub enum AppError {
     #[error("外接硬盘不可用")]
     DriveUnavailable,
 
-    #[error("负载过大")]
-    #[allow(dead_code)]
-    PayloadTooLarge,
-
     #[error(transparent)]
     Database(#[from] sqlx::Error),
 
@@ -93,7 +89,7 @@ impl AppError {
             | AppError::RegistrationBusy(_) => {
                 tracing::debug!(error = %self, "请求冲突/已过期");
             }
-            AppError::NotFound | AppError::BadRequest(_) | AppError::PayloadTooLarge => {
+            AppError::NotFound | AppError::BadRequest(_) => {
                 tracing::debug!(error = %self, "请求被拒绝");
             }
             AppError::Unauthorized | AppError::Forbidden | AppError::ForbiddenReason(_) => {}
@@ -118,7 +114,6 @@ impl AppError {
             AppError::CodedConflict(code, _) => (StatusCode::CONFLICT, code),
             AppError::Gone => (StatusCode::GONE, "GONE"),
             AppError::DriveUnavailable => (StatusCode::SERVICE_UNAVAILABLE, "DRIVE_UNAVAILABLE"),
-            AppError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE"),
             AppError::Database(_) | AppError::Io(_) | AppError::Other(_) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "INTERNAL_ERROR")
             }

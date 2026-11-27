@@ -8,16 +8,13 @@ use crate::auth::jwt;
 use crate::error::AppError;
 use crate::state::AppState;
 
-/// 已认证用户，携带用户 id 与用户名。
+/// 已认证用户，携带用户 id。
 ///
-/// `username` 目前仅在下方提取时被写入当前请求 span（`span.record`），
-/// 从而让本次请求的所有日志行自动带上可读用户名——handler 内部不需要
-/// 再显式传递。编译器看不到这层间接使用，故标注 `#[allow(dead_code)]`。
+/// 用户名只在下方提取时写入当前请求 span（`span.record`），
+/// 让本次请求的所有日志行自动带上可读用户名，不随结构体传递。
 #[derive(Debug, Clone)]
 pub struct AuthUser {
     pub user_id: String,
-    #[allow(dead_code)]
-    pub username: String,
 }
 
 /// 校验签名之后必须再查一次库：token 有效不代表账户仍然可用。
@@ -72,7 +69,6 @@ impl FromRequestParts<AppState> for AuthUser {
 
         Ok(AuthUser {
             user_id: claims.sub,
-            username,
         })
     }
 }

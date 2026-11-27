@@ -7,7 +7,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll};
-use std::time::Duration;
 
 use futures_lite::Stream;
 use tokio_util::sync::CancellationToken;
@@ -34,18 +33,6 @@ impl ActivityTracker {
     /// 当前在途传输数。
     pub fn active(&self) -> usize {
         self.active.load(Ordering::SeqCst)
-    }
-
-    /// 等到没有在途传输，或超过 `max_wait`；返回是否已空闲。
-    pub async fn wait_idle(&self, max_wait: Duration) -> bool {
-        let deadline = tokio::time::Instant::now() + max_wait;
-        while self.active() > 0 {
-            if tokio::time::Instant::now() >= deadline {
-                return false;
-            }
-            tokio::time::sleep(Duration::from_millis(200)).await;
-        }
-        true
     }
 }
 
@@ -127,14 +114,5 @@ mod tests {
         assert_eq!(t.active(), 1);
         drop(b);
         assert_eq!(t.active(), 0);
-    }
-
-    #[tokio::test]
-    async fn wait_idle_times_out_then_succeeds() {
-        let t = ActivityTracker::new();
-        let g = t.begin();
-        assert!(!t.wait_idle(Duration::from_millis(50)).await);
-        drop(g);
-        assert!(t.wait_idle(Duration::from_millis(50)).await);
     }
 }
