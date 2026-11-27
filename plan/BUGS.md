@@ -51,7 +51,7 @@ After the fix run the flaky test in a loop (for example 200 iterations) to confi
 
 ## B-002 (P2, data safety / disk leak) An upload interrupted midway leaves its bytes on disk with no database row
 
-**Status: open.** Found by `tests/api_http.rs::upload_interrupted_midway_leaves_no_orphan_file_on_disk`
+**Status: fixed** (branch `agent/B-002-upload-orphan`: drop guard deletes the partial file unless the row is inserted). Found by `tests/api_http.rs::upload_interrupted_midway_leaves_no_orphan_file_on_disk`
 (the only test in the suite that fails today; it passes once the bug is fixed).
 
 **Repro (against a running server, any account, token in `$T`):**

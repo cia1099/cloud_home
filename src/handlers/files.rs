@@ -101,6 +101,9 @@ pub async fn upload(
 
     let file_id = uuid::Uuid::new_v4().to_string();
     let physical_path = path_resolver::file_path(&data_root, &user.user_id, &file_id);
+    // 任何提前返回（解析/写盘/校验失败）或 handler future 被丢弃（客户端中途断线）
+    // 都会删除已写入的部分文件；仅在落库成功后解除。
+    let mut guard = PartialFileGuard(Some(physical_path.clone()));
 
     let mut parent_id: Option<String> = None;
     let mut name: Option<String> = None;
@@ -155,7 +158,7 @@ pub async fn upload(
         }
     }
 
-    // 校验与落库；失败时清理已写入的物理文件，避免孤儿。
+    // 校验与落库；失败时由 guard 清理已写入的物理文件，避免孤儿。
     let result = finalize_upload(
         &state,
         &user.user_id,
@@ -170,6 +173,7 @@ pub async fn upload(
 
     match result {
         Ok(entry) => {
+            guard.0 = None;
             let response = FileResponse::from(entry);
             let file_path = file_service::full_path(
                 &state.db,
@@ -199,9 +203,18 @@ pub async fn upload(
             );
             Ok((StatusCode::CREATED, ApiResponse::new(response)))
         }
-        Err(e) => {
-            let _ = tokio::fs::remove_file(&physical_path).await;
-            Err(e)
+        Err(e) => Err(e),
+    }
+}
+
+/// 上传中的物理文件守卫：drop 时删除文件（同步删除，保证 future 被取消时也会执行）。
+/// 落库成功后将内部路径置为 `None` 解除。
+struct PartialFileGuard(Option<std::path::PathBuf>);
+
+impl Drop for PartialFileGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.0.take() {
+            let _ = std::fs::remove_file(path);
         }
     }
 }

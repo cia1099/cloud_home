@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   OpenAPI schema is now hand-written instead of a never-read struct.
 
 ### Fixed
+- **Interrupted uploads no longer leave orphan files on disk (B-002).** A client
+  disconnecting mid-upload, a multipart error, or a cancelled request now deletes
+  the partially written file; it is kept only once the database row is inserted.
 - Two admins pressing Approve and Reject in chat at the same moment could both
   "win" (the approval silently overturned the rejection). A chat button can no
   longer overturn a rejection; only the admin endpoint can.
