@@ -200,7 +200,7 @@ export function reqRow(r: Requirement): string {
 // ---------- decisions ----------
 
 /** Decisions that have a page of their own (relative to decisions/): the explanation the owner reads before answering. */
-export const DETAIL_PAGE: Record<string, string> = { 'A-001': 'brand/', 'A-002': 'admins/' };
+export const DETAIL_PAGE: Record<string, string> = { 'A-003': 'brand/', 'A-002': 'admins/' };
 
 /** `root` is the relative prefix from the rendered page to the site root ("../", "../../"). `detail: false` hides the link on the detail page itself. */
 export function decisionCard(a: Approval, root: string, detail = true): string {

@@ -501,7 +501,7 @@ html[data-l=zh] .ms-hero h1 { letter-spacing:-.01em; line-height:1.15; }
 .burn svg { overflow:visible; }
 .screen { display:none; } .screen.on { display:block; animation:scr .5s var(--ease); } @keyframes scr { from { opacity:0; transform:translateY(8px) } }
 .device img { display:block; width:100%; height:auto; }
-/* decision detail pages: brand directions */
+/* decision detail pages: cloud icon variants */
 .dir-h { display:flex; align-items:center; gap:14px; flex-wrap:wrap; } .dir-h h3 { font-size:1.375rem; letter-spacing:-.02em; }
 .dir-l { width:44px; height:44px; border-radius:12px; display:grid; place-items:center; background:var(--accent-tint); color:var(--accent); font-weight:700; font-size:1.25rem; flex:none; }
 .stages { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin-top:20px; }
@@ -510,7 +510,9 @@ html[data-l=zh] .ms-hero h1 { letter-spacing:-.01em; line-height:1.15; }
 .stage-l { position:absolute; top:12px; left:16px; font-size:.75rem; font-weight:600; color:var(--sg-2); }
 .mk-row { display:flex; align-items:flex-end; gap:24px; flex-wrap:wrap; }
 .mk-row figure { margin:0; display:grid; justify-items:start; gap:8px; } .mk-row figcaption { font-size:.75rem; color:var(--sg-2); }
-.mk-row img { max-width:none; } .appicon img { border-radius:22.37%; box-shadow:0 1px 3px rgba(0,0,0,.25); } .wm img { max-width:100%; height:auto; }
+.mk-row img { max-width:none; } .appicon img { filter:drop-shadow(0 2px 4px rgba(0,0,0,.22)); }
+.logo-now { display:block; } .logo-now svg { width:100%; height:100%; display:block; }
+.ba { display:grid; gap:12px; } .ba-t { font-size:.8125rem; font-weight:600; color:var(--sg-2); }
 /* decision detail pages: admins */
 .dg { margin:0; display:flex; flex-direction:column; align-items:center; gap:0; padding:22px 18px; border-radius:var(--r-l); background:var(--surface); box-shadow:var(--sh-1); } .dg > figcaption { align-self:flex-start; margin-bottom:14px; font-size:1.0625rem; }
 .dg-n { display:grid; justify-items:center; gap:4px; text-align:center; padding:14px 16px; border-radius:var(--r-m); background:var(--surface-2); min-width:0; flex:1; width:100%; } .dg-n b { font-size:.9375rem; } .dg-n .k-ic { width:36px; height:36px; border-radius:50%; display:grid; place-items:center; background:var(--accent-tint); color:var(--accent); }
