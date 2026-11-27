@@ -13,7 +13,7 @@
 #
 # NOT covered yet (R-026, the UI is not embedded in the binary): that GET / serves the new UI after the
 # update and the old UI after a rollback, and that --self-test refuses a release with a broken UI.
-# Env: E2E_TARGET_DIR (cargo target dir, default <repo>/target).
+# Env: E2E_TARGET_DIR = cargo target dir to build in (default <repo>/target).
 set -uo pipefail
 # shellcheck source=scripts/e2e_lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/e2e_lib.sh"
@@ -30,6 +30,7 @@ cleanup() {
   [ -n "$SUP_PID" ] && kill "$SUP_PID" 2>/dev/null
   pkill -f "$WORK/root/current/cloud_home" 2>/dev/null
   [ -n "$MIRROR_PID" ] && kill "$MIRROR_PID" 2>/dev/null
+  wait 2>/dev/null
   rm -rf "$WORK"
 }
 trap cleanup EXIT
@@ -61,8 +62,9 @@ open(p, "w").write(s)
 PY
 
 build() { # build <version> <dest>
-  sed -i.bak "0,/^version = \".*\"/s//version = \"$1\"/" "$SRC/Cargo.toml" && rm -f "$SRC/Cargo.toml.bak"
-  (cd "$SRC" && cargo build --quiet) || die "build of $1 failed"
+  export V="$1"
+  perl -i -pe 'if (!$done && s/^version = ".*"/version = "$ENV{V}"/) { $done = 1 }' "$SRC/Cargo.toml"
+  (cd "$SRC" && cargo build --quiet) >"$WORK/build.log" 2>&1 || { tail -30 "$WORK/build.log"; die "build of $1 failed"; }
   cp "$CARGO_TARGET_DIR/debug/cloud_home" "$2"
   [ "$("$2" --self-test | cut -d' ' -f2)" = "$1" ] || die "built binary reports the wrong version"
 }
@@ -94,7 +96,7 @@ mkdir -p "$ROOT/versions/$VER_A" "$ROOT/update"
 cp "$WORK/bin-a" "$ROOT/versions/$VER_A/cloud_home"
 ln -sfn "versions/$VER_A" "$ROOT/current"
 APP_PORT="$(free_port)"
-API="http://127.0.0.1:$APP_PORT"
+API="http://127.0.0.1:$APP_PORT/api/v1"
 cat > "$WORK/supervise.sh" <<SUP
 #!/usr/bin/env bash
 cd "$ROOT" || exit 1
@@ -127,20 +129,19 @@ admin() { # admin <method> <path>
 admin_code() { curl -s -o /dev/null -w '%{http_code}' -X "$1" -H "X-Admin-Password: $ADMIN_PW" "$API$2"; }
 snap() { admin GET /admin/update | jq -r "$1"; }
 link() { readlink "$ROOT/$1"; }
-state() { jq -r "$1" "$ROOT/update/state.json" 2>/dev/null; }
+state() { jq -r "($1) // \"none\"" "$ROOT/update/state.json" 2>/dev/null || echo none; }
 link_is() { [ "$(link "$1")" = "$2" ]; }
 state_is() { [ "$(state "$1")" = "$2" ]; }
 phase_is() { [ "$(snap .data.phase)" = "$1" ]; }
 db() { sqlite3 "$(find "$WORK/drive" -name cloud_home.db | head -1)" "$1"; }
 published_count() { grep -c "GET /cloud_home-$1-" "$WORK/mirror.log"; }
 
-wait_until 60 version_is "$VER_A" || { tail -20 "$WORK/server.log"; die "server A did not come up"; }
-admin GET /admin/update | jq . | head -30
+wait_until 60 version_is "$VER_A" || { tail -5 "$WORK/server.log" | cut -c1-300; die "server A did not come up"; }
 expect "A runs and the updater is enabled" "$(snap '.data.enabled')" true
 
 # Some data that must survive an update and a rollback.
 curl -s -o /dev/null -X POST -H 'Content-Type: application/json' \
-  -d '{"email":"owner@example.com","password":"correct-horse-battery"}' "$API/auth/register"
+  -d '{"username":"owner","email":"owner@example.com","password":"correct-horse-battery"}' "$API/auth/register"
 expect "setup: one account exists before any update" "$(db 'SELECT COUNT(*) FROM users')" 1
 
 echo "== scenario: tampered manifest (valid signature broken by editing the manifest)"
@@ -188,7 +189,7 @@ expect "tampered package: current still A" "$(link current)" "versions/$VER_A"
 expect "tampered package: A still serving" "$(running_version)" "$VER_A"
 if [ ! -e "$ROOT/versions/$VER_B" ]; then ok "tampered package: nothing installed"; else bad "tampered package: versions/$VER_B exists"; fi
 expect "tampered package: no staged leftovers" "$(find "$ROOT/update/staging" -type f 2>/dev/null | wc -l | tr -d ' ')" 0
-expect "tampered package: no pending state" "$(state '.pending')" null
+expect "tampered package: no pending state" "$(state '.pending')" none
 
 echo "== scenario: happy path (A -> B)"
 publish "$WORK/dist-b" "$VER_B" "$MIRROR" "$WORK/key-good/key.sec" "$MIRROR_URL"
@@ -204,8 +205,8 @@ BACKUP="$(state '.backup')"
 if [ -s "$BACKUP" ]; then ok "happy: database backup written"; else bad "happy: no database backup at '$BACKUP'"; fi
 expect "happy: data survived the update" "$(db 'SELECT COUNT(*) FROM users')" 1
 echo "  (waiting for the 2 minute commit window)"
-wait_until 150 state_is .pending null
-expect "happy: update committed after stable run" "$(state '.pending')" null
+wait_until 150 state_is .pending none
+expect "happy: update committed after stable run" "$(state '.pending')" none
 
 echo "== scenario: crash -> rollback with database restore (B -> C, C wipes users then crashes)"
 publish "$WORK/dist-c" "$VER_C" "$MIRROR" "$WORK/key-good/key.sec" "$MIRROR_URL"
@@ -220,7 +221,7 @@ expect "crash: rolled back, current -> B" "$(link current)" "versions/$VER_B"
 wait_until 30 version_is "$VER_B"
 expect "crash: B serving again" "$(running_version)" "$VER_B"
 expect "crash: failed version recorded" "$(state '.last_failed')" "$VER_C"
-expect "crash: pending cleared" "$(state '.pending')" null
+expect "crash: pending cleared" "$(state '.pending')" none
 expect "crash: database restored (users back)" "$(db 'SELECT COUNT(*) FROM users')" 1
 expect "crash: C's schema change undone" \
   "$(db "SELECT COUNT(*) FROM sqlite_master WHERE name='e2e_crash_marker'")" 0
