@@ -58,3 +58,9 @@ A decision card has only *Approve* and *Deny*. For a choice between named varian
 - zh Why: Telegram 审批机器人的令牌一就位就能现场验证；真正的 Google、Apple 登录要等你确认之后才接入。
 - zh Risk: 低。你无需把任何秘密发给团队，文件留在你自己的机器上（权限 600）。你批准之前不会接入任何东西，设备只带登录接口。
 - zh If approved: 后端工程师接入真实登录提供方，做现场验证（手机上收到真实的审批消息、真实的 Google 和 Apple 登录），并汇报结果。   zh If denied: 在备注里写明缺什么或哪里不清楚，指南会更新。
+
+### A-006 [ ] Cut stable release v0.3.1 (R-040) — 2026-11-28 — requested by manager
+- What: push the work on agent/manager, tag v0.3.1 and publish a stable release (replacing the rc tags).
+- Why: R-020, R-021, R-030, R-031, R-060, R-061 and R-066 are implemented and in review; the full test suite passes (190 unit, 39 API, 12 approval, 7 share, 24 browser, 100 OTA e2e). Not yet checked by hand: the web app on a real device, the live Telegram bot, real Google/Apple sign-in (these stay off until credentials exist).
+- Risk: medium. A release is public and boxes with auto-update will install it; the OTA rollback path exists and was tested.
+- If approved: you merge agent/manager into main yourself or tell me to; I then prepare the release notes and ask once more before the push and tag. If denied: stay on rc tags; the note says what to change.
