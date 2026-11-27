@@ -1,0 +1,53 @@
+{
+ "kind": "weekly",
+ "title": {
+  "en": "Credential guides, chat alerts, a stable-release request",
+  "zh": "凭据指南、聊天提醒、稳定版发布请求"
+ },
+ "summary": {
+  "en": "Three step-by-step guides (Telegram, Google, Apple) are live under Decisions, with request A-005 'Credentials ready?'. Chat alerts (R-065) are built: update available with an Install button, drive unplugged/plugged, low disk, repeated admin-password failures; each can be switched off and is rate-limited. R-024 (verify email/phone ownership) turned out to be already implemented; I added a test and fixed stale docs. After merging: cargo clippy has 1 minor warning in a test file, tests pass (190 unit, 40 API, 12 approval, 7 share). New request A-006: cut the stable v0.3.1 release (needs you). Not checked: alerts were tested only with a fake chat provider (no live Telegram), the guide pages were not viewed in a browser, and the Google/Apple steps are written from memory and need one walk-through. One gap noted: a new account in approval mode cannot confirm its email until approved (R-025a, your call).",
+  "zh": "三份分步指南（Telegram、Google、Apple）已上线于「决定」栏目，并附请求 A-005「凭据准备好了吗？」。聊天提醒（R-065）已完成：有可用更新（带安装按钮）、硬盘拔出/插入、磁盘空间不足、管理员密码多次失败；每种都可关闭且有频率限制。R-024（验证邮箱/手机归属）其实已经实现，我补了一个测试并更正了过时文档。合并后：cargo clippy 在一个测试文件里有 1 条小警告，测试通过（单元 190、API 40、审批 12、分享 7）。新请求 A-006：发布稳定版 v0.3.1（需要你决定）。未核实：提醒仅用模拟聊天服务测试（没有真实 Telegram），指南页面未在浏览器中查看，Google/Apple 的步骤凭记忆写成，需要走一遍。已记录一个缺口：审批模式下的新账户在通过前无法确认邮箱（R-025a，由你决定）。"
+ },
+ "chip": {
+  "tone": "accent",
+  "icon": "check",
+  "text": {
+   "en": "A-004, A-005, A-006 wait for you",
+   "zh": "A-004、A-005、A-006 等你决定"
+  }
+ },
+ "cover": {
+  "style": "c1",
+  "icon": "heart"
+ },
+ "sections": [
+  {
+   "id": "changes",
+   "title": {
+    "en": "What changed",
+    "zh": "有什么变化"
+   },
+   "component": "text",
+   "data": {
+    "bullets": [
+     {
+      "en": "**R-073 (guides part):** /decisions/guides/ with Telegram, Google and Apple pages.",
+      "zh": "**R-073（指南部分）：**/decisions/guides/ 含 Telegram、Google、Apple 三页。"
+     },
+     {
+      "en": "**R-065 (review):** four alert types with on/off switches and rate limits; Install button is single-use and refuses while transfers run.",
+      "zh": "**R-065（待验收）：**四种提醒，可开关并有频率限制；安装按钮一次有效，传输进行中会拒绝。"
+     },
+     {
+      "en": "**R-024 (review):** already satisfied by existing code; test added.",
+      "zh": "**R-024（待验收）：**现有代码已满足；已补测试。"
+     },
+     {
+      "en": "**A-006:** stable release v0.3.1 awaits your approval.",
+      "zh": "**A-006：**稳定版 v0.3.1 等你批准。"
+     }
+    ]
+   }
+  }
+ ]
+}
