@@ -50,6 +50,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   OpenAPI schema is now hand-written instead of a never-read struct.
 
 ### Fixed
+- **JSON request-body errors now use the standard error envelope (B-004).** Malformed JSON, wrong field types, a missing/wrong `Content-Type` and oversized bodies used to get axum's `text/plain` rejection. They now return `{"error":{"code","message"}}` as `application/json` with `INVALID_JSON` (400), `INVALID_BODY` (422), `UNSUPPORTED_MEDIA_TYPE` (415) or `PAYLOAD_TOO_LARGE` (413).
 - **Interrupted uploads no longer leave orphan files on disk (B-002).** A client
   disconnecting mid-upload, a multipart error, or a cancelled request now deletes
   the partially written file; it is kept only once the database row is inserted.

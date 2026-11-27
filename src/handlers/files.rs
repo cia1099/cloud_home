@@ -12,7 +12,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
 use crate::auth::AuthUser;
 use crate::drive::path_resolver;
-use crate::error::{AppError, AppResult, ErrorResponse};
+use crate::error::{ApiJson, AppError, AppResult, ErrorResponse};
 use crate::models::common::OkResponse;
 use crate::models::event::{ChangeKind, FileChangeEvent};
 use crate::models::file::{
@@ -458,7 +458,7 @@ pub async fn rename(
     State(state): State<AppState>,
     user: AuthUser,
     AxumPath(id): AxumPath<String>,
-    axum::Json(dto): axum::Json<RenameDto>,
+    ApiJson(dto): ApiJson<RenameDto>,
 ) -> AppResult<ApiResponse<FileResponse>> {
     // 改名前先取旧 entry，供审计日志拼 old_path/change（改名后旧名已不可得）。
     let before = file_service::get_owned(&state.db, &user.user_id, &id).await?;
@@ -523,7 +523,7 @@ pub async fn move_file(
     State(state): State<AppState>,
     user: AuthUser,
     AxumPath(id): AxumPath<String>,
-    axum::Json(dto): axum::Json<MoveDto>,
+    ApiJson(dto): ApiJson<MoveDto>,
 ) -> AppResult<ApiResponse<FileResponse>> {
     let before = file_service::get_owned(&state.db, &user.user_id, &id).await?;
     let old_parent_id = before.parent_id.clone();
@@ -663,7 +663,7 @@ pub async fn delete(
 pub async fn download_archive(
     State(state): State<AppState>,
     user: AuthUser,
-    axum::Json(req): axum::Json<crate::models::file::DownloadRequest>,
+    ApiJson(req): ApiJson<crate::models::file::DownloadRequest>,
 ) -> AppResult<Response> {
     if req.ids.is_empty() {
         return Err(AppError::BadRequest("ids 不能为空".into()));

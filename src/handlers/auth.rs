@@ -1,13 +1,12 @@
 //! 认证端点：注册、登录、登出、获取当前用户。
 
-use axum::Json;
 use axum::extract::State;
 use axum::http::request::Parts;
 use axum::http::{HeaderMap, StatusCode, header::SET_COOKIE};
 use axum::response::{IntoResponse, Response};
 
 use crate::auth::{AuthUser, jwt, password};
-use crate::error::{AppError, AppResult, ErrorResponse};
+use crate::error::{ApiJson, AppError, AppResult, ErrorResponse};
 use crate::models::common::OkResponse;
 use crate::models::user::{
     APPROVAL_PENDING, AuthResponse, CreateUserDto, LoginDto, RegisterPendingResponse, User,
@@ -35,7 +34,7 @@ use crate::state::AppState;
 pub async fn register(
     State(state): State<AppState>,
     parts: Parts,
-    Json(dto): Json<CreateUserDto>,
+    ApiJson(dto): ApiJson<CreateUserDto>,
 ) -> AppResult<Response> {
     let username = dto.username.trim();
     if username.chars().count() < 3 {
@@ -134,7 +133,7 @@ pub async fn register(
 )]
 pub async fn login(
     State(state): State<AppState>,
-    Json(dto): Json<LoginDto>,
+    ApiJson(dto): ApiJson<LoginDto>,
 ) -> AppResult<(StatusCode, HeaderMap, ApiResponse<AuthResponse>)> {
     // identifier 可以是邮箱或手机号；两者都规范化后再查，避免大小写/空白错配。
     let identifier = normalize_login_identifier(&dto.identifier);

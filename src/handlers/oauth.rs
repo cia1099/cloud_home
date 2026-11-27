@@ -3,7 +3,6 @@
 //! 总开关 `OAUTH_ENABLED` 关闭（默认）时，除 `GET /auth/providers`（报告空列表）外
 //! 一律 404。真实 provider 尚未接入，所以目前生产环境列表恒为空。
 
-use axum::Json;
 use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::StatusCode;
 use axum::http::request::Parts;
@@ -12,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use crate::auth::AuthUser;
-use crate::error::{AppResult, ErrorResponse};
+use crate::error::{ApiJson, AppResult, ErrorResponse};
 use crate::handlers::auth::issue_auth_response;
 use crate::models::user::{AuthResponse, RegisterPendingResponse, UserResponse};
 use crate::openapi::ApiResponse;
@@ -111,7 +110,7 @@ pub async fn login(
     State(state): State<AppState>,
     AxumPath(provider): AxumPath<String>,
     parts: Parts,
-    Json(dto): Json<OAuthCodeDto>,
+    ApiJson(dto): ApiJson<OAuthCodeDto>,
 ) -> AppResult<Response> {
     let p = state.oauth.get(&provider)?;
     let profile = p
@@ -186,7 +185,7 @@ pub async fn link(
     State(state): State<AppState>,
     user: AuthUser,
     AxumPath(provider): AxumPath<String>,
-    Json(dto): Json<OAuthCodeDto>,
+    ApiJson(dto): ApiJson<OAuthCodeDto>,
 ) -> AppResult<ApiResponse<UserResponse>> {
     let p = state.oauth.get(&provider)?;
     let profile = p.exchange(&dto.code, &dto.redirect_uri).await?;

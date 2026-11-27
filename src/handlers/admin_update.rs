@@ -4,11 +4,10 @@
 //! 只读写进程级的更新器状态与 `update/settings.json`，因此不涉及账户隔离。
 //! 一个产品版本同时覆盖后端与内嵌 UI（见 `spec/update.md`），`current_version` 即二者共同的版本。
 
-use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 
-use crate::error::{AppError, AppResult, ErrorResponse};
+use crate::error::{ApiJson, AppError, AppResult, ErrorResponse};
 use crate::handlers::admin::AdminGuard;
 use crate::models::update::{InstallUpdateDto, UpdateSettingsDto, UpdateStatusResponse};
 use crate::openapi::ApiResponse;
@@ -119,9 +118,9 @@ pub async fn check(
 pub async fn install(
     State(state): State<AppState>,
     _guard: AdminGuard,
-    dto: Option<Json<InstallUpdateDto>>,
+    dto: Option<ApiJson<InstallUpdateDto>>,
 ) -> AppResult<(StatusCode, ApiResponse<UpdateStatusResponse>)> {
-    let force = dto.map(|Json(d)| d.force).unwrap_or(false);
+    let force = dto.map(|ApiJson(d)| d.force).unwrap_or(false);
     let version = state
         .updater
         .snapshot()
@@ -168,7 +167,7 @@ pub async fn install(
 pub async fn put_settings(
     State(state): State<AppState>,
     _guard: AdminGuard,
-    Json(dto): Json<UpdateSettingsDto>,
+    ApiJson(dto): ApiJson<UpdateSettingsDto>,
 ) -> AppResult<ApiResponse<UpdateStatusResponse>> {
     if !state.updater.enabled() {
         return Err(map_update_error(UpdateError::Disabled));

@@ -10,11 +10,10 @@
 
 use std::net::IpAddr;
 
-use axum::Json;
 use axum::extract::{FromRequestParts, Query, State};
 use axum::http::request::Parts;
 
-use crate::error::{AppError, AppResult, ErrorResponse};
+use crate::error::{ApiJson, AppError, AppResult, ErrorResponse};
 use crate::models::user::{
     APPROVAL_APPROVED, APPROVAL_PENDING, APPROVAL_REJECTED, AdminActionResponse,
     AdminApproveDto, AdminDecisionResponse, AdminPurgeResponse, AdminRejectDto, AdminTargetDto,
@@ -199,7 +198,7 @@ const DECIDED_BY: &str = ADMIN_ENDPOINT;
 pub async fn approve_user(
     State(state): State<AppState>,
     _guard: AdminGuard,
-    Json(dto): Json<AdminApproveDto>,
+    ApiJson(dto): ApiJson<AdminApproveDto>,
 ) -> AppResult<ApiResponse<AdminDecisionResponse>> {
     decide(&state, &dto.identifier, dto.provider.as_deref(), Decision::Approve, dto.note.as_deref())
         .await
@@ -223,7 +222,7 @@ pub async fn approve_user(
 pub async fn reject_user(
     State(state): State<AppState>,
     _guard: AdminGuard,
-    Json(dto): Json<AdminRejectDto>,
+    ApiJson(dto): ApiJson<AdminRejectDto>,
 ) -> AppResult<ApiResponse<AdminDecisionResponse>> {
     decide(&state, &dto.identifier, dto.provider.as_deref(), Decision::Reject, dto.reason.as_deref())
         .await
@@ -269,7 +268,7 @@ async fn decide(
 pub async fn delete_user(
     State(state): State<AppState>,
     _guard: AdminGuard,
-    Json(dto): Json<AdminTargetDto>,
+    ApiJson(dto): ApiJson<AdminTargetDto>,
 ) -> AppResult<ApiResponse<AdminActionResponse>> {
     let target = user_service::find_any(&state.db, dto.identifier.trim(), dto.provider.as_deref())
         .await?;
@@ -309,7 +308,7 @@ pub async fn delete_user(
 pub async fn restore_user(
     State(state): State<AppState>,
     _guard: AdminGuard,
-    Json(dto): Json<AdminTargetDto>,
+    ApiJson(dto): ApiJson<AdminTargetDto>,
 ) -> AppResult<ApiResponse<AdminActionResponse>> {
     let target = user_service::find_any(&state.db, dto.identifier.trim(), dto.provider.as_deref())
         .await?;
@@ -348,7 +347,7 @@ pub async fn restore_user(
 pub async fn purge_trash(
     State(state): State<AppState>,
     _guard: AdminGuard,
-    Json(dto): Json<AdminTargetDto>,
+    ApiJson(dto): ApiJson<AdminTargetDto>,
 ) -> AppResult<ApiResponse<AdminPurgeResponse>> {
     let target =
         user_service::find_any(&state.db, dto.identifier.trim(), dto.provider.as_deref()).await?;

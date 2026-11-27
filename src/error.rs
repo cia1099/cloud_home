@@ -1,3 +1,5 @@
+use axum::extract::rejection::JsonRejection;
+use axum::extract::{FromRequest, OptionalFromRequest, Request};
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -43,6 +45,10 @@ pub enum AppError {
 
     #[error("{0}")]
     BadRequest(String),
+
+    /// 请求体 JSON 提取失败（语法、类型、Content-Type、过大），由 `ApiJson` 产生。
+    #[error("{2}")]
+    BadBody(StatusCode, &'static str, String),
 
     #[error("资源冲突: {0}")]
     Conflict(String),
@@ -93,7 +99,10 @@ impl AppError {
             | AppError::RegistrationBusy(_) => {
                 tracing::debug!(error = %self, "请求冲突/已过期");
             }
-            AppError::NotFound | AppError::PayloadTooLarge | AppError::BadRequest(_) => {
+            AppError::NotFound
+            | AppError::PayloadTooLarge
+            | AppError::BadRequest(_)
+            | AppError::BadBody(..) => {
                 tracing::debug!(error = %self, "请求被拒绝");
             }
             AppError::Unauthorized | AppError::Forbidden | AppError::ForbiddenReason(_) => {}
@@ -115,6 +124,7 @@ impl AppError {
             AppError::NotFound => (StatusCode::NOT_FOUND, "NOT_FOUND"),
             AppError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE"),
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, "BAD_REQUEST"),
+            AppError::BadBody(status, code, _) => (*status, code),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT"),
             AppError::CodedConflict(code, _) => (StatusCode::CONFLICT, code),
             AppError::Gone => (StatusCode::GONE, "GONE"),
@@ -149,6 +159,58 @@ impl IntoResponse for AppError {
     }
 }
 
+/// 请求体 JSON 提取器：替换 `axum::Json` 作为入参，
+/// 所有提取失败都走统一错误信封，而不是 axum 默认的 `text/plain`。
+///
+/// 错误码：语法错 `INVALID_JSON`(400)、类型/字段错 `INVALID_BODY`(422)、
+/// 缺少或错误的 Content-Type `UNSUPPORTED_MEDIA_TYPE`(415)、过大 `PAYLOAD_TOO_LARGE`(413)。
+pub struct ApiJson<T>(pub T);
+
+impl From<JsonRejection> for AppError {
+    fn from(rej: JsonRejection) -> Self {
+        let (code, message) = match &rej {
+            JsonRejection::JsonSyntaxError(_) => ("INVALID_JSON", "请求体不是合法的 JSON"),
+            JsonRejection::JsonDataError(_) => ("INVALID_BODY", "请求体字段缺失或类型不正确"),
+            JsonRejection::MissingJsonContentType(_) => (
+                "UNSUPPORTED_MEDIA_TYPE",
+                "Content-Type 必须是 application/json",
+            ),
+            _ if rej.status() == StatusCode::PAYLOAD_TOO_LARGE => {
+                return AppError::PayloadTooLarge;
+            }
+            _ => ("INVALID_BODY", "无法读取请求体"),
+        };
+        AppError::BadBody(rej.status(), code, message.to_string())
+    }
+}
+
+impl<S, T> FromRequest<S> for ApiJson<T>
+where
+    Json<T>: FromRequest<S, Rejection = JsonRejection>,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, AppError> {
+        Ok(Self(Json::<T>::from_request(req, state).await?.0))
+    }
+}
+
+/// 请求体可选的端点用：没有 Content-Type 视为未提供，其余失败同样走信封。
+impl<S, T> OptionalFromRequest<S> for ApiJson<T>
+where
+    Json<T>: OptionalFromRequest<S, Rejection = JsonRejection>,
+    S: Send + Sync,
+{
+    type Rejection = AppError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Option<Self>, AppError> {
+        Ok(<Json<T> as OptionalFromRequest<S>>::from_request(req, state)
+            .await?
+            .map(|j| Self(j.0)))
+    }
+}
+
 pub type AppResult<T> = Result<T, AppError>;
 
 #[cfg(test)]
@@ -164,6 +226,11 @@ mod tests {
             (AppError::RegistrationBusy("x".into()), 429, "REGISTRATION_BUSY"),
             (AppError::CodedConflict("UPDATE_X", "x".into()), 409, "UPDATE_X"),
             (AppError::PayloadTooLarge, 413, "PAYLOAD_TOO_LARGE"),
+            (
+                AppError::BadBody(StatusCode::BAD_REQUEST, "INVALID_JSON", "x".into()),
+                400,
+                "INVALID_JSON",
+            ),
         ] {
             let (s, c) = err.parts();
             assert_eq!((s.as_u16(), c), (status, code));
