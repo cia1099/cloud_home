@@ -16,7 +16,7 @@ The report site (R-001) has its first edition built and published; it is in revi
 | Report site | first edition built, checked and published (R-001, in review) | owner review; next report after the next milestone |
 
 ## Active tasks
-- 2026-11-27: issues #1-#4 handled and closed (R-001/R-002 done; A-002 approved; A-001 denied). Delegated: R-060 cooldown removal (backend-engineer, branch agent/R-060-no-cooldown) and R-072 redo (designer, main checkout).
+- 2026-11-27: issues #1-#4 handled and closed (R-001/R-002 done; A-002 approved; A-001 denied). R-060 cooldown removal: committed on agent/R-060-no-cooldown (a04f992, worktree .claude/worktrees/agent-a8c2ccaf357bc5ebc), UNVERIFIED and UNMERGED: cargo is not on PATH in the worker or manager sessions, so build/test/clippy and the curl check have not run. Next: a session with cargo runs them, then merge. R-072: cloud-icon variants A/B committed on agent/manager (4280b24), not rendered or viewed; next: render, frontend publishes /decisions/brand/ page + new approval request, deploy report.
 - R-002 · designer · main checkout · state: follow-up delivered (01cc6e5, 5c6ccb9), unviewed in a browser · next: tester/manager looks at mockup at phone width (dark), then R-003 (frontend) and R-071 (backend) can start; no worker active
 - R-020 merged into agent/manager (94 tests reported at merge; not re-run in the report session); live curl check still outstanding (needs a running instance).
 - Report 2026-11-25-1200-web-app-design built and deployed; live check passed (site 200, report listed, report page 200, screenshots load). Mockup screenshots only; cargo is not available in the report session, so tests were not re-run.
