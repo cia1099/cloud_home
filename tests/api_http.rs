@@ -81,7 +81,21 @@ impl Server {
     }
 
     /// 在已有目录上（重新）启动：数据库与文件随目录保留。
+    /// 空闲端口是「先探测、后绑定」选出来的，并行的测试进程可能抢先占用；
+    /// 服务没能在自己的端口上起来（进程退出）就换一个端口重试，绝不把请求发给别人的服务。
     fn start_in(dir: PathBuf, env: &[(&str, &str)]) -> Self {
+        for _ in 0..5 {
+            if let Some(srv) = Self::try_start(&dir, env) {
+                return srv;
+            }
+        }
+        panic!(
+            "连续 5 次都没能启动服务：\n{}",
+            std::fs::read_to_string(dir.join("stdout.log")).unwrap_or_default()
+        );
+    }
+
+    fn try_start(dir: &Path, env: &[(&str, &str)]) -> Option<Self> {
         let port = TcpListener::bind("127.0.0.1:0")
             .unwrap()
             .local_addr()
@@ -93,7 +107,7 @@ impl Server {
             .open(dir.join("stdout.log"))
             .unwrap();
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_cloud_home"));
-        cmd.current_dir(&dir) // 避免读到仓库里的 .env
+        cmd.current_dir(dir) // 避免读到仓库里的 .env
             .env_clear()
             .env("PATH", std::env::var("PATH").unwrap_or_default())
             .env("SERVER_HOST", "127.0.0.1")
@@ -113,9 +127,26 @@ impl Server {
             cmd.env(k, v);
         }
         let child = cmd.spawn().unwrap();
-        let srv = Self { child, port, dir };
+        let mut srv = Self {
+            child,
+            port,
+            dir: dir.to_path_buf(),
+        };
         let deadline = Instant::now() + Duration::from_secs(30);
-        while TcpStream::connect(("127.0.0.1", srv.port)).is_err() {
+        // 就绪 = 这个子进程自己打印了「已启动」且监听着我们选的端口（而不是别人的服务）。
+        let started = format!(":{port}");
+        loop {
+            if srv.child.try_wait().unwrap().is_some() {
+                srv.dir = PathBuf::new(); // 保留目录，供下一次尝试
+                return None;
+            }
+            let log = std::fs::read_to_string(dir.join("stdout.log")).unwrap_or_default();
+            if log
+                .lines()
+                .any(|l| l.contains("已启动") && l.contains(&started))
+            {
+                return Some(srv);
+            }
             assert!(
                 Instant::now() < deadline,
                 "服务未在 30 秒内就绪：\n{}",
@@ -123,7 +154,6 @@ impl Server {
             );
             std::thread::sleep(Duration::from_millis(50));
         }
-        srv
     }
 
     /// 停掉进程但保留目录，供重启。
@@ -150,7 +180,8 @@ impl Server {
         s.write_all(req.as_bytes()).unwrap();
         s.write_all(body).unwrap();
         let mut raw = Vec::new();
-        s.read_to_end(&mut raw).unwrap();
+        s.read_to_end(&mut raw)
+            .unwrap_or_else(|e| panic!("{method} {path}: {e}"));
         parse_response(&raw)
     }
 
