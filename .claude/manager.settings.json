@@ -41,7 +41,9 @@
       "Bash(tail:*)",
       "Bash(echo:*)",
       "Bash(find:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(qlmanage:*)",
+      "Bash(sips:*)"
     ],
     "deny": [
       "Bash(git push:*)",
