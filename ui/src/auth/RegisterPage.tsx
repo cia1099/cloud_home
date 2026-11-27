@@ -7,6 +7,7 @@ import { useI18n } from '../i18n/useI18n'
 import type { MessageKey } from '../i18n/messages/en'
 import { useSession } from '../session/useSession'
 import { AuthLayout } from './AuthLayout'
+import { OAuthButtons } from './OAuthButtons'
 import { PasswordField } from './PasswordField'
 import { StatusScreen, type StatusKind } from './StatusScreen'
 
@@ -110,6 +111,7 @@ export function RegisterPage() {
           {t('auth.register')}
         </button>
       </form>
+      <OAuthButtons />
       <p className="auth-foot">
         {t('auth.have_account')} <Link to="/signin">{t('auth.sign_in')}</Link>
       </p>

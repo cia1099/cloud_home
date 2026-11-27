@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router'
+import { OAuthCallbackPage } from './auth/OAuthCallbackPage'
 import { PendingPage } from './auth/PendingPage'
 import { RegisterPage } from './auth/RegisterPage'
 import { SignInPage } from './auth/SignInPage'
@@ -26,6 +27,7 @@ export function App() {
             <Routes>
               <Route path="/signin" element={<SignInPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/auth/callback/:provider" element={<OAuthCallbackPage />} />
               <Route path="/pending" element={<PendingPage />} />
               <Route path="/s/:token" element={<PublicSharePage />} />
               <Route element={<RequireAuth />}>

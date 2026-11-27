@@ -8,6 +8,7 @@ import {
   type Registration,
   type User,
 } from '../api/auth'
+import { oauthLogin, type OAuthProvider } from '../api/oauth'
 import { ApiError, setUnauthorizedHandler } from '../api/client'
 import { SessionContext, type Session } from './useSession'
 
@@ -52,6 +53,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return result.status
   }, [])
 
+  const signInWithOAuth = useCallback(async (provider: OAuthProvider, code: string, redirectUri: string) => {
+    const result = await oauthLogin(provider, code, redirectUri)
+    if (result.status === 'signed_in') setSession({ phase: 'authed', user: result.user })
+    return result.status
+  }, [])
+
   const signOut = useCallback(async () => {
     // The cookie is cleared by the server; even if the request fails the user wants out.
     await apiLogout().catch(() => undefined)
@@ -65,6 +72,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setAttempt((n) => n + 1)
   }, [])
 
-  const value = useMemo(() => ({ session, signIn, signUp, signOut, setUser, retry }), [session, signIn, signUp, signOut, setUser, retry])
+  const value = useMemo(() => ({ session, signIn, signUp, signInWithOAuth, signOut, setUser, retry }), [session, signIn, signUp, signInWithOAuth, signOut, setUser, retry])
   return <SessionContext value={value}>{children}</SessionContext>
 }
