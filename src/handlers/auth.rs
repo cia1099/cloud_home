@@ -92,7 +92,7 @@ pub async fn register(
                 "failure",
                 reason = "duplicate_identifier",
                 username = %username,
-                "注册失败：邮箱或手机号已被使用，或冷却期未过"
+                "注册失败：邮箱或手机号已被使用"
             );
         }
     })?;

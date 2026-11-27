@@ -33,7 +33,6 @@ pub struct RegistrationPolicy {
     /// pending 账户总数上限，超出返回 429（仅 approval 模式）。
     pub pending_max: i64,
     /// 被拒绝的标识在此天数内不得重新注册。
-    pub reject_cooldown_days: i64,
     /// pending 超过此天数自动拒绝。
     pub pending_expire_days: i64,
 }
@@ -168,7 +167,6 @@ impl Config {
                 mode: env_or("REGISTRATION_MODE", "approval").parse()?,
                 rate_per_ip_per_hour: env_parse("REGISTER_RATE_PER_IP_PER_HOUR", 5)?,
                 pending_max: env_parse("PENDING_MAX", 20)?,
-                reject_cooldown_days: env_parse("REJECT_COOLDOWN_DAYS", 7)?,
                 pending_expire_days: env_parse("PENDING_EXPIRE_DAYS", 14)?,
             },
         })

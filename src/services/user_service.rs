@@ -176,7 +176,7 @@ impl RegisterOutcome {
 
 /// 建立账户：users 行 + password 凭证 + email/phone 标识，全在一个事务里。
 ///
-/// 流程：模式检查 → 限流 / 队列上限（仅 approval）→ 拒绝冷却 → 事务。
+/// 流程：模式检查 → 限流 / 队列上限（仅 approval）→ 被拒绝的旧申请改回 pending（无冷却、不限次数）→ 事务。
 /// 事务的第一条语句就是 INSERT（拿到 SQLite 写锁），所以「users 表是否原本为空」
 /// 的判定与插入串行化——两个并发的首次注册不可能都被引导批准。
 pub async fn register(
@@ -191,7 +191,10 @@ pub async fn register(
     if policy.mode == RegistrationMode::Approval {
         check_registration_load(db, policy, source.ip.as_deref()).await?;
     }
-    let stale_rejected = rejected_blockers(db, policy, acct.email, acct.phone).await?;
+    if let Some(old_id) = rejected_match(db, acct.email, acct.phone).await? {
+        let user = reapply_rejected(db, &old_id, &acct, &source).await?;
+        return Ok((user, RegisterOutcome::Pending));
+    }
 
     let id = uuid::Uuid::new_v4().to_string();
     let now = now_rfc3339();
@@ -241,14 +244,6 @@ pub async fn register(
         if promoted.rows_affected() == 1 {
             outcome = RegisterOutcome::Bootstrap;
         }
-    }
-
-    // 冷却期已过的 rejected 旧申请：删掉旧行，标识才能让给新申请（拒绝账户从未有过数据）。
-    for old in &stale_rejected {
-        sqlx::query("DELETE FROM users WHERE id = ? AND approval_status = 'rejected'")
-            .bind(old)
-            .execute(&mut *tx)
-            .await?;
     }
 
     // password 凭证的 identifier 仅作留痕，查找一律走 email/phone 标识行。
@@ -323,50 +318,98 @@ async fn check_registration_load(
     Ok(())
 }
 
-/// 占着这些标识的 rejected 旧账户：冷却期内直接 409；已过期的返回 id，由事务删除后复用标识。
-async fn rejected_blockers(
+/// 占着这些标识的 rejected 旧账户（若有）：重新注册会把它改回 pending，而不是新建一行。
+async fn rejected_match(
     db: &Db,
-    policy: &RegistrationPolicy,
     email: Option<&str>,
     phone: Option<&str>,
-) -> AppResult<Vec<String>> {
-    let rows: Vec<(String, Option<String>)> = sqlx::query_as(
-        "SELECT DISTINCT u.id, u.approval_decided_at FROM users u \
+) -> AppResult<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as(
+        "SELECT u.id FROM users u \
          JOIN user_identities i ON i.user_id = u.id \
          WHERE u.approval_status = 'rejected' AND u.deleted_at IS NULL \
-           AND i.provider IN (?, ?) AND i.identifier IN (?, ?)",
+           AND i.provider IN (?, ?) AND i.identifier IN (?, ?) \
+         ORDER BY u.created_at LIMIT 1",
     )
     .bind(PROVIDER_EMAIL)
     .bind(PROVIDER_PHONE)
     .bind(email.unwrap_or(""))
     .bind(phone.unwrap_or(""))
-    .fetch_all(db)
+    .fetch_optional(db)
     .await?;
 
-    let cooldown = chrono::Duration::days(policy.reject_cooldown_days);
-    let mut stale = Vec::new();
-    for (id, decided_at) in rows {
-        let decided = decided_at
-            .as_deref()
-            .and_then(|t| chrono::DateTime::parse_from_rfc3339(t).ok());
-        match decided {
-            Some(at) if chrono::Utc::now() < at + cooldown => {
-                crate::audit!(
-                    warn,
-                    "user.register",
-                    "failure",
-                    reason = "reject_cooldown",
-                    "注册被拒：该标识的申请近期被拒绝，冷却期未过"
-                );
-                return Err(AppError::Conflict(format!(
-                    "该邮箱或手机号的申请近期被拒绝，{} 天内不能再次注册",
-                    policy.reject_cooldown_days
-                )));
-            }
-            _ => stale.push(id),
+    Ok(row.map(|(id,)| id))
+}
+
+/// 被拒绝的申请人再次注册：同一行改回 pending，按全新申请处理（改写名字、密码、来源 IP，
+/// `created_at` 重置以便计入限流与过期），仍保持 `is_active = 0`，不签发令牌。
+/// 重试次数与间隔都不设限；限流、待批准上限已在调用前检查过。
+async fn reapply_rejected(
+    db: &Db,
+    old_id: &str,
+    acct: &NewAccount<'_>,
+    source: &RegisterSource,
+) -> AppResult<User> {
+    let hash = password::hash(acct.password)?;
+    let now = now_rfc3339();
+    let mut tx = db.begin().await?;
+
+    // 仅当仍是 rejected 时才改写（与并发的审批决定互斥）。
+    let updated = sqlx::query(
+        "UPDATE users SET username = ?, is_active = 0, approval_status = 'pending', \
+         approval_decided_at = NULL, approval_decided_by = NULL, approval_note = NULL, \
+         registered_ip = ?, created_at = ?, updated_at = ? \
+         WHERE id = ? AND approval_status = 'rejected' AND deleted_at IS NULL",
+    )
+    .bind(acct.username)
+    .bind(source.ip.as_deref())
+    .bind(&now)
+    .bind(&now)
+    .bind(old_id)
+    .execute(&mut *tx)
+    .await?;
+    if updated.rows_affected() != 1 {
+        return Err(AppError::Conflict("该申请状态已变化，请重试".into()));
+    }
+
+    sqlx::query(
+        "UPDATE user_identities SET secret = ?, updated_at = ? WHERE user_id = ? AND provider = ?",
+    )
+    .bind(&hash)
+    .bind(&now)
+    .bind(old_id)
+    .bind(PROVIDER_PASSWORD)
+    .execute(&mut *tx)
+    .await?;
+
+    // 新提交的邮箱 / 手机号：已有同类标识则改写，没有则新增。
+    for (provider, value) in [(PROVIDER_EMAIL, acct.email), (PROVIDER_PHONE, acct.phone)] {
+        let Some(value) = value else { continue };
+        let updated = sqlx::query(
+            "UPDATE user_identities SET identifier = ?, updated_at = ? \
+             WHERE user_id = ? AND provider = ?",
+        )
+        .bind(value)
+        .bind(&now)
+        .bind(old_id)
+        .bind(provider)
+        .execute(&mut *tx)
+        .await
+        .map_err(duplicate_identifier)?;
+        if updated.rows_affected() == 0 {
+            insert_identity(&mut tx, old_id, provider, value, None, None, &now).await?;
         }
     }
-    Ok(stale)
+
+    tx.commit().await?;
+    crate::audit!(
+        info,
+        "user.register",
+        "reapply",
+        user_id = %old_id,
+        "被拒绝的申请人重新提交申请，账户改回待批准"
+    );
+    get(db, old_id).await
 }
 
 async fn insert_identity(
@@ -678,7 +721,6 @@ mod tests {
             mode,
             rate_per_ip_per_hour: 100,
             pending_max: 100,
-            reject_cooldown_days: 7,
             pending_expire_days: 14,
         }
     }
@@ -809,35 +851,35 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejected_identifier_is_blocked_during_cooldown_then_reusable() {
+    async fn rejected_applicant_can_reapply_without_limit_then_be_approved() {
+        use crate::services::approval_service::{Decision, decide};
         let db = test_pool().await;
         let p = policy(RegistrationMode::Approval);
         let (u, _) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
-        crate::services::approval_service::decide(
-            &db,
-            &u.id,
-            crate::services::approval_service::Decision::Reject,
-            "admin-endpoint",
-            None,
-        )
-        .await
-        .unwrap();
 
-        let err = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap_err();
-        assert!(matches!(err, AppError::Conflict(_)));
+        // 连续多次「拒绝 → 立即重新注册」：不设冷却、不限次数，始终是同一账户回到 pending。
+        for _ in 0..3 {
+            decide(&db, &u.id, Decision::Reject, "admin-endpoint", None)
+                .await
+                .unwrap();
+            assert_eq!(get(&db, &u.id).await.unwrap().approval_status, "rejected");
 
-        // 把决定时间拨到冷却期之前：旧行被替换，新申请进入 pending。
-        let old = (chrono::Utc::now() - chrono::Duration::days(8)).to_rfc3339();
-        sqlx::query("UPDATE users SET approval_decided_at = ? WHERE id = ?")
-            .bind(old)
-            .bind(&u.id)
-            .execute(&db)
+            let (n, out) = reg(&db, &p, "a@x.com", "9.9.9.9", false).await.unwrap();
+            assert_eq!(out, RegisterOutcome::Pending);
+            assert_eq!(n.id, u.id);
+            assert_eq!(n.is_active, 0);
+            assert_eq!(n.approval_status, "pending");
+            assert!(n.approval_decided_at.is_none());
+            assert_eq!(n.registered_ip.as_deref(), Some("9.9.9.9"));
+        }
+
+        // 重新提交的密码生效；批准后账户启用。
+        decide(&db, &u.id, Decision::Approve, "admin-endpoint", None)
             .await
             .unwrap();
-        let (n, out) = reg(&db, &p, "a@x.com", "8.8.8.8", false).await.unwrap();
-        assert_eq!(out, RegisterOutcome::Pending);
-        assert_ne!(n.id, u.id);
-        assert!(get(&db, &u.id).await.is_err());
+        let approved = get(&db, &u.id).await.unwrap();
+        assert_eq!(approved.approval_status, "approved");
+        assert_eq!(approved.is_active, 1);
     }
 
     #[tokio::test]

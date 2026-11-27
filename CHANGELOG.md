@@ -31,8 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `user.reject`, `user.expire` (the registration audit event `auth.register`
   is renamed `user.register`).
 - Registration abuse limits: `REGISTER_RATE_PER_IP_PER_HOUR` (5) and
-  `PENDING_MAX` (20) answer `429 REGISTRATION_BUSY`; a rejected identifier
-  cannot register again for `REJECT_COOLDOWN_DAYS` (7, `409`); pending requests
+  `PENDING_MAX` (20) answer `429 REGISTRATION_BUSY`; a rejected applicant may
+  register again at any time, with no cooldown and no cap on attempts: the same
+  account goes back to `pending` (new password and name, still inactive, no
+  token) and counts as a new request; pending requests
   older than `PENDING_EXPIRE_DAYS` (14) are rejected automatically by an hourly
   background task. Restoring a soft-deleted account never reactivates one that
   is not approved.
