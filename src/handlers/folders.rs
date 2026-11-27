@@ -1,11 +1,10 @@
 //! 资料夹端点。
 
-use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 
 use crate::auth::AuthUser;
-use crate::error::{AppResult, ErrorResponse};
+use crate::error::{ApiJson, AppResult, ErrorResponse};
 use crate::models::event::{ChangeKind, FileChangeEvent};
 use crate::models::file::{CreateFolderDto, FILE_TYPE_FOLDER, FileResponse};
 use crate::openapi::ApiResponse;
@@ -29,7 +28,7 @@ use crate::state::AppState;
 pub async fn create(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(dto): Json<CreateFolderDto>,
+    ApiJson(dto): ApiJson<CreateFolderDto>,
 ) -> AppResult<(StatusCode, ApiResponse<FileResponse>)> {
     file_service::validate_name(&dto.name)?;
     file_service::validate_parent(&state.db, &user.user_id, dto.parent_id.as_deref()).await?;

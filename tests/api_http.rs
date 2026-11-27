@@ -3000,12 +3000,33 @@ fn malformed_json_bodies_are_client_errors_and_change_nothing() {
                 ],
                 payload.as_bytes(),
             );
-            assert!(
-                (400..500).contains(&r.status),
+            let want = if payload == "{not json" {
+                ("INVALID_JSON", 400)
+            } else {
+                ("INVALID_BODY", 422)
+            };
+            assert_eq!(
+                (r.code(), r.status),
+                want,
                 "{method} {path} {payload}: {}",
                 r.status
             );
+            assert!(
+                r.header("content-type")
+                    .is_some_and(|c| c.starts_with("application/json")),
+                "{method} {path} {payload}: {:?}",
+                r.header("content-type")
+            );
+            assert!(r.body["error"]["message"].is_string());
         }
+        // 缺少 Content-Type：415 信封
+        let r = srv.send(
+            method,
+            path,
+            &[("Authorization".into(), format!("Bearer {}", alice.token))],
+            b"{}",
+        );
+        assert_eq!((r.code(), r.status), ("UNSUPPORTED_MEDIA_TYPE", 415));
     }
     assert!(srv.list(&alice, None).items().is_empty());
     assert!(srv.get(&alice, "/shares").items().is_empty());

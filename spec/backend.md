@@ -297,6 +297,8 @@ Base URL: `http://localhost:8080/api/v1`
 
 错误格式: `{ "error": { "code": "ERROR_CODE", "message": "..." } }`
 
+请求体 JSON 解析失败同样返回该信封（由 `error.rs` 的 `ApiJson` 提取器统一处理）：语法错误 `400 INVALID_JSON`，字段缺失/类型错误 `422 INVALID_BODY`，缺少或错误的 Content-Type `415 UNSUPPORTED_MEDIA_TYPE`，请求体过大 `413 PAYLOAD_TOO_LARGE`。
+
 ### 认证
 
 | 方法 | 路径 | 认证 | 说明 |

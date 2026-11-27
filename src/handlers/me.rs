@@ -11,12 +11,11 @@
 //! 「证明新值」则与「设置新值」解耦：新标识一律以未验证状态落库，
 //! 用户随时可通过下方的验证端点把它标记为已验证。
 
-use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 
 use crate::auth::{AuthUser, password};
-use crate::error::{AppError, AppResult, ErrorResponse};
+use crate::error::{ApiJson, AppError, AppResult, ErrorResponse};
 use crate::models::common::OkResponse;
 use crate::models::user::{
     ChallengeDto, ChangeIdentifierDto, ChangePasswordDto, RemoveIdentifierDto, UpdateProfileDto,
@@ -44,7 +43,7 @@ use crate::state::AppState;
 pub async fn update_profile(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(dto): Json<UpdateProfileDto>,
+    ApiJson(dto): ApiJson<UpdateProfileDto>,
 ) -> AppResult<ApiResponse<UserResponse>> {
     let name = dto.username.trim();
     if name.chars().count() < 3 {
@@ -85,7 +84,7 @@ pub async fn update_profile(
 pub async fn change_password(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(dto): Json<ChangePasswordDto>,
+    ApiJson(dto): ApiJson<ChangePasswordDto>,
 ) -> AppResult<ApiResponse<OkResponse>> {
     if dto.new_password.len() < 8 {
         return Err(AppError::BadRequest("密码至少 8 个字符".into()));
@@ -122,7 +121,7 @@ pub async fn change_password(
 pub async fn challenge(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(dto): Json<ChallengeDto>,
+    ApiJson(dto): ApiJson<ChallengeDto>,
 ) -> AppResult<StatusCode> {
     check_provider(&dto.provider)?;
     let target = challenge_target(&state, &user.user_id, &dto.provider).await?;
@@ -155,7 +154,7 @@ pub async fn challenge(
 pub async fn change_identifier(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(dto): Json<ChangeIdentifierDto>,
+    ApiJson(dto): ApiJson<ChangeIdentifierDto>,
 ) -> AppResult<ApiResponse<UserResponse>> {
     check_provider(&dto.provider)?;
     let new_value = user_service::normalize_for(&dto.provider, &dto.new_value)?;
@@ -203,7 +202,7 @@ pub async fn change_identifier(
 pub async fn remove_identifier(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(dto): Json<RemoveIdentifierDto>,
+    ApiJson(dto): ApiJson<RemoveIdentifierDto>,
 ) -> AppResult<ApiResponse<UserResponse>> {
     check_provider(&dto.provider)?;
     assert_password(&state, &user.user_id, &dto.current_password).await?;
@@ -251,7 +250,7 @@ pub async fn remove_identifier(
 pub async fn verify_request(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(dto): Json<VerifyRequestDto>,
+    ApiJson(dto): ApiJson<VerifyRequestDto>,
 ) -> AppResult<StatusCode> {
     check_provider(&dto.provider)?;
     let identity = user_service::user_owned_identity(&state.db, &user.user_id, &dto.provider).await?;
@@ -286,7 +285,7 @@ pub async fn verify_request(
 pub async fn verify_identifier(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(dto): Json<VerifyIdentifierDto>,
+    ApiJson(dto): ApiJson<VerifyIdentifierDto>,
 ) -> AppResult<ApiResponse<UserResponse>> {
     check_provider(&dto.provider)?;
     let identity = user_service::user_owned_identity(&state.db, &user.user_id, &dto.provider).await?;

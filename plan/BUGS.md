@@ -86,9 +86,9 @@ disconnect that drops the handler future skips it as well.
   and also stop the mirrored unit tests from running twice.
 - `cargo test` reports `lifecycle.rs: method wait_idle is never used` (a pre-existing idle-code warning, R-070).
 
-## B-002 (P2, API contract) Malformed or ill-typed JSON bodies get a `text/plain` axum rejection, not the JSON error envelope
+## B-004 (P2, API contract) Malformed or ill-typed JSON bodies get a `text/plain` axum rejection, not the JSON error envelope
 
-**Status: open.** Found by the R-030 second round (`malformed_json_bodies_are_client_errors_and_change_nothing`,
+**Status: fixed** (branch `agent/B-004-json-envelope`: one `ApiJson` extractor in `src/error.rs` replaces `axum::Json` for request bodies; codes `INVALID_JSON` 400, `INVALID_BODY` 422, `UNSUPPORTED_MEDIA_TYPE` 415, `PAYLOAD_TOO_LARGE` 413; the probe test now requires the envelope). Originally: Found by the R-030 second round (`malformed_json_bodies_are_client_errors_and_change_nothing`,
 `tests/api_http.rs`; it asserts only "4xx, nothing changed", so the suite stays green until this is fixed;
 then tighten it to require the envelope).
 

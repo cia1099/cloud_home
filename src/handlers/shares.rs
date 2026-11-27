@@ -1,12 +1,11 @@
 //! 分享端点（需认证）：公开链接、站内定向分享（收件人）及收件人的只读访问。
 
-use axum::Json;
 use axum::extract::{Path as AxumPath, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::Response;
 
 use crate::auth::AuthUser;
-use crate::error::{AppError, AppResult, ErrorResponse};
+use crate::error::{ApiJson, AppError, AppResult, ErrorResponse};
 use crate::events::ShareNoticeKind;
 use crate::handlers::files::{self, Disposition};
 use crate::models::common::OkResponse;
@@ -47,7 +46,7 @@ async fn respond(state: &AppState, owner_id: &str, link: ShareLink) -> AppResult
 pub async fn create(
     State(state): State<AppState>,
     user: AuthUser,
-    Json(dto): Json<CreateShareDto>,
+    ApiJson(dto): ApiJson<CreateShareDto>,
 ) -> AppResult<(StatusCode, ApiResponse<ShareResponse>)> {
     let link = share_service::create(&state.db, &user.user_id, &dto).await?;
     let resp = respond(&state, &user.user_id, link).await?;
@@ -122,7 +121,7 @@ pub async fn update(
     State(state): State<AppState>,
     user: AuthUser,
     AxumPath(id): AxumPath<String>,
-    Json(dto): Json<UpdateShareDto>,
+    ApiJson(dto): ApiJson<UpdateShareDto>,
 ) -> AppResult<ApiResponse<ShareResponse>> {
     let (link, added, removed) =
         share_service::update_recipients(&state.db, &user.user_id, &id, &dto.recipient_ids)
