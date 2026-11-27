@@ -36,6 +36,14 @@ $UPDATE_ROOT (默认 /opt/cloud_home)
 ```
 
 **更新器仅在 `current` 是符号链接时启用**，所以开发机 `cargo run` 不会自更新。
+
+首次安装由 `packaging/linux/install.sh`（systemd，`Restart=always`，用户 `cloudhome`）与
+`packaging/macos/install.sh`（launchd LaunchDaemon，`KeepAlive`，以 `sudo` 的调用用户运行）完成：
+先用脚本内嵌的公钥（须与 `update::PUBLIC_KEY` 一致，有单元测试守护）验 `manifest.json` 签名，再按清单里本机
+目标的 sha256 校验 `cloud_home-<ver>-<target>.tar.gz`，只解出 `cloud_home`、跑 `--self-test`，然后布置上述目录并
+生成 `.env`（随机 `JWT_SECRET`）。整个安装目录归服务用户所有，因为更新器要在其中写 `versions/` 与 `update/`。
+脚本解析清单依赖 `scripts/make_manifest.py` 的 `json.dumps(indent=2)` 输出格式。已有 `current` 时脚本不覆盖。
+测试用钩子：`--no-system`、`UPDATE_ROOT`、`CLOUD_HOME_BASE_URL`、`CLOUD_HOME_PUBLIC_KEY`，生产勿设。
 数据库备份在数据盘 `backups/`（保留最近 2 份）。
 
 ## 配置（.env）

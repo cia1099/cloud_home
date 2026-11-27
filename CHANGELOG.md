@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Device packaging (R-021).** `packaging/linux/install.sh` (creates the
+  `cloudhome` user, installs a systemd unit with `Restart=always`) and
+  `packaging/macos/install.sh` (launchd LaunchDaemon with `KeepAlive`) install
+  the latest release: the manifest signature is verified with the `minisign`
+  CLI against the public key embedded in the binary, the tarball sha256 is
+  checked, and `/opt/cloud_home` is laid out with the `current` symlink so the
+  updater is enabled. A unit test keeps the scripts' embedded key in sync with
+  `update::PUBLIC_KEY`.
 - **Shared with you (backend, R-071).** Shares can now be addressed to specific
   family members: `POST /shares` accepts `recipient_ids` (approved, active
   users other than the owner); such a share has no public link. New endpoints:

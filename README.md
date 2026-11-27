@@ -35,6 +35,21 @@ openssl rand -base64 64
 
 > 注意：`DATABASE_URL` 无需配置，程序会在运行时根据侦测到的硬盘路径自动构造。
 
+### 一体机安装（发布版，无需 Rust）
+
+脚本会取最新发布的清单并用内置 minisign 公钥验签（验不过即中止），再下载匹配本机架构的安装包、校验 sha256，
+布置 `/opt/cloud_home`（`versions/<ver>/` + `current` 符号链接，在线更新随即可用），并注册开机自启、退出即重启的服务。
+首次安装会生成 `/opt/cloud_home/.env`（随机 `JWT_SECRET`），按需修改后 `systemctl restart cloud_home`（macOS 见下）。
+
+```sh
+# Linux（需要 curl、minisign、systemd；创建 cloudhome 用户与 systemd 服务）
+sudo bash packaging/linux/install.sh
+
+# macOS（Apple 芯片；brew install minisign；服务以当前登录用户运行，launchd LaunchDaemon）
+sudo bash packaging/macos/install.sh
+# 修改 .env 后：sudo launchctl kickstart -k system/com.cloudhome.server
+```
+
 ## 构建
 
 ```sh
