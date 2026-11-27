@@ -158,46 +158,65 @@ pub async fn create(
     // password 凭证的 identifier 仅作留痕，查找一律走 email/phone 标识行。
     insert_identity(
         &mut tx,
-        &id,
-        PROVIDER_PASSWORD,
-        email.or(phone).unwrap_or(&id),
-        Some(&hash),
-        None,
+        &NewIdentity {
+            secret: Some(&hash),
+            ..NewIdentity::new(&id, PROVIDER_PASSWORD, email.or(phone).unwrap_or(&id))
+        },
         &now,
     )
     .await?;
 
     if let Some(e) = email {
-        insert_identity(&mut tx, &id, PROVIDER_EMAIL, e, None, None, &now).await?;
+        insert_identity(&mut tx, &NewIdentity::new(&id, PROVIDER_EMAIL, e), &now).await?;
     }
     if let Some(p) = phone {
-        insert_identity(&mut tx, &id, PROVIDER_PHONE, p, None, None, &now).await?;
+        insert_identity(&mut tx, &NewIdentity::new(&id, PROVIDER_PHONE, p), &now).await?;
     }
 
     tx.commit().await?;
     get(db, &id).await
 }
 
-async fn insert_identity(
+/// 待写入的一条身份。默认：无凭证、未验证、用户自有（`managed_by` 为空）。
+pub(super) struct NewIdentity<'a> {
+    pub user_id: &'a str,
+    pub provider: &'a str,
+    pub identifier: &'a str,
+    pub secret: Option<&'a str>,
+    pub verified_at: Option<&'a str>,
+    pub managed_by: Option<&'a str>,
+}
+
+impl<'a> NewIdentity<'a> {
+    pub(super) fn new(user_id: &'a str, provider: &'a str, identifier: &'a str) -> Self {
+        Self {
+            user_id,
+            provider,
+            identifier,
+            secret: None,
+            verified_at: None,
+            managed_by: None,
+        }
+    }
+}
+
+pub(super) async fn insert_identity(
     tx: &mut sqlx::SqliteConnection,
-    user_id: &str,
-    provider: &str,
-    identifier: &str,
-    secret: Option<&str>,
-    verified_at: Option<&str>,
+    i: &NewIdentity<'_>,
     now: &str,
 ) -> AppResult<()> {
     sqlx::query(
         "INSERT INTO user_identities \
          (id, user_id, provider, identifier, secret, verified_at, managed_by, created_at, updated_at) \
-         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
     .bind(uuid::Uuid::new_v4().to_string())
-    .bind(user_id)
-    .bind(provider)
-    .bind(identifier)
-    .bind(secret)
-    .bind(verified_at)
+    .bind(i.user_id)
+    .bind(i.provider)
+    .bind(i.identifier)
+    .bind(i.secret)
+    .bind(i.verified_at)
+    .bind(i.managed_by)
     .bind(now)
     .bind(now)
     .execute(&mut *tx)
@@ -272,7 +291,7 @@ pub async fn set_identifier(
         }
         None => {
             let mut conn = db.acquire().await?;
-            insert_identity(&mut conn, user_id, provider, value, None, None, &now).await?;
+            insert_identity(&mut conn, &NewIdentity::new(user_id, provider, value), &now).await?;
         }
     }
     Ok(())

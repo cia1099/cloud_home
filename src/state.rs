@@ -21,6 +21,8 @@ pub struct AppState {
     pub activity: ActivityTracker,
     /// 关停令牌：取消即触发优雅关停（SIGTERM、更新重启都走它），SSE 流也监听它。
     pub shutdown: CancellationToken,
+    /// 第三方登录 provider 注册表（含总开关）。
+    pub oauth: crate::auth::oauth::OAuthRegistry,
     /// 在线更新器。
     pub updater: crate::update::Updater,
 }

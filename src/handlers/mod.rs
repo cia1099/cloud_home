@@ -7,6 +7,7 @@ pub mod events;
 pub mod files;
 pub mod folders;
 pub mod me;
+pub mod oauth;
 pub mod public;
 pub mod search;
 pub mod shares;
@@ -43,6 +44,11 @@ pub fn build_router(state: AppState) -> Router {
         .routes(routes!(auth::login))
         .routes(routes!(auth::logout))
         .routes(routes!(auth::me))
+        // 第三方登录（总开关默认关）
+        .routes(routes!(oauth::providers))
+        .routes(routes!(oauth::authorize))
+        .routes(routes!(oauth::login))
+        .routes(routes!(oauth::link))
         // 个人资料
         .routes(routes!(me::update_profile))
         .routes(routes!(me::change_password))

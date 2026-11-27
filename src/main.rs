@@ -108,6 +108,7 @@ async fn main() -> anyhow::Result<()> {
         events: events.clone(),
         activity,
         shutdown: shutdown.clone(),
+        oauth: auth::oauth::OAuthRegistry::new(config.oauth_enabled),
         updater: updater.clone(),
     };
 

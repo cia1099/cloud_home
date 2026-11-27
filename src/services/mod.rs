@@ -1,5 +1,6 @@
 pub mod archive_service;
 pub mod file_service;
+pub mod oauth_service;
 pub mod otp_service;
 pub mod share_service;
 pub mod thumbnail_service;

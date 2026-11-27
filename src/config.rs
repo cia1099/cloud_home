@@ -33,6 +33,8 @@ pub struct Config {
     pub trust_proxy_headers: bool,
     /// 运维端点（删除 / 还原账户）的共享口令。未设置即关闭这些端点。
     pub admin_password: Option<String>,
+    /// 第三方登录总开关（默认关）。开启后仍只有已装配的 provider 可用。
+    pub oauth_enabled: bool,
     /// 在线更新：manual（人点安装）| auto（时间窗内空闲时自动装）。
     pub update_mode: crate::update::settings::Mode,
     /// 自动安装的时间窗（本地时间）`HH:MM-HH:MM`。
@@ -69,6 +71,7 @@ impl std::fmt::Debug for Config {
                 "admin_password",
                 &self.admin_password.as_ref().map(|_| "<redacted>"),
             )
+            .field("oauth_enabled", &self.oauth_enabled)
             .field("update_mode", &self.update_mode)
             .field("update_window", &self.update_window)
             .field("update_channel", &self.update_channel)
@@ -110,6 +113,7 @@ impl Config {
             admin_password: std::env::var("ADMIN_PASSWORD")
                 .ok()
                 .filter(|s| !s.trim().is_empty()),
+            oauth_enabled: env_parse("OAUTH_ENABLED", false)?,
             update_mode: env_or("UPDATE_MODE", "manual").parse()?,
             update_window: {
                 let w = env_or("UPDATE_WINDOW", "03:00-05:00");
