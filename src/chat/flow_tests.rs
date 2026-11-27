@@ -762,6 +762,7 @@ async fn button_after_decision_elsewhere_reports_who_decided() {
         crate::services::approval_service::Decision::Reject,
         "admin-endpoint",
         None,
+        true,
     )
     .await
     .unwrap();
@@ -937,6 +938,7 @@ async fn queued_notification_is_dropped_if_account_was_decided_meanwhile() {
         crate::services::approval_service::Decision::Approve,
         "admin-endpoint",
         None,
+        true,
     )
     .await
     .unwrap();

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- Two admins pressing Approve and Reject in chat at the same moment could both
+  "win" (the approval silently overturned the rejection). A chat button can no
+  longer overturn a rejection; only the admin endpoint can.
+
 ### Changed
 - **Breaking:** new accounts now need administrator approval. With the new
   default `REGISTRATION_MODE=approval`, `POST /auth/register` answers
