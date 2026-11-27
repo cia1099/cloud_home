@@ -1,0 +1,16 @@
+{
+  "kind": "weekly",
+  "title": { "en": "The UI now travels with the update (R-026, R-031)", "zh": "界面现在随更新一起走（R-026、R-031）" },
+  "summary": {
+    "en": "The built web app is now embedded in the single cloud_home program and served from the same address as the API (R-026, in review). The update test script grew UI checks and I re-ran it myself: 100 of 100 pass. After an update the new UI is served, after a rollback the old one returns, and releases with a broken UI are refused before the switch. Rust tests pass (156 + 12 + 7) and clippy has no warnings. Not done: the web app itself has not been opened in a browser, and real systemd/launchd services are untested. A-004 (cloud icon C or D) still waits for you.",
+    "zh": "构建好的网页应用现已嵌入单个 cloud_home 程序，与 API 使用同一地址提供（R-026，待验收）。更新测试脚本新增了界面检查，我亲自复跑：100 项全部通过。更新后提供新界面，回滚后恢复旧界面，界面损坏的发布会在切换前被拒绝。Rust 测试通过（156 + 12 + 7），clippy 无警告。未完成：尚未在浏览器中打开网页应用，真实 systemd/launchd 服务未测试。A-004（云图标 C 或 D）仍等你决定。"
+  },
+  "chip": { "tone": "accent", "icon": "check", "text": { "en": "A-004 still waits for you", "zh": "A-004 仍等你决定" } },
+  "cover": { "style": "c1", "icon": "heart" },
+  "sections": [
+    { "id": "changes", "title": { "en": "What changed", "zh": "有什么变化" }, "component": "text", "data": { "bullets": [
+      { "en": "**R-026 (review):** UI embedded in the binary; SPA fallback, /api never shadowed, noindex, cache headers, `--self-test` checks the UI, release build refuses a missing or stale UI.", "zh": "**R-026（待验收）：**界面嵌入程序；SPA 回退、/api 不被遮蔽、noindex、缓存头，`--self-test` 检查界面，发布构建拒绝缺失或过期的界面。" },
+      { "en": "**R-031 (review):** `scripts/e2e_update.sh` 100 passed, 0 failed (manager re-run).", "zh": "**R-031（待验收）：**`scripts/e2e_update.sh` 100 项通过、0 失败（经理复跑）。" }
+    ] } }
+  ]
+}
