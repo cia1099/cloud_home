@@ -26,7 +26,12 @@ export function setUnauthorizedHandler(handler: (() => void) | undefined): void 
   onUnauthorized = handler
 }
 
-function isErrorEnvelope(value: unknown): value is { error: { code: string; message: string } } {
+/** For requests that cannot go through `api()` (XHR uploads): a 401 returns the user to sign-in too. */
+export function reportUnauthorized(): void {
+  onUnauthorized?.()
+}
+
+export function isErrorEnvelope(value: unknown): value is { error: { code: string; message: string } } {
   if (typeof value !== 'object' || value === null || !('error' in value)) return false
   const error = (value as { error: unknown }).error
   return typeof error === 'object' && error !== null && typeof (error as { code?: unknown }).code === 'string'

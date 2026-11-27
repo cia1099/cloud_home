@@ -3,6 +3,8 @@ import { Icon, type IconName } from '../components/Icon'
 import { useI18n } from '../i18n/useI18n'
 import type { MessageKey } from '../i18n/messages/en'
 import { useStreamStatus } from '../sse/useEventStream'
+import { UploadPanel } from '../upload/UploadPanel'
+import { UploadProvider } from '../upload/UploadProvider'
 import { useOnline } from './useOnline'
 
 // New destinations (Shared, Trash, Storage, Administration) are added with their screens.
@@ -27,6 +29,7 @@ export function AppShell() {
   const online = useOnline()
   const stream = useStreamStatus()
   return (
+    <UploadProvider>
     <div className="app">
       <a className="skip" href="#content">
         {t('a11y.skip')}
@@ -60,6 +63,8 @@ export function AppShell() {
       <nav className="tabs" aria-label={t('nav.main')}>
         <NavItems className="" />
       </nav>
+      <UploadPanel />
     </div>
+    </UploadProvider>
   )
 }

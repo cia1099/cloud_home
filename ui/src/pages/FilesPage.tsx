@@ -18,6 +18,11 @@ import type { MessageKey } from '../i18n/messages/en'
 import { useI18n } from '../i18n/useI18n'
 import { useStreamEvent } from '../sse/useEventStream'
 import { useToast } from '../toast/useToast'
+import { useOnline } from '../shell/useOnline'
+import { fromDrop } from '../upload/collect'
+import { UploadButton } from '../upload/UploadButton'
+import { useFileDrop } from '../upload/useFileDrop'
+import { useUpload } from '../upload/useUpload'
 
 const SEARCH_DEBOUNCE_MS = 250
 const NO_SELECTION: ReadonlySet<string> = new Set()
@@ -65,6 +70,8 @@ export function FilesPage() {
   const query = params.get('q')?.trim() ?? ''
   const searching = query !== ''
   const coarse = useCoarse()
+  const online = useOnline()
+  const { enqueue } = useUpload()
 
   const [view, setView] = useView()
   const [sort, setSort] = useSort()
@@ -207,6 +214,11 @@ export function FilesPage() {
     },
   }
 
+  const destination = { id: folderId, name: trail.length > 0 ? trail[trail.length - 1].name : t('nav.files') }
+  const { dragging, handlers: dropHandlers } = useFileDrop(online, (items) => {
+    fromDrop(items).then((picked) => enqueue(picked, destination), fail)
+  })
+
   const onSort = (key: SortKey) => setSort(sort.key === key ? { key, dir: sort.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' })
 
   const openSortMenu = (target: HTMLElement) => {
@@ -285,7 +297,7 @@ export function FilesPage() {
   }
 
   return (
-    <div className="fpage">
+    <div className="fpage" {...dropHandlers}>
       <h1 className="sr-only">{t('files.title')}</h1>
       <div className={selecting ? 'bar sel' : 'bar'}>
         {selecting ? (
@@ -305,10 +317,7 @@ export function FilesPage() {
             <button type="button" className="ibtn" aria-label={t('files.sort_by')} aria-haspopup="menu" onClick={(event) => openSortMenu(event.currentTarget)}>
               <Icon name="sort" size={20} />
             </button>
-            <button type="button" className="btn tint" onClick={() => setDialog('new-folder')}>
-              <Icon name="folderPlus" size={18} />
-              <span className="btn-label">{t('files.new_folder')}</span>
-            </button>
+            <UploadButton disabled={!online} onPick={(picked) => enqueue(picked, destination)} onNewFolder={() => setDialog('new-folder')} />
           </>
         )}
       </div>
@@ -323,6 +332,18 @@ export function FilesPage() {
       )}
 
       {body}
+
+      {dragging && (
+        <div className="drop" aria-hidden="true">
+          <div className="in">
+            <span className="dz">
+              <Icon name="upload" size={40} />
+            </span>
+            <h2>{t('upload.drop.title')}</h2>
+            <p>{t('upload.drop.text', { folder: destination.name })}</p>
+          </div>
+        </div>
+      )}
 
       {menu && <Menu anchor={menu.anchor} items={menu.items} label={menu.label} onClose={closeMenu} />}
       {dialog === 'new-folder' && (
