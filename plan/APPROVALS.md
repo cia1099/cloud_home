@@ -41,4 +41,4 @@ For a choice between named options instead of yes/no, add `- Options: A, B` (sin
 - Risk: low.
 - Options: A, B
 - If A: I produce the final SVG set from Variant A (Sky) and apply it to the mockup, sign-in, share page and report header.   If B: the same, from Variant B (Porcelain). If neither, say the change in the owner note.
-- Owner note:
+- Owner note: DENIED (issue #5; the title said "choose A" but the body says deny, so treated as deny). "Follow Apple SF Symbol style. I hope the brand can present cloud drive at home." The designer redoes the icon.
