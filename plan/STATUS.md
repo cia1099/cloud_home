@@ -16,7 +16,7 @@ The report site (R-001) has its first edition built and published; it is in revi
 | Report site | first edition built, checked and published (R-001, in review) | owner review; next report after the next milestone |
 
 ## Active tasks
-- R-072 · designer · main checkout · state: delegated (A-003 denied via issue #5: SF Symbols style, cloud drive at home) · next: verify SVGs render, frontend publishes new /decisions/brand/ + new approval A-004, deploy report.
+- R-072 · designer done (318104e: variants C Hearth, D Roofline in design/brand/, NOT rendered or viewed: shell denies qlmanage/rsvg for me and workers) · next: a session that can render checks C/D at 16/32/256px, then frontend publishes /decisions/brand/ + approval A-004, deploy report. Not done this session.
 - R-003 merged (agent/R-003-web-foundation): ui build, lint, 31 vitest pass (verified by manager). NOT run in a browser or against the backend (no browser tool; workers' shell denied temp dirs/servers). Uses bun (ui/bun.lock), not npm: CLAUDE.md says npm, to reconcile. Next: tester live check + screenshots, then file browser (R-007) and R-027.
 - R-071 merged (agent/R-071-shared-with-me): cargo test 143+12+155+7 pass, clippy zero warnings. Live curl outstanding; archive download of received folder not done (not in R-071 text).
 - R-070 merged (3261515): clippy --all-targets zero warnings, tests pass. Observed once: tests/approval_http.rs `restore_never_reactivates_a_pending_or_rejected_account` failed in a full `cargo test` run, passed on rerun (possible flake under parallel load; tester to investigate). Live /openapi.json check of UploadForm outstanding. Remaining backlog: R-071 backend, R-003 frontend (needs R-002 design, done), R-073 guides.
