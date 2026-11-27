@@ -1,0 +1,17 @@
+{
+  "kind": "weekly",
+  "title": { "en": "Update and install scripts now actually run (R-031, R-021)", "zh": "更新与安装脚本已实际跑通（R-031、R-021）" },
+  "summary": {
+    "en": "The tester ran the self-update end to end against a local signed mirror: 40 of 40 checks pass (happy path, tampered manifest, wrong key, tampered package, crash then rollback with database restore, no reinstall loop). The Linux and macOS install scripts also ran against a throwaway-signed mirror: 52 of 52 checks pass, including refusals for bad signatures and packages. I re-ran the install check myself (52/52). Not covered: the UI-update assertions (R-026 is not built), real systemd/launchd services, and a real Linux binary. A-004 (cloud icon C or D) still waits for you.",
+    "zh": "测试员用本地签名镜像端到端跑了自动更新：40 项全部通过（正常更新、清单被篡改、错误密钥、安装包被篡改、崩溃后回滚并恢复数据库、不会反复重装）。Linux 与 macOS 安装脚本也在临时签名镜像上跑通：52 项全部通过，包括对错误签名和安装包的拒绝。安装检查我自己又跑了一遍（52/52）。未覆盖：界面随更新的断言（R-026 尚未实现）、真实的 systemd/launchd 服务、真实 Linux 二进制。A-004（云图标 C 或 D）仍等你决定。"
+  },
+  "chip": { "tone": "accent", "icon": "check", "text": { "en": "A-004 still waits for you", "zh": "A-004 仍等你决定" } },
+  "cover": { "style": "c1", "icon": "heart" },
+  "sections": [
+    { "id": "changes", "title": { "en": "What changed", "zh": "有什么变化" }, "component": "text", "data": { "bullets": [
+      { "en": "**R-031 (review):** `scripts/e2e_update.sh`, 40 passed, 0 failed (about 4 min). Mutation check: disabling the sha256 check makes the tampered-package case fail.", "zh": "**R-031（待验收）：**`scripts/e2e_update.sh`，40 项通过、0 失败（约 4 分钟）。变异检查：关闭 sha256 校验后篡改包用例会失败。" },
+      { "en": "**R-021 (review):** `scripts/e2e_install.sh`, 52 passed, 0 failed; re-run by the manager.", "zh": "**R-021（待验收）：**`scripts/e2e_install.sh`，52 项通过、0 失败；经理已复跑。" },
+      { "en": "**Open:** UI served/rolled back with updates (needs R-026); service steps need a Linux box.", "zh": "**未完成：**界面随更新切换与回滚（需要 R-026）；服务注册步骤需要 Linux 机器。" }
+    ] } }
+  ]
+}
