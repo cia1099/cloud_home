@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Cloud Home">
+  <title>Cloud Home, variant B (Porcelain, light)</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e6edf8"/>
+    </linearGradient>
+    <linearGradient id="cloud" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#4aa8ff"/>
+      <stop offset="1" stop-color="#0a58d0"/>
+    </linearGradient>
+    <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity=".45"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="lift" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#0a3d99" flood-opacity=".30"/>
+    </filter>
+  </defs>
+  <path d="M512 0C880 0 1024 144 1024 512C1024 880 880 1024 512 1024C144 1024 0 880 0 512C0 144 144 0 512 0Z" fill="url(#tile)"/>
+  <g transform="translate(4 0)">
+    <path filter="url(#lift)" d="M344 731H680A132 132 0 0 0 698 468A197 197 0 0 0 318 501A117 117 0 0 0 344 731Z" fill="url(#cloud)"/>
+    <path d="M344 731H680A132 132 0 0 0 698 468A197 197 0 0 0 318 501A117 117 0 0 0 344 731Z" fill="url(#hl)"/>
+  </g>
+</svg>

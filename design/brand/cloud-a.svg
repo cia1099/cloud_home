@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Cloud Home">
+  <title>Cloud Home, variant A (Sky)</title>
+  <defs>
+    <linearGradient id="tile" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#4aa8ff"/>
+      <stop offset="1" stop-color="#0a58d0"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.3" cy="0" r="0.9">
+      <stop offset="0" stop-color="#fff" stop-opacity=".28"/>
+      <stop offset=".6" stop-color="#fff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cloud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#dcebff"/>
+    </linearGradient>
+    <filter id="lift" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="22" stdDeviation="26" flood-color="#04307a" flood-opacity=".38"/>
+    </filter>
+    <clipPath id="c"><path id="shape" d="M344 731H680A132 132 0 0 0 698 468A197 197 0 0 0 318 501A117 117 0 0 0 344 731Z"/></clipPath>
+  </defs>
+  <path d="M512 0C880 0 1024 144 1024 512C1024 880 880 1024 512 1024C144 1024 0 880 0 512C0 144 144 0 512 0Z" fill="url(#tile)"/>
+  <path d="M512 0C880 0 1024 144 1024 512C1024 880 880 1024 512 1024C144 1024 0 880 0 512C0 144 144 0 512 0Z" fill="url(#sheen)"/>
+  <g filter="url(#lift)">
+    <path d="M344 731H680A132 132 0 0 0 698 468A197 197 0 0 0 318 501A117 117 0 0 0 344 731Z" fill="url(#cloud)" transform="translate(4 0)"/>
+  </g>
+  <!-- soft inner shadow along the lower edge of the cloud -->
+  <g clip-path="url(#c)" transform="translate(4 0)">
+    <path d="M344 731H680A132 132 0 0 0 698 468A197 197 0 0 0 318 501A117 117 0 0 0 344 731Z" fill="none" stroke="#7fb4ff" stroke-opacity=".35" stroke-width="36" transform="translate(0 -10)"/>
+  </g>
+</svg>

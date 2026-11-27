@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Cloud Home">
+  <title>Cloud Home, variant A, small-size (favicon, 16-32px)</title>
+  <defs>
+    <linearGradient id="tile" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#3f9fff"/>
+      <stop offset="1" stop-color="#0a58d0"/>
+    </linearGradient>
+  </defs>
+  <path d="M512 0C880 0 1024 144 1024 512C1024 880 880 1024 512 1024C144 1024 0 880 0 512C0 144 144 0 512 0Z" fill="url(#tile)"/>
+  <!-- cloud enlarged 1.18x about the tile centre, no filters or strokes, so it stays crisp at 16px -->
+  <path d="M344 731H680A132 132 0 0 0 698 468A197 197 0 0 0 318 501A117 117 0 0 0 344 731Z" fill="#fff" transform="translate(512 512) scale(1.18) translate(-508 -515)"/>
+</svg>

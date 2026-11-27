@@ -1,5 +1,7 @@
 # Cloud Home brand directions (R-072 step 1)
 
+> **Superseded.** The owner denied directions A/B/C and asked for the existing report-site cloud icon refined instead. See `cloud-refined.md` and `cloud-a.svg`, `cloud-a-favicon.svg`, `cloud-b.svg`, `cloud-b-dark.svg`. The text below is kept only until the refined cloud is approved, then the `direction-*` folders and this file should be removed.
+
 Three candidate directions. Nothing is applied anywhere yet; `design/system.md` and the mockups are unchanged.
 
 | | Direction | Idea | Colour added to system.md |
