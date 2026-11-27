@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- **Registration ownership verification (R-024)** needed no new code: an email or
+  phone given at registration is stored unverified and counts as verified only
+  after the owner confirms the one-time code (`/me/identifier/verify/request` +
+  `/me/identifier/verify`); OAuth linking already requires a verified local
+  email. Added an HTTP test for it (including cross-account isolation) and
+  corrected `spec/backend.md`.
 - **Chat alerts (R-065).** Paired admins now get system alerts in the chat: a new
   version is available (with an "Install now" button that runs the same
   updater as `POST /admin/update/install`, same preconditions), the data drive

@@ -3032,3 +3032,46 @@ fn malformed_json_bodies_are_client_errors_and_change_nothing() {
     assert!(srv.get(&alice, "/shares").items().is_empty());
     assert_eq!(srv.get(&alice, "/auth/me").data()["username"], "alice");
 }
+
+/// 注册不做归属校验，但登记的标识一律以未验证落库；验证码只能由持有该标识的账户确认，
+/// 他人拿到码也无法替别人的账户置 verified。
+#[test]
+fn registered_identifier_is_unverified_until_the_owner_confirms_the_code() {
+    let (srv, alice, bob) = two();
+    let verified = |who: &Acct| {
+        srv.get(who, "/auth/me").data()["identities"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|i| i["provider"] == "email" && i["verified"] == true)
+    };
+    assert!(!verified(&alice), "新注册的邮箱必须是未验证");
+
+    let r = srv.call(
+        Some(&alice),
+        "POST",
+        "/me/identifier/verify/request",
+        Some(&json!({"provider": "email"})),
+    );
+    assert_eq!(r.status, 204);
+    let code = srv.otp_code(&alice.email);
+
+    // bob 拿到 alice 的码也只会作用于 bob 自己的邮箱：校验失败，alice 仍未验证。
+    let r = srv.call(
+        Some(&bob),
+        "POST",
+        "/me/identifier/verify",
+        Some(&json!({"provider": "email", "code": code})),
+    );
+    assert_eq!(r.status, 400);
+    assert!(!verified(&alice) && !verified(&bob));
+
+    let r = srv.call(
+        Some(&alice),
+        "POST",
+        "/me/identifier/verify",
+        Some(&json!({"provider": "email", "code": code})),
+    );
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(verified(&alice) && !verified(&bob));
+}
