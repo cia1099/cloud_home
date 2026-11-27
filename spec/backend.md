@@ -87,6 +87,7 @@ cloud_home/
     ├── error.rs          # AppError 枚举，实现 IntoResponse
     ├── logging.rs        # 日志初始化（双路输出）、audit! 宏、git 风格改名记法
     ├── state.rs          # AppState { db, config, drive_manager }
+    ├── ui.rs             # 内嵌 Web UI：静态文件 + SPA 回退、缓存头、noindex、--self-test 的 UI 校验
     ├── db/
     │   └── mod.rs        # SqlitePool 初始化，运行 sqlx migrate
     ├── models/
@@ -125,6 +126,23 @@ cloud_home/
     └── tasks/
         └── trash_cleaner.rs  # tokio::spawn 定时任务，每小时清理过期文件
 ```
+
+### Web UI 的提供（R-026）
+
+`ui/dist`（Vite 构建产物）在发布构建时由 `build.rs` 生成 `include_bytes!` 表编进二进制；调试构建（`debug_assertions`）
+运行时直接读磁盘上的 `ui/dist`，`cargo build` 不要求它存在。取字节之外的逻辑（`src/ui.rs`）两种构建完全共用。
+
+- 路由：`/api/v1/*`、`/docs`、`/openapi.json` 先匹配；其余请求进入 router 的 fallback。
+  `/api` 与 `/api/*` 未匹配时返回 JSON 404（`{"error":{"code":"NOT_FOUND",...}}`），绝不回退为 `index.html`。
+- 文件命中则返回；未命中且路径在 `/assets/` 下或末段带扩展名（如 `/favicon.ico`）→ 404（缺失资源不会被 `index.html` 掩盖）；
+  其余（前端路由如 `/files/photos`）→ `index.html`。仅 GET/HEAD，其他方法 405；含 `..` 的路径 404。
+- 缓存：`assets/*`（文件名带内容哈希）`public, max-age=31536000, immutable`；`index.html` 与其他根文件 `no-cache`。
+- 所有响应（含 API、文档）带 `X-Robots-Tag: noindex, nofollow`。
+- 发布构建守卫：`ui/dist/index.html` 缺失，或 `ui/dist/version.json`（UI 构建时写入 `Cargo.toml` 版本）与 `CARGO_PKG_VERSION`
+  不一致，则 `cargo build --release` 失败。
+- `cloud_home --self-test` 额外校验 UI：`index.html` 存在、其引用的 `/assets/*` 都存在、`version.json` 版本等于二进制版本；
+  任一不满足则非零退出，更新器据此拒绝安装（见 `spec/update.md`）。
+- 发布流水线先构建 UI（`bun install --frozen-lockfile && bun run build`）再构建 Rust 二进制。
 
 ---
 

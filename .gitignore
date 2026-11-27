@@ -8,3 +8,5 @@ Cargo.lock
 /design/.tmp
 /.claude/worktrees
 /.verify
+/ui/dist
+/ui/node_modules

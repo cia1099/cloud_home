@@ -113,6 +113,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   older than `PENDING_EXPIRE_DAYS` (14) are rejected automatically by an hourly
   background task. Restoring a soft-deleted account never reactivates one that
   is not approved.
+- One binary serves the API and the web UI. The built `ui/dist` is embedded in
+  the `cloud_home` binary and served from the same origin as `/api/v1`, with
+  SPA fallback to `index.html`. `/api/v1`, `/docs` and `/openapi.json` are never
+  shadowed, unknown `/api/*` paths stay a JSON 404, and a missing `/assets/*`
+  file is a 404 rather than `index.html`. `index.html` is `no-cache`, hashed
+  assets are `immutable`, and every response carries
+  `X-Robots-Tag: noindex, nofollow`. Debug builds read `ui/dist` from disk and
+  compile without it; release builds fail unless `ui/dist/index.html` exists and
+  the UI's baked-in version equals the crate version.
+- `cloud_home --self-test` also verifies the embedded UI (index, referenced
+  assets, version), so an update package with a broken UI is refused before it
+  is installed. Updating the binary now updates the UI with it.
+- The release workflow builds the UI first (frozen lockfile), then the binaries.
 - `POST /admin/trash/purge` empties a single account's trash immediately,
   reclaiming the disk space without waiting out the retention window. This is
   the only way to clear a removed account's files: deactivating an account
