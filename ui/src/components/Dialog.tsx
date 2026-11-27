@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 
 /** Modal dialog on the native `<dialog>` element: focus trap, Esc and focus return come from the browser. */
-export function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+export function Dialog({ title, onClose, alert = false, children }: { title: string; onClose: () => void; alert?: boolean; children: ReactNode }) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
 
@@ -16,6 +16,7 @@ export function Dialog({ title, onClose, children }: { title: string; onClose: (
     <dialog
       ref={ref}
       className="dialog"
+      role={alert ? 'alertdialog' : undefined}
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault()

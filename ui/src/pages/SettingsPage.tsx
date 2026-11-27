@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
+import { Icon } from '../components/Icon'
 import { LanguageSwitch } from '../components/LanguageSwitch'
 import { useI18n } from '../i18n/useI18n'
 import type { MessageKey } from '../i18n/messages/en'
@@ -61,6 +63,14 @@ export function SettingsPage() {
               ))}
             </div>
           </div>
+        </div>
+      </section>
+      <section className="phone-only">
+        <div className="cell-list">
+          <Link className="cell" to="/storage">
+            <span className="lbl">{t('nav.storage')}</span>
+            <Icon name="chevR" size={16} />
+          </Link>
         </div>
       </section>
       <p className="small num">

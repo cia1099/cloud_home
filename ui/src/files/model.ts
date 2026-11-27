@@ -10,7 +10,7 @@ export const DEFAULT_SORT: Sort = { key: 'name', dir: 'asc' }
 
 export type Kind = 'folder' | 'image' | 'video' | 'audio' | 'pdf' | 'doc' | 'sheet' | 'zip' | 'file'
 
-const isFolder = (item: FileItem) => item.file_type === 'folder'
+const isFolder = (item: Pick<FileItem, 'file_type'>) => item.file_type === 'folder'
 
 /** Name sort is natural ("file2" before "file10") and locale-aware; folders always come first. */
 export function sortItems<T extends FileItem>(items: readonly T[], sort: Sort, intlTag: string): T[] {
@@ -39,7 +39,7 @@ const DOC_EXT = new Set(['.doc', '.docx', '.txt', '.md', '.rtf', '.pages', '.odt
 const ZIP_EXT = new Set(['.zip', '.gz', '.tar', '.tgz', '.7z', '.rar', '.bz2', '.xz'])
 
 /** Picks the icon family from the MIME type, falling back to the extension. */
-export function kindOf(item: FileItem): Kind {
+export function kindOf(item: Pick<FileItem, 'file_type' | 'name' | 'mime_type'>): Kind {
   if (isFolder(item)) return 'folder'
   const mime = item.mime_type ?? ''
   if (mime.startsWith('image/')) return 'image'

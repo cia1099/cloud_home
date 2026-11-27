@@ -3,8 +3,9 @@ import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { createFolder, moveFile, renameFile, restoreFromTrash, trashFile, type FileItem } from '../api/files'
 import { ApiError } from '../api/client'
 import { errorKey } from '../api/errors'
-import { Icon, type IconName } from '../components/Icon'
+import { Icon } from '../components/Icon'
 import { Menu, type MenuAnchor, type MenuItem } from '../components/Menu'
+import { StateView } from '../components/StateView'
 import { Collection, type CollectionActions, type SelectMode } from '../files/Collection'
 import { MoveDialog, NewFolderDialog } from '../files/Dialogs'
 import { affectsFolder, rangeIds, sortItems, toggleId, type Sort, type SortKey } from '../files/model'
@@ -16,6 +17,7 @@ import { useFolderListing, useSearchListing } from '../files/useListing'
 import { INTL_TAGS } from '../i18n/locale'
 import type { MessageKey } from '../i18n/messages/en'
 import { useI18n } from '../i18n/useI18n'
+import { ShareDialog } from '../shares/ShareDialog'
 import { useStreamEvent } from '../sse/useEventStream'
 import { useToast } from '../toast/useToast'
 
@@ -29,20 +31,7 @@ interface MenuState {
   label: string
 }
 
-type DialogName = 'new-folder' | 'move' | null
-
-function StateView({ icon, tone, title, text, children }: { icon: IconName; tone?: 'warn' | 'err' | 'gray'; title: string; text: string; children?: ReactNode }) {
-  return (
-    <div className="state">
-      <span className={tone ? `big ${tone}` : 'big'} aria-hidden="true">
-        <Icon name={icon} size={44} />
-      </span>
-      <h2>{title}</h2>
-      <p>{text}</p>
-      {children}
-    </div>
-  )
-}
+type DialogName = 'new-folder' | 'move' | 'share' | null
 
 function Skeleton({ list }: { list: boolean }) {
   const { t } = useI18n()
@@ -201,6 +190,7 @@ export function FilesPage() {
       const entries: MenuItem[] = []
       if (single && item.file_type === 'folder') entries.push({ label: t('files.open'), icon: 'folder', onSelect: () => open(item) })
       if (single) entries.push({ label: t('files.rename'), icon: 'edit', onSelect: () => setRenaming({ id: item.id, error: null }) })
+      if (single) entries.push({ label: t('share.action'), icon: 'share', onSelect: () => setDialog('share') })
       entries.push({ label: t('files.move'), icon: 'move', onSelect: () => setDialog('move') })
       entries.push({ label: t('files.delete'), icon: 'trash', danger: true, separated: true, onSelect: () => void trash(targets) })
       setMenu({ anchor: at, items: entries, label: t('files.actions', { name: item.name }) })
@@ -292,6 +282,7 @@ export function FilesPage() {
           <SelectionBar
             count={selectedItems.length}
             single={selectedItems.length === 1}
+            onShare={() => setDialog('share')}
             onRename={() => setRenaming({ id: selectedItems[0].id, error: null })}
             onMove={() => setDialog('move')}
             onTrash={() => void trash(selectedItems)}
@@ -336,6 +327,7 @@ export function FilesPage() {
           }}
         />
       )}
+      {dialog === 'share' && selectedItems.length === 1 && <ShareDialog item={selectedItems[0]} onClose={() => setDialog(null)} />}
       {dialog === 'move' && (
         <MoveDialog
           moving={selectedItems}

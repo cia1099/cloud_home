@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useRef } from 'react'
 
 /** Event names sent by `GET /events/stream`. */
-export type StreamEvent = 'usage' | 'files' | 'update'
-export const STREAM_EVENTS: readonly StreamEvent[] = ['usage', 'files', 'update']
+export type StreamEvent = 'usage' | 'files' | 'update' | 'share.received' | 'share.revoked'
+export const STREAM_EVENTS: readonly StreamEvent[] = ['usage', 'files', 'update', 'share.received', 'share.revoked']
 
 export type StreamStatus = 'connecting' | 'open' | 'reconnecting'
 

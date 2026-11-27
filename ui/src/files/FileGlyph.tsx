@@ -15,7 +15,7 @@ const KIND_ICON: Record<Exclude<Kind, 'folder'>, IconName> = {
 }
 
 /** Folder icon, server thumbnail for images, or a coloured kind glyph. `size` is the glyph size in px. */
-export function FileGlyph({ item, size, thumbnail = false }: { item: FileItem; size: number; thumbnail?: boolean }) {
+export function FileGlyph({ item, size, thumbnail = false }: { item: Pick<FileItem, 'id' | 'file_type' | 'name' | 'mime_type'>; size: number; thumbnail?: boolean }) {
   const [thumbFailed, setThumbFailed] = useState(false)
   const kind = kindOf(item)
   if (kind === 'folder') return <Icon name="folder" size={size} className="folder-glyph" />

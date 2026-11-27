@@ -5,15 +5,18 @@ import type { MessageKey } from '../i18n/messages/en'
 import { useStreamStatus } from '../sse/useEventStream'
 import { useOnline } from './useOnline'
 
-// New destinations (Shared, Trash, Storage, Administration) are added with their screens.
-const NAV: { to: string; icon: IconName; label: MessageKey }[] = [
-  { to: '/files', icon: 'folder', label: 'nav.files' },
-  { to: '/settings', icon: 'sliders', label: 'nav.settings' },
+// New destinations (Administration) are added with their screens. `tab: false` items live inside Settings on a phone.
+const NAV: { to: string; icon: IconName; label: MessageKey; tab: boolean }[] = [
+  { to: '/files', icon: 'folder', label: 'nav.files', tab: true },
+  { to: '/shared', icon: 'share', label: 'nav.shared', tab: true },
+  { to: '/trash', icon: 'trash', label: 'nav.trash', tab: true },
+  { to: '/storage', icon: 'drive', label: 'nav.storage', tab: false },
+  { to: '/settings', icon: 'sliders', label: 'nav.settings', tab: true },
 ]
 
-function NavItems({ className }: { className: string }) {
+function NavItems({ className, tabsOnly = false }: { className: string; tabsOnly?: boolean }) {
   const { t } = useI18n()
-  return NAV.map((item) => (
+  return NAV.filter((item) => item.tab || !tabsOnly).map((item) => (
     <NavLink key={item.to} to={item.to} className={className}>
       <Icon name={item.icon} size={22} />
       <span>{t(item.label)}</span>
@@ -58,7 +61,7 @@ export function AppShell() {
         </div>
       </div>
       <nav className="tabs" aria-label={t('nav.main')}>
-        <NavItems className="" />
+        <NavItems className="" tabsOnly />
       </nav>
     </div>
   )

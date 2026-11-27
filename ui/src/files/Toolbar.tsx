@@ -82,6 +82,7 @@ export function ViewToggle({ view, onChange }: { view: View; onChange: (view: Vi
 export function SelectionBar({
   count,
   single,
+  onShare,
   onRename,
   onMove,
   onTrash,
@@ -89,6 +90,7 @@ export function SelectionBar({
 }: {
   count: number
   single: boolean
+  onShare: () => void
   onRename: () => void
   onMove: () => void
   onTrash: () => void
@@ -101,6 +103,12 @@ export function SelectionBar({
         {tn('files.selected', count)}
       </span>
       <div className="acts">
+        {single && (
+          <button type="button" className="abtn" onClick={onShare}>
+            <Icon name="share" size={18} />
+            {t('share.action')}
+          </button>
+        )}
         {single && (
           <button type="button" className="abtn" onClick={onRename}>
             <Icon name="edit" size={18} />
