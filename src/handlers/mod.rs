@@ -16,6 +16,7 @@ pub mod search;
 pub mod shares;
 pub mod trash;
 pub mod usage;
+pub mod users;
 
 use axum::Router;
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
@@ -94,7 +95,16 @@ pub fn build_router(state: AppState) -> Router {
         .routes(routes!(trash::delete_one))
         // 分享
         .routes(routes!(shares::create, shares::list))
-        .routes(routes!(shares::revoke))
+        .routes(routes!(shares::update, shares::revoke))
+        .routes(routes!(shares::received_list))
+        .routes(routes!(shares::seen))
+        .routes(routes!(shares::received_children))
+        .routes(routes!(shares::received_metadata))
+        .routes(routes!(shares::received_raw))
+        .routes(routes!(shares::received_thumbnail))
+        .routes(routes!(shares::received_download))
+        // 人员目录
+        .routes(routes!(users::directory))
         // 公开访问（无 auth）
         .routes(routes!(public::info))
         .routes(routes!(public::download));
