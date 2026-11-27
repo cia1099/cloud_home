@@ -74,6 +74,7 @@ Close each issue after you have acted on it.
 - **R-074 (new, owner asked for it): Accept button.** Until it ships, treat a `[CHG R-nnn]` or `[DEL R-nnn]` issue whose text says accepted / reviewed / well done as *accepted*: mark that requirement `done` (never delete work) and close the issue. Also: the owner reported seeing no update on the report site. Render and check the two new cloud icon variants, publish them on `/decisions/` with a fresh approval request, verify and merge R-060 (cargo is on PATH when the owner starts you from their terminal), then build and deploy the site and write the report.
 
 ## Log
+- 2026-11-27 — owner's session: deleted tests/chat_fake.rs (cargo test 143+12+7 pass, clippy no warnings); CLAUDE.md and the agent files now say bun (not npm) for the web app; the owner answered A-003 in GitHub issue #5 — process it.
 - 2026-11-27 — R-060 (no rejection cooldown) merged into agent/manager by the owner's session: 131 tests pass, clippy only the known `wait_idle` warning (R-070); live curl check of re-registration still outstanding. Earlier note that R-060 was unmerged is obsolete.
 - 2026-11-19 — team and SPEC.md created.
 - 2026-11-25 — R-020 merged; R-002 follow-up (owner decisions) delivered; R-071 added. R-002 web-app design delivered (abccdae); R-020 verified but unmerged; owner answered the 5 design questions (see Owner decisions).

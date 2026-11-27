@@ -49,7 +49,7 @@ cloud_home/
 3. **改动即清理。** 同一次提交里删掉因这次改动而失效的一切：旧调用方、旧测试、旧文档（`spec/`、`README.md`、`.env.example`、OpenAPI 注解、`CHANGELOG.md`）、旧依赖。重命名或删除后，全仓库搜索残留引用（后端、前端、脚本、文档）。
 4. **破坏性变更不留兼容层。** 直接改成新行为，所有调用方（含 `ui/`）在同一次改动里更新，并在 `CHANGELOG.md` 标 **Breaking**。后端与 UI 同包发布、一起 OTA 更新，所以不需要为旧客户端保留旧接口。
 5. **唯一例外：已应用的数据库迁移。** `migrations/` 是只追加的账本（设备上的数据库已按它升级过），不改写、不删除；需要删列/表就新增一个迁移。但读写旧列/旧表的代码必须在同一次提交里删除。
-6. **提交前自查。** `cargo clippy --all-targets` 没有 `dead_code` / `unused` 类警告；前端 `npm run lint` 与类型检查通过且无未使用的导出/依赖；`grep -rniE '_v[0-9]\b|legacy|deprecated|_old\b|todo.*remove'` 没有新增命中。
+6. **提交前自查。** `cargo clippy --all-targets` 没有 `dead_code` / `unused` 类警告；前端 `bun run lint` 与类型检查通过且无未使用的导出/依赖；`grep -rniE '_v[0-9]\b|legacy|deprecated|_old\b|todo.*remove'` 没有新增命中。
 
 ## Agent team
 
