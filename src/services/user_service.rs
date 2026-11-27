@@ -859,7 +859,7 @@ mod tests {
 
         // 连续多次「拒绝 → 立即重新注册」：不设冷却、不限次数，始终是同一账户回到 pending。
         for _ in 0..3 {
-            decide(&db, &u.id, Decision::Reject, "admin-endpoint", None)
+            decide(&db, &u.id, Decision::Reject, "admin-endpoint", None, true)
                 .await
                 .unwrap();
             assert_eq!(get(&db, &u.id).await.unwrap().approval_status, "rejected");
@@ -874,7 +874,7 @@ mod tests {
         }
 
         // 重新提交的密码生效；批准后账户启用。
-        decide(&db, &u.id, Decision::Approve, "admin-endpoint", None)
+        decide(&db, &u.id, Decision::Approve, "admin-endpoint", None, true)
             .await
             .unwrap();
         let approved = get(&db, &u.id).await.unwrap();

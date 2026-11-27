@@ -2,6 +2,11 @@
 
 ## B-001 (P1, security/correctness) A chat button can overturn a concurrent decision; two decisions on one account
 
+**Status: fixed** on `agent/B-001-decide-race`. `approval_service::decide` takes `overturn_rejection: bool`
+(admin endpoint `true`, chat button `false`); the approve UPDATE only matches `rejected` when it is true, so a
+losing chat Approve gets 0 rows -> `Conflict` -> "Already decided". Unit test
+`chat_style_approve_cannot_overturn_a_rejection` added. The 200-iteration loop is recorded in the report.
+
 Found while diagnosing the flaky `chat::flow_tests::simultaneous_presses_produce_exactly_one_decision`
 (fails about 1 run in 4, `assertion left == right: left 0, right 1` on `losers.len()`).
 The test is correct; the product code violates spec/admin_chat.md §8 item 7 ("two simultaneous presses -> one decision")

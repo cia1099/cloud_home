@@ -35,9 +35,10 @@ pub struct Decided {
 
 /// 对账户做出审批决定。
 ///
-/// - pending → 批准 / 拒绝；rejected → 批准（允许改判）；
+/// - pending → 批准 / 拒绝；rejected → 批准仅当 `overturn_rejection`（管理端点：允许改判；
+///   聊天按钮：不允许，否则并发的 Reject / Approve 会两个都「成功」）；
 /// - 与当前状态相同 → 幂等成功（`changed = false`）；
-/// - 其余（拒绝一个已批准的账户）→ 409，并写明先前的决定者——
+/// - 其余（拒绝一个已批准的账户等）→ 409，并写明先前的决定者——
 ///   已批准账户可能已有数据，要停用应走删除账户。
 ///
 /// 状态迁移是一条带条件的 UPDATE，两个管理员同时点击时恰好一个生效。
@@ -48,6 +49,7 @@ pub async fn decide(
     decision: Decision,
     decided_by: &str,
     note: Option<&str>,
+    overturn_rejection: bool,
 ) -> AppResult<Decided> {
     let now = now_rfc3339();
     let note = note.map(str::trim).filter(|n| !n.is_empty());
@@ -57,13 +59,15 @@ pub async fn decide(
             sqlx::query(
                 "UPDATE users SET approval_status = 'approved', is_active = 1, \
                  approval_decided_at = ?, approval_decided_by = ?, approval_note = ?, updated_at = ? \
-                 WHERE id = ? AND approval_status IN ('pending', 'rejected') AND deleted_at IS NULL",
+                 WHERE id = ? AND (approval_status = 'pending' \
+                 OR (? AND approval_status = 'rejected')) AND deleted_at IS NULL",
             )
             .bind(&now)
             .bind(decided_by)
             .bind(note)
             .bind(&now)
             .bind(user_id)
+            .bind(overturn_rejection)
             .execute(db)
             .await?
         }
@@ -195,6 +199,7 @@ mod tests {
             Decision::Approve,
             "admin-endpoint",
             Some(" ok "),
+            true,
         )
         .await
         .unwrap();
@@ -210,7 +215,7 @@ mod tests {
         assert_eq!(d.user.approval_note.as_deref(), Some("ok"));
 
         // 重复批准：幂等，不改动，且不覆盖先前的决定者。
-        let again = decide(&db, &u.id, Decision::Approve, "chat:telegram:1", None)
+        let again = decide(&db, &u.id, Decision::Approve, "chat:telegram:1", None, false)
             .await
             .unwrap();
         assert!(!again.changed);
@@ -224,7 +229,7 @@ mod tests {
     async fn reject_keeps_inactive_and_reject_is_idempotent() {
         let db = test_pool().await;
         let u = pending(&db, "a@x.com").await;
-        let d = decide(&db, &u.id, Decision::Reject, "admin-endpoint", Some("spam"))
+        let d = decide(&db, &u.id, Decision::Reject, "admin-endpoint", Some("spam"), true)
             .await
             .unwrap();
         assert!(d.changed);
@@ -233,7 +238,7 @@ mod tests {
             (0, "rejected")
         );
         assert!(
-            !decide(&db, &u.id, Decision::Reject, "admin-endpoint", None)
+            !decide(&db, &u.id, Decision::Reject, "admin-endpoint", None, true)
                 .await
                 .unwrap()
                 .changed
@@ -244,10 +249,10 @@ mod tests {
     async fn reject_then_approve_is_allowed() {
         let db = test_pool().await;
         let u = pending(&db, "a@x.com").await;
-        decide(&db, &u.id, Decision::Reject, "admin-endpoint", None)
+        decide(&db, &u.id, Decision::Reject, "admin-endpoint", None, true)
             .await
             .unwrap();
-        let d = decide(&db, &u.id, Decision::Approve, "admin-endpoint", None)
+        let d = decide(&db, &u.id, Decision::Approve, "admin-endpoint", None, true)
             .await
             .unwrap();
         assert!(d.changed);
@@ -258,14 +263,29 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn chat_style_approve_cannot_overturn_a_rejection() {
+        let db = test_pool().await;
+        let u = pending(&db, "a@x.com").await;
+        decide(&db, &u.id, Decision::Reject, "chat:telegram:2", None, false)
+            .await
+            .unwrap();
+        assert!(matches!(
+            decide(&db, &u.id, Decision::Approve, "chat:telegram:1", None, false).await,
+            Err(AppError::Conflict(_))
+        ));
+        let after = user_service::get(&db, &u.id).await.unwrap();
+        assert_eq!((after.is_active, after.approval_status.as_str()), (0, "rejected"));
+    }
+
+    #[tokio::test]
     async fn rejecting_an_approved_account_conflicts_and_names_the_decider() {
         let db = test_pool().await;
         let u = pending(&db, "a@x.com").await;
-        decide(&db, &u.id, Decision::Approve, "chat:telegram:42", None)
+        decide(&db, &u.id, Decision::Approve, "chat:telegram:42", None, false)
             .await
             .unwrap();
         let Err(AppError::Conflict(msg)) =
-            decide(&db, &u.id, Decision::Reject, "admin-endpoint", None).await
+            decide(&db, &u.id, Decision::Reject, "admin-endpoint", None, true).await
         else {
             panic!("expected conflict");
         };
@@ -284,7 +304,7 @@ mod tests {
             .await
             .unwrap();
         assert!(
-            decide(&db, &u.id, Decision::Approve, "admin-endpoint", None)
+            decide(&db, &u.id, Decision::Approve, "admin-endpoint", None, true)
                 .await
                 .is_err()
         );
@@ -295,7 +315,7 @@ mod tests {
     async fn unknown_account_is_not_found() {
         let db = test_pool().await;
         assert!(matches!(
-            decide(&db, "nope", Decision::Approve, "admin-endpoint", None).await,
+            decide(&db, "nope", Decision::Approve, "admin-endpoint", None, true).await,
             Err(AppError::NotFound)
         ));
     }
@@ -305,8 +325,8 @@ mod tests {
         let db = test_pool().await;
         let u = pending(&db, "a@x.com").await;
         let (a, b) = tokio::join!(
-            decide(&db, &u.id, Decision::Approve, "chat:telegram:1", None),
-            decide(&db, &u.id, Decision::Approve, "chat:telegram:2", None),
+            decide(&db, &u.id, Decision::Approve, "chat:telegram:1", None, false),
+            decide(&db, &u.id, Decision::Approve, "chat:telegram:2", None, false),
         );
         let changed = [a.unwrap(), b.unwrap()]
             .iter()
@@ -321,7 +341,7 @@ mod tests {
         let old = pending(&db, "old@x.com").await;
         let fresh = pending(&db, "new@x.com").await;
         let approved = pending(&db, "ok@x.com").await;
-        decide(&db, &approved.id, Decision::Approve, "admin-endpoint", None)
+        decide(&db, &approved.id, Decision::Approve, "admin-endpoint", None, true)
             .await
             .unwrap();
 

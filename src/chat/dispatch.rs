@@ -224,8 +224,16 @@ impl ChatService {
                 Decision::Reject
             };
             let decided_by = format!("chat:{}:{}", self.inner.kind.as_str(), from.id);
-            match approval_service::decide(&self.inner.db, &user_id, decision, &decided_by, None)
-                .await
+            // 聊天按钮不得推翻拒绝：改判只能走管理端点。
+            match approval_service::decide(
+                &self.inner.db,
+                &user_id,
+                decision,
+                &decided_by,
+                None,
+                false,
+            )
+            .await
             {
                 Ok(d) => won = d.changed,
                 // 并发的另一位管理员先到了：当作已被决定。

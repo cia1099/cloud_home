@@ -237,7 +237,7 @@ async fn decide(
     note: Option<&str>,
 ) -> AppResult<ApiResponse<AdminDecisionResponse>> {
     let target = user_service::find_any(&state.db, identifier.trim(), provider).await?;
-    let decided = approval_service::decide(&state.db, &target.id, decision, DECIDED_BY, note).await?;
+    let decided = approval_service::decide(&state.db, &target.id, decision, DECIDED_BY, note, true).await?;
     let u = decided.user;
     Ok(ApiResponse::new(AdminDecisionResponse {
         user_id: u.id,
