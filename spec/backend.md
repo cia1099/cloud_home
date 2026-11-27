@@ -282,6 +282,10 @@ Base URL: `http://localhost:8080/api/v1`
 | POST | /auth/login    | 无 | 登录，`identifier` 可为邮箱或手机号，设置 auth_token Cookie，同时返回 token + expires_at |
 | POST | /auth/logout   | JWT | 清除 auth_token Cookie（`Set-Cookie: auth_token=; Max-Age=0`） |
 | GET  | /auth/me       | JWT | 获取当前用户信息（含各标识的 verified / managed_by 与 has_password） |
+| GET  | /auth/providers | 无 | 报告第三方登录是否开启与已配置的 provider：`{"data":{"enabled":bool,"providers":["google"]}}`；前端据此显隐「用 Google / Apple 继续」按钮 |
+| GET  | /auth/oauth/{provider}/authorize?redirect_uri=&state= | 无 | 返回 `{"data":{"url":"..."}}`，前端把浏览器导向该地址；`state` 由前端生成并在回调时自行核对 |
+| POST | /auth/oauth/{provider}/login | 无 | body `{code, redirect_uri}`；200，响应同 `/auth/login`（token + Cookie + user） |
+| POST | /auth/oauth/{provider}/link  | JWT | body 同上；为当前账户绑定第三方账号，返回 `UserResponse`；幂等 |
 
 **用户名不唯一**，它只是可随时修改的显示名；登录一律靠邮箱或手机号。
 JWT 的 Claims 里**不带用户名**——`AuthUser` 提取时本就要查库确认账户仍启用，
@@ -328,7 +332,18 @@ OTP 限制：6 位数字、5 分钟有效、单码最多 5 次尝试、同一目
 
 ### 第三方登录（Google / Apple）的约定
 
-OAuth 登录本身（客户端凭证、令牌交换、回调路由）尚未实现，此处先固定契约与支撑它的 schema：
+接口层已实现（`auth/oauth.rs` 的 `OAuthProvider` trait 与 `OAuthRegistry`、`services/oauth_service.rs`、
+`handlers/oauth.rs`），但 **Google / Apple 的真实客户端（凭证、令牌交换）尚未接入**，
+生产注册表为空，`GET /auth/providers` 恒返回 `providers: []`；自动化测试用 `cfg(test)` 的
+`FakeProvider`，不联网。总开关 `OAUTH_ENABLED`（默认 `false`）关闭时，除 `/auth/providers`
+外的 oauth 端点一律 404；provider 未配置同样 404。错误码：400 第三方未给已验证邮箱；
+401 授权码无效或账户已停用；409 邮箱已属于「本地邮箱尚未验证」的账户，或第三方账号已绑到别的账户
+（`link` 绝不转移归属）。契约与支撑它的 schema：
+
+- **关联既有账户还要求其本地邮箱已 `verified_at`**：注册不验证归属（见上），否则可先抢注他人邮箱，
+  等本人用 Google 登录时被并入攻击者持有密码的账户。未验证时返回 409，让用户先登录验证、再用 `link` 绑定。
+- **新建账户遵循注册模式**：R-060（审批流）落地前，OAuth 新账户与 `/auth/register` 一样直接启用；
+  R-060 落地时 `oauth_service::login` 的新建分支必须改走同一条建号 / 审批路径。
 
 - 第三方托管的标识（`managed_by` 非空）在本地**只读**：`/me/identifier` 一律返回 403，
   提示去对应平台修改；纯第三方账户也不需要密码，`/me/password` 同样 403。
@@ -647,6 +662,9 @@ JWT 的 `Claims` 因此新增 `username` 字段（`#[serde(default)]` 兼容改�
 | `auth.login` failure（密码错误） | 同上 | `reason="bad_password"`, `user_id`, `username` |
 | `auth.login` success | 同上 | `user_id`, `username` |
 | `auth.logout` | 同上 | `user_id` |
+| `auth.oauth_login` | `handlers/oauth.rs`、`services/oauth_service.rs` | success：`provider`, `user_id`, `username`；failure：`reason`（`exchange_failed` / `user_inactive`） |
+| `auth.oauth_link` | `handlers/oauth.rs` | `provider`, `user_id` |
+| `auth.oauth_sync` skipped | `services/oauth_service.rs` | warn，`reason="email_taken"`，同步邮箱撞名被跳过 |
 | `auth.token_rejected` | `auth/extractor.rs`（`token_missing`）、`auth/jwt.rs`（`token_invalid`） | warn, `reason` |
 | `file.upload` | `handlers/files.rs` | `file_id`, `file_name`, `file_path`, `size_bytes` |
 | `file.download` | 同上 | `file_id`, `file_name`, `file_path`, `size_bytes` |
@@ -700,6 +718,8 @@ TRUST_PROXY_HEADERS=false
 # 运维端点（/admin/users）的共享口令；留空 = 这些端点一律 404（功能关闭）。
 # 另有一层「调用方须来自回环或内网」的限制，注意其在反向代理之后会失效。
 ADMIN_PASSWORD=
+# 第三方登录总开关，默认关闭（目前只有接口层，真实 provider 未接入）。
+OAUTH_ENABLED=false
 ```
 
 > `DATABASE_URL` 由程序在运行时根据侦测到的硬盘路径自动构造，无需在 .env 中写死。

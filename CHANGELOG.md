@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Provider-neutral Google / Apple sign-in interface (no real client wired yet).
+  `GET /auth/providers` reports `{enabled, providers}` so the UI can hide the
+  "Continue with Google/Apple" buttons; `GET /auth/oauth/{provider}/authorize`,
+  `POST /auth/oauth/{provider}/login` and `POST /auth/oauth/{provider}/link`
+  sit behind the new `OAUTH_ENABLED` switch (default `false`; off means 404).
+  Login follows the documented rules: only provider-verified emails are
+  accepted, an existing account is joined only when its local email is already
+  verified, and a third-party account is never moved between accounts. Tested
+  with an in-process fake provider, no network.
 - `POST /admin/trash/purge` empties a single account's trash immediately,
   reclaiming the disk space without waiting out the retention window. This is
   the only way to clear a removed account's files: deactivating an account
