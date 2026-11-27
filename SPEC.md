@@ -157,4 +157,5 @@ Follow `CLAUDE.md`, `spec/backend.md`, `spec/update.md`. Backend migrations are 
 | 2026-11-26 | Added R-073: when the sign-in and Telegram interfaces are done, publish credential guides on the report site and finish the real wiring after the owner supplies the credentials. |
 | 2026-11-27 | Owner issues #1/#2: R-001 and R-002 reviewed and accepted → done. #3: A-002 approved (several equal admins); rejected members may re-register without limit, cooldown removed from R-060. #4: A-001 denied; R-072 redirected to evolve the report site's cloud icon. |
 | 2026-11-27 | Added R-074: an Accept button for requirements in review (`[OK R-nnn]` issues). |
+| 2026-11-27 | Owner issue #5: A-003 denied; R-072 icon redone in SF Symbols style and conveying a cloud drive at home. |
 | 2026-11-27 | Removed the superseded "bot language / several admins or one" open item from section 6 (answered by A-002). |

@@ -15,7 +15,7 @@ The report site shows pending requests at the top of the Overview and on `/decis
 - Why: …
 - Risk: …
 - If approved: …   If denied: …
-- Owner note:
+- Owner note: DENIED (issue #5; title said "choose A" but the body says deny, so treated as deny). "I want you following Apple SF Symbol style. I hope the brand can present cloud drive at home." Designer redoes the icon: SF Symbols-like cloud glyph (monoline/weight-consistent) that conveys a cloud drive at home (e.g. cloud + house motif).
 ```
 For a choice between named options instead of yes/no, add `- Options: A, B` (single words or letters, comma-separated) and replace the If line with `- If A: …   If B: …`. The site then shows one *Choose X* button per option.
 
@@ -35,7 +35,7 @@ For a choice between named options instead of yes/no, add `- Options: A, B` (sin
 - If approved: approve = several admins allowed (pairing is still one code at a time; default whoever pairs). Deny = strictly one admin (a second /pair is refused). Until answered the default is "whoever pairs".
 - Owner note: Approved 2026-11-27 (issue #3): several equal admins; rejected members may re-register without limit, no cooldown.
 
-### A-003 [ ] Cloud icon variant for Cloud Home (R-072) — 2026-11-27 — requested by manager
+### A-003 [x] DENIED 2026-11-27 — Cloud icon variant for Cloud Home (R-072) — 2026-11-27 — requested by manager
 - What: pick between two refinements of the report site's cloud icon (design/brand/cloud-a.svg "Variant A" and cloud-b.svg "Variant B"), shown on the report site /decisions/brand/.
 - Why: you asked to base the brand on the report site's cloud and make it more Apple-like and elegant.
 - Risk: low.
