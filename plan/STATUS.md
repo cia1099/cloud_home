@@ -52,6 +52,13 @@ Only the items above plus R-072 and R-073 are new; continue the rest of the plan
 ## Notes for the team (2026-11-26)
 The report site works now (https://report.cia1099.cloudns.ch/). If a live check fails, check DNS first: compare `dig +short @8.8.8.8`, `@9.9.9.9` and `@1.1.1.1` for `report.cia1099.cloudns.ch`, and tell the owner which ones fail. Do not change DNS and do not keep retrying the deploy.
 
+## Owner answers on GitHub (2026-11-27)
+Read the open issues (#1–#4) and handle them. How to read them:
+- **#1, #2 `[DEL R-001]` / `[DEL R-002]`**: the reason says "Well done. I had reviewed it". This means *reviewed and accepted*: mark R-001 and R-002 done. Do **not** delete the report site or the design, and do not remove their code.
+- **#3 A-002 approve**: several equal admins. Also: a rejected member may register again, with no limit on the number of tries; drop the cooldown after a rejection (keep the other abuse limits unless they conflict, and ask if they do).
+- **#4 A-001 deny**: do not use directions A, B or C. Base the new brand on the report site's cloud icon (header logo and favicon in `manager-site/`) and make it feel more like Apple design, elegant. The issue body has the owner's reference images.
+Close each issue after you have acted on it.
+
 ## Log
 - 2026-11-19 — team and SPEC.md created.
 - 2026-11-25 — R-020 merged; R-002 follow-up (owner decisions) delivered; R-071 added. R-002 web-app design delivered (abccdae); R-020 verified but unmerged; owner answered the 5 design questions (see Owner decisions).
