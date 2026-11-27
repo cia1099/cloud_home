@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router'
+import { downloadArchive, downloadFile, type ArchiveFormat } from '../api/download'
 import { createFolder, moveFile, renameFile, restoreFromTrash, trashFile, type FileItem } from '../api/files'
 import { ApiError } from '../api/client'
 import { errorKey } from '../api/errors'
@@ -7,7 +8,7 @@ import { Icon } from '../components/Icon'
 import { Menu, type MenuAnchor, type MenuItem } from '../components/Menu'
 import { StateView } from '../components/StateView'
 import { Collection, type CollectionActions, type SelectMode } from '../files/Collection'
-import { MoveDialog, NewFolderDialog } from '../files/Dialogs'
+import { DownloadDialog, MoveDialog, NewFolderDialog } from '../files/Dialogs'
 import { affectsFolder, rangeIds, sortItems, toggleId, type Sort, type SortKey } from '../files/model'
 import { useSort, useView } from '../files/prefs'
 import { Breadcrumbs, SearchField, SelectionBar, ViewToggle } from '../files/Toolbar'
@@ -36,7 +37,7 @@ interface MenuState {
   label: string
 }
 
-type DialogName = 'new-folder' | 'move' | 'share' | null
+type DialogName = 'new-folder' | 'move' | 'share' | 'download' | null
 
 function Skeleton({ list }: { list: boolean }) {
   const { t } = useI18n()
@@ -180,6 +181,22 @@ export function FilesPage() {
     [refresh, t],
   )
 
+  /** One plain file downloads directly; folders and multiple items ask for an archive format. */
+  const startDownload = (targets: readonly FileItem[]) => {
+    if (targets.length === 1 && targets[0].file_type === 'file') downloadFile(targets[0].id)
+    else setDialog('download')
+  }
+
+  const downloadSelection = async (format: ArchiveFormat) => {
+    const name = selectedItems.length === 1 ? selectedItems[0].name : t('app.name')
+    const { finished } = await downloadArchive(
+      selectedItems.map((item) => item.id),
+      format,
+      name,
+    )
+    void finished.then(() => toast({ text: t('download.done') }), fail)
+  }
+
   const targetsFor = (item: FileItem) => (selection.has(item.id) ? selectedItems : [item])
 
   const actions: CollectionActions = {
@@ -196,6 +213,7 @@ export function FilesPage() {
       const single = targets.length === 1
       const entries: MenuItem[] = []
       if (single && item.file_type === 'folder') entries.push({ label: t('files.open'), icon: 'folder', onSelect: () => open(item) })
+      entries.push({ label: t('download.action'), icon: 'download', onSelect: () => startDownload(targets) })
       if (single) entries.push({ label: t('files.rename'), icon: 'edit', onSelect: () => setRenaming({ id: item.id, error: null }) })
       if (single) entries.push({ label: t('share.action'), icon: 'share', onSelect: () => setDialog('share') })
       entries.push({ label: t('files.move'), icon: 'move', onSelect: () => setDialog('move') })
@@ -294,6 +312,7 @@ export function FilesPage() {
           <SelectionBar
             count={selectedItems.length}
             single={selectedItems.length === 1}
+            onDownload={() => startDownload(selectedItems)}
             onShare={() => setDialog('share')}
             onRename={() => setRenaming({ id: selectedItems[0].id, error: null })}
             onMove={() => setDialog('move')}
@@ -349,6 +368,9 @@ export function FilesPage() {
         />
       )}
       {dialog === 'share' && selectedItems.length === 1 && <ShareDialog item={selectedItems[0]} onClose={() => setDialog(null)} />}
+      {dialog === 'download' && selectedItems.length > 0 && (
+        <DownloadDialog count={selectedItems.length} onDownload={downloadSelection} onClose={() => setDialog(null)} />
+      )}
       {dialog === 'move' && (
         <MoveDialog
           moving={selectedItems}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import type { ArchiveFormat } from '../api/download'
 import { listFolder, type FileItem } from '../api/files'
 import { errorKey } from '../api/errors'
 import { Dialog } from '../components/Dialog'
@@ -162,6 +163,60 @@ export function MoveDialog({
           {t('files.move.here')}
         </button>
       </div>
+    </Dialog>
+  )
+}
+
+/** Folders and multiple items leave as one archive; the person picks ZIP (default) or tar.gz. */
+export function DownloadDialog({ count, onDownload, onClose }: { count: number; onDownload: (format: ArchiveFormat) => Promise<void>; onClose: () => void }) {
+  const { t, tn } = useI18n()
+  const [format, setFormat] = useState<ArchiveFormat>('zip')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    setBusy(true)
+    try {
+      await onDownload(format)
+      onClose()
+    } catch (cause) {
+      // Dismissing the browser's save dialog is not a failure.
+      if (cause instanceof DOMException && cause.name === 'AbortError') onClose()
+      else {
+        setError(t(errorKey(cause)))
+        setBusy(false)
+      }
+    }
+  }
+
+  return (
+    <Dialog title={t('download.title')} onClose={onClose}>
+      <form onSubmit={(event) => void submit(event)} className="dialog-form">
+        <p className="small">{tn('download.summary', count)}</p>
+        <fieldset className="choice">
+          <legend className="label">{t('download.format')}</legend>
+          {(['zip', 'tar.gz'] as const).map((value) => (
+            <label key={value}>
+              <input type="radio" name="download-format" checked={format === value} onChange={() => setFormat(value)} />
+              <span>
+                {t(value === 'zip' ? 'download.zip' : 'download.targz')}
+                <span className="small"> {t(value === 'zip' ? 'download.zip.hint' : 'download.targz.hint')}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <ErrorLine message={error} />
+        <div className="row-end">
+          <button type="button" className="btn plain" onClick={onClose}>
+            {t('files.cancel')}
+          </button>
+          <button type="submit" className="btn primary" disabled={busy}>
+            <Icon name="download" size={18} />
+            {t('download.action')}
+          </button>
+        </div>
+      </form>
     </Dialog>
   )
 }
