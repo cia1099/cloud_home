@@ -12,6 +12,7 @@ mod openapi;
 mod services;
 mod state;
 mod tasks;
+mod ui;
 mod update;
 mod util;
 mod version;
@@ -40,7 +41,9 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
         Some("--self-test") => {
-            // 能走到这里，说明二进制在本机 CPU/OS 上可执行、动态依赖齐全。
+            // 能走到这里，说明二进制在本机 CPU/OS 上可执行、动态依赖齐全；再校验内嵌 UI，
+            // 有问题就非零退出，更新器据此拒绝安装。
+            ui::self_test().context("内嵌 UI 自检失败")?;
             println!("ok {} {}", version::VERSION, version::TARGET);
             return Ok(());
         }

@@ -110,8 +110,11 @@ pub fn build_router(state: AppState) -> Router {
         .layer(cors)
         .layer(body_limit);
 
+    // 其余路径交给内嵌 UI：静态文件 + SPA 回退；API / 文档路由优先匹配，不会被遮蔽。
     api_router
         .merge(docs_router(openapi))
+        .fallback(crate::ui::fallback)
+        .layer(axum::middleware::map_response(crate::ui::noindex))
         .layer(middleware)
         .with_state(state)
 }
