@@ -1,0 +1,95 @@
+{
+  "kind": "weekly",
+  "title": {
+    "en": "Two refined cloud icons to choose from",
+    "zh": "两个打磨过的云图标，请你选一个"
+  },
+  "summary": {
+    "en": "Your answers from issues #1 to #4 are processed: R-001 and R-002 are accepted, A-002 is approved (several equal admins, rejected members may re-register with no cooldown) and A-001 is denied. The no-cooldown change (R-060) is done and all 131 backend tests pass. A new request, A-003, asks you to choose between two refinements of the report site's own cloud icon. See the Decisions page.",
+    "zh": "你在议题 #1 到 #4 里的回答已处理：R-001 和 R-002 已验收，A-002 已批准（允许多位地位相同的管理员，被拒绝的成员可无限制重新注册，没有冷却期），A-001 已拒绝。取消冷却期的改动（R-060）已完成，后端 131 项测试全部通过。新的请求 A-003 请你在报告网站自己的云图标的两个打磨方案中选一个，见“决策”页。"
+  },
+  "chip": {
+    "tone": "accent",
+    "icon": "check",
+    "text": {
+      "en": "A-003 waits for your answer",
+      "zh": "A-003 等你回答"
+    }
+  },
+  "cover": {
+    "style": "c1",
+    "icon": "heart"
+  },
+  "sections": [
+    {
+      "id": "summary",
+      "title": {
+        "en": "Summary",
+        "zh": "概要"
+      },
+      "component": "kpis",
+      "data": {
+        "items": [
+          {
+            "label": { "en": "Backend tests (R-060)", "zh": "后端测试（R-060）" },
+            "value": 131,
+            "sub": { "en": "all passing", "zh": "全部通过" }
+          },
+          {
+            "label": { "en": "Accepted", "zh": "已验收" },
+            "value": { "en": "R-001, R-002", "zh": "R-001、R-002" },
+            "sub": { "en": "by you", "zh": "由你验收" }
+          },
+          {
+            "label": { "en": "Decisions answered", "zh": "已回答的决策" },
+            "value": 2,
+            "sub": { "en": "A-002 approved, A-001 denied", "zh": "A-002 批准，A-001 拒绝" }
+          },
+          {
+            "label": { "en": "Waiting for you", "zh": "等你回答" },
+            "value": { "en": "A-003", "zh": "A-003" },
+            "sub": { "en": "Variant A or B", "zh": "方案 A 或 B" }
+          }
+        ]
+      }
+    },
+    {
+      "id": "icon",
+      "title": { "en": "The cloud icon", "zh": "云图标" },
+      "component": "text",
+      "data": {
+        "bullets": [
+          {
+            "en": "**Variant A, Sky:** your blue tile and white cloud with a system-icon finish (continuous corners, soft depth). The designer recommends it.",
+            "zh": "**方案 A，Sky：**你的蓝底白云，按系统图标的质感完成（连续曲率圆角、柔和的层次）。设计师推荐。"
+          },
+          {
+            "en": "**Variant B, Porcelain:** a pale tile (graphite in dark mode) with a blue cloud. Quieter, less recognisable.",
+            "zh": "**方案 B，Porcelain：**浅色底（深色模式为石墨色）配蓝云。更安静，但辨识度较低。"
+          },
+          {
+            "en": "On the Decisions page, **Approve** picks A and **Deny** picks B. The page shows both in light and dark, at 16, 32, 64 and 180 pixels, as an app icon and next to today's logo.",
+            "zh": "在“决策”页，点**批准**选 A，点**拒绝**选 B。页面按浅色与深色、16、32、64、180 像素、应用图标，以及与现在的标志对比来展示两者。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "risks",
+      "title": { "en": "Risks and what was not verified", "zh": "风险与未验证的内容" },
+      "component": "callouts",
+      "data": {
+        "items": [
+          {
+            "tone": "risk",
+            "title": { "en": "Not yet seen in a browser", "zh": "尚未在浏览器里看过" },
+            "text": {
+              "en": "The page builds and every link resolves, but this session had no browser, so the icons and the page have not been looked at on screen and there are no screenshots yet. Check the page on your phone before answering.",
+              "zh": "页面能构建，所有链接都有效，但本次会话没有浏览器，所以图标和页面还没有在屏幕上看过，也没有截图。回答之前，请先在手机上看一眼这个页面。"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
