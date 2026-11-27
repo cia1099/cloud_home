@@ -63,7 +63,7 @@ Ships as a packaged device that updates itself over the internet from GitHub Rel
 | R-006 | P0 | todo | **Sign in / register / sign out**; account menu; email or phone as identifier; session persists across reloads. Registration and login handle the approval states of R-062. | frontend-engineer |
 | R-007 | P0 | review | **File browser**: grid and list views, breadcrumb, sorting, multi-select, rename, move, delete-to-trash, new folder, search, empty/loading/error states. | frontend-engineer |
 | R-008 | P0 | review | **Upload**: drag-and-drop and picker, folders, per-file progress, cancel, duplicate names shown as the server renames them (`name(1).ext`), large files. | frontend-engineer |
-| R-009 | P1 | todo | **Preview**: image gallery with thumbnails and keyboard/swipe navigation, in-browser audio/video playback (Range), download. | frontend-engineer |
+| R-009 | P1 | review | **Preview**: image gallery with thumbnails and keyboard/swipe navigation, in-browser audio/video playback (Range), download. | frontend-engineer |
 | R-010 | P1 | review | **Batch download** (ZIP or tar.gz choice) and single-file download; folders included. | frontend-engineer |
 | R-011 | P1 | review | **Trash** (list, restore, delete forever, empty, shows days left), **sharing** (create link with expiry/download permission, list, revoke, public share page), **storage usage** view; live updates via SSE. | frontend-engineer |
 | R-012 | P1 | todo | **Account settings**: display name, password, add/change/remove/verify email and phone with the one-time-code flow. | frontend-engineer |
