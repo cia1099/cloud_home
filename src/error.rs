@@ -37,6 +37,10 @@ pub enum AppError {
     #[error("资源不存在")]
     NotFound,
 
+    /// 413：请求体超过 `MAX_UPLOAD_SIZE_MB`。
+    #[error("请求体超过大小限制")]
+    PayloadTooLarge,
+
     #[error("{0}")]
     BadRequest(String),
 
@@ -89,7 +93,7 @@ impl AppError {
             | AppError::RegistrationBusy(_) => {
                 tracing::debug!(error = %self, "请求冲突/已过期");
             }
-            AppError::NotFound | AppError::BadRequest(_) => {
+            AppError::NotFound | AppError::PayloadTooLarge | AppError::BadRequest(_) => {
                 tracing::debug!(error = %self, "请求被拒绝");
             }
             AppError::Unauthorized | AppError::Forbidden | AppError::ForbiddenReason(_) => {}
@@ -109,6 +113,7 @@ impl AppError {
                 (StatusCode::TOO_MANY_REQUESTS, "REGISTRATION_BUSY")
             }
             AppError::NotFound => (StatusCode::NOT_FOUND, "NOT_FOUND"),
+            AppError::PayloadTooLarge => (StatusCode::PAYLOAD_TOO_LARGE, "PAYLOAD_TOO_LARGE"),
             AppError::BadRequest(_) => (StatusCode::BAD_REQUEST, "BAD_REQUEST"),
             AppError::Conflict(_) => (StatusCode::CONFLICT, "CONFLICT"),
             AppError::CodedConflict(code, _) => (StatusCode::CONFLICT, code),
@@ -158,6 +163,7 @@ mod tests {
             (AppError::RegistrationClosed, 403, "REGISTRATION_CLOSED"),
             (AppError::RegistrationBusy("x".into()), 429, "REGISTRATION_BUSY"),
             (AppError::CodedConflict("UPDATE_X", "x".into()), 409, "UPDATE_X"),
+            (AppError::PayloadTooLarge, 413, "PAYLOAD_TOO_LARGE"),
         ] {
             let (s, c) = err.parts();
             assert_eq!((s.as_u16(), c), (status, code));

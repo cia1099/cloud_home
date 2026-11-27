@@ -86,6 +86,7 @@ pub async fn get_metadata(
         (status = 201, description = "上传成功；若同名已存在会自动追加 (1)/(2)…… 后缀", body = ApiResponse<FileResponse>),
         (status = 400, description = "参数校验失败", body = ErrorResponse),
         (status = 401, description = "认证失败", body = ErrorResponse),
+        (status = 413, description = "请求体超过 MAX_UPLOAD_SIZE_MB（code=PAYLOAD_TOO_LARGE）", body = ErrorResponse),
         (status = 503, description = "外接硬盘不可用", body = ErrorResponse),
     ),
     security(("cookie_auth" = []), ("bearer_auth" = []))
@@ -113,7 +114,7 @@ pub async fn upload(
     while let Some(mut field) = multipart
         .next_field()
         .await
-        .map_err(|_| AppError::BadRequest("multipart 解析失败".into()))?
+        .map_err(|e| multipart_error(e, "multipart 解析失败"))?
     {
         match field.name() {
             Some("parent_id") => {
@@ -146,7 +147,7 @@ pub async fn upload(
                 while let Some(chunk) = field
                     .chunk()
                     .await
-                    .map_err(|_| AppError::BadRequest("文件流读取失败".into()))?
+                    .map_err(|e| multipart_error(e, "文件流读取失败"))?
                 {
                     out.write_all(&chunk).await?;
                     size_bytes += chunk.len() as i64;
@@ -204,6 +205,16 @@ pub async fn upload(
             Ok((StatusCode::CREATED, ApiResponse::new(response)))
         }
         Err(e) => Err(e),
+    }
+}
+
+/// multipart 读取失败的错误映射：请求体超过大小限制（分块上传无 Content-Length 时
+/// 在流中途触发）返回 413，其余为 400。
+fn multipart_error(e: axum::extract::multipart::MultipartError, msg: &str) -> AppError {
+    if e.status() == StatusCode::PAYLOAD_TOO_LARGE {
+        AppError::PayloadTooLarge
+    } else {
+        AppError::BadRequest(msg.into())
     }
 }
 

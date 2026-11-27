@@ -19,12 +19,15 @@ pub mod usage;
 pub mod users;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
+use axum::response::{IntoResponse, Response};
 use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderValue, Method};
 use tower::ServiceBuilder;
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::limit::RequestBodyLimitLayer;
+use tower_http::map_response_body::MapResponseBodyLayer;
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
@@ -116,7 +119,7 @@ pub fn build_router(state: AppState) -> Router {
     // 中间件栈（自外向内）：
     //   请求 id 生成 → 传播到响应 → 捕获 panic（转 500，服务不中断）
     //   → 访问日志 span（含 request_id/method/route/client_ip）
-    //   → CORS → 请求体大小限制 → 路由
+    //   → CORS → 413 信封 → 请求体大小限制 → 路由
     let middleware = ServiceBuilder::new()
         .layer(SetRequestIdLayer::x_request_id(MakeRequestUuid))
         .layer(PropagateRequestIdLayer::x_request_id())
@@ -131,6 +134,11 @@ pub fn build_router(state: AppState) -> Router {
                 .on_failure(()),
         )
         .layer(cors)
+        // 请求体大小以 MAX_UPLOAD_SIZE_MB 为唯一上限：关掉 axum 默认的 2 MB 限制
+        // （否则大文件 multipart 解析会失败），并把限制层产生的空 413 转成统一错误信封。
+        .layer(axum::middleware::map_response(payload_too_large_envelope))
+        .layer(MapResponseBodyLayer::new(axum::body::Body::new))
+        .layer(DefaultBodyLimit::disable())
         .layer(body_limit);
 
     // 其余路径交给内嵌 UI：静态文件 + SPA 回退；API / 文档路由优先匹配，不会被遮蔽。
@@ -140,6 +148,19 @@ pub fn build_router(state: AppState) -> Router {
         .layer(axum::middleware::map_response(crate::ui::noindex))
         .layer(middleware)
         .with_state(state)
+}
+
+/// `RequestBodyLimitLayer` 在 Content-Length 超限时直接返回空 body 的 413；
+/// 这里补成统一的 JSON 错误信封（handler 自己产生的 413 已是 JSON，原样放行）。
+async fn payload_too_large_envelope(res: Response) -> Response {
+    let is_json = res
+        .headers()
+        .get(CONTENT_TYPE)
+        .is_some_and(|v| v.as_bytes().starts_with(b"application/json"));
+    if res.status() == axum::http::StatusCode::PAYLOAD_TOO_LARGE && !is_json {
+        return crate::error::AppError::PayloadTooLarge.into_response();
+    }
+    res
 }
 
 /// GET /health 响应体。

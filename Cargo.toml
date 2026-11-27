@@ -7,7 +7,7 @@ edition = "2024"
 # Web 框架
 axum = { version = "0.8", features = ["multipart"] }
 tower = { version = "0.5", features = ["full"] }
-tower-http = { version = "0.7", features = ["cors", "trace", "limit", "request-id", "catch-panic"] }
+tower-http = { version = "0.7", features = ["cors", "trace", "limit", "request-id", "catch-panic", "map-response-body"] }
 
 # 异步运行时
 tokio = { version = "1", features = ["full"] }

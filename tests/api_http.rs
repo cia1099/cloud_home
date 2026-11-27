@@ -1364,6 +1364,69 @@ fn upload_interrupted_midway_leaves_no_orphan_file_on_disk() {
     );
 }
 
+#[test]
+fn upload_over_2mb_succeeds_and_over_limit_gets_json_413() {
+    let srv = Server::start_with(&[("MAX_UPLOAD_SIZE_MB", "3")]);
+    let alice = srv.signup("alice");
+
+    // 超过 axum 默认 2 MB 限制、但在配置上限内：必须成功，且内容逐字节一致。
+    let big: Vec<u8> = (0..2_500_000u32).map(|i| (i % 251) as u8).collect();
+    let id = srv.upload(&alice, None, "big.bin", &big);
+    assert_eq!(srv.get(&alice, &format!("/files/{id}/download")).raw, big);
+
+    // 超过配置上限（Content-Length 已知）：服务端看到头部就拒绝，不读请求体——
+    // 413 + 统一 JSON 错误信封，且不留条目。
+    let mut s = srv.connect();
+    s.write_all(
+        format!(
+            "POST /api/v1/files/upload HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nAuthorization: Bearer {}\r\nContent-Type: multipart/form-data; boundary={BOUNDARY}\r\nContent-Length: {}\r\n\r\n",
+            alice.token,
+            4 * 1024 * 1024
+        )
+        .as_bytes(),
+    )
+    .unwrap();
+    let mut raw = Vec::new();
+    let _ = s.read_to_end(&mut raw);
+    let r = parse_response(&raw);
+    assert_eq!(r.status, 413, "{}", String::from_utf8_lossy(&raw));
+    assert_eq!(r.code(), "PAYLOAD_TOO_LARGE");
+    assert_eq!(srv.list(&alice, None).items().len(), 1);
+
+    // 分块传输（无 Content-Length）在流中途超限：同样是 JSON 413，不留孤儿文件。
+    let mut s = srv.connect();
+    let head = format!(
+        "--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"chunked.bin\"\r\nContent-Type: application/octet-stream\r\n\r\n"
+    );
+    let _ = s.write_all(
+        format!(
+            "POST /api/v1/files/upload HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nAuthorization: Bearer {}\r\nContent-Type: multipart/form-data; boundary={BOUNDARY}\r\nTransfer-Encoding: chunked\r\n\r\n",
+            alice.token
+        )
+        .as_bytes(),
+    );
+    let mut first = head.into_bytes();
+    first.extend(vec![7u8; 1 << 20]);
+    let chunks = [first, vec![7u8; 1 << 20], vec![7u8; 1 << 20], vec![7u8; 4096]];
+    for c in &chunks {
+        if s.write_all(format!("{:x}\r\n", c.len()).as_bytes()).is_err()
+            || s.write_all(c).is_err()
+            || s.write_all(b"\r\n").is_err()
+        {
+            break; // 服务端已提前回应并关闭
+        }
+    }
+    let _ = s.write_all(b"0\r\n\r\n");
+    let mut raw = Vec::new();
+    let _ = s.read_to_end(&mut raw);
+    let r = parse_response(&raw);
+    assert_eq!(r.status, 413, "{}", String::from_utf8_lossy(&raw));
+    assert_eq!(r.code(), "PAYLOAD_TOO_LARGE");
+    std::thread::sleep(Duration::from_millis(300));
+    assert_eq!(srv.list(&alice, None).items().len(), 1);
+    assert_eq!(srv.disk_files().len(), 1, "超限上传在磁盘上留下了孤儿文件");
+}
+
 // =====================================================================
 // 优先级 3：认证与一次性验证码
 // =====================================================================
