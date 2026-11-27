@@ -5,7 +5,7 @@ deploying anything other than the report site, key/secret changes, breaking API 
 costly or restrictively-licensed dependencies, deleting data or features, unclear requirements).
 The report site shows pending requests at the top of the Overview and on `/decisions/`.
 
-**To answer:** tap *Approve* / *Deny* (or *Choose A* / *Choose B* when the request lists options) on the report site's Decisions page (opens a pre-filled GitHub issue `[DECISION A-nnn] approve|deny|choose X`; submit it), **or** change the box on the request's first line here and optionally add a note under it.
+**To answer:** tap *Approve* / *Deny* on the report site's Decisions page (opens a pre-filled GitHub issue `[DECISION A-nnn] approve|deny`; submit it, and when the request is a choice between named variants, write the one you pick in the issue note), **or** change the box on the request's first line here and optionally add a note under it.
 `[ ]` pending · `[x]` approved · `[!]` denied. The manager reads this file at the start of every cycle.
 
 ## Request format
@@ -17,7 +17,7 @@ The report site shows pending requests at the top of the Overview and on `/decis
 - If approved: …   If denied: …
 - Owner note: DENIED (issue #5; title said "choose A" but the body says deny, so treated as deny). "I want you following Apple SF Symbol style. I hope the brand can present cloud drive at home." Designer redoes the icon: SF Symbols-like cloud glyph (monoline/weight-consistent) that conveys a cloud drive at home (e.g. cloud + house motif).
 ```
-For a choice between named options instead of yes/no, add `- Options: A, B` (single words or letters, comma-separated) and replace the If line with `- If A: …   If B: …`. The site then shows one *Choose X* button per option.
+A decision card has only *Approve* and *Deny*. For a choice between named variants, say so in `- What:` and word `- If approved:` as "I choose the variant named in my note"; the deny note says what to change.
 
 ## Requests
 
@@ -39,6 +39,11 @@ For a choice between named options instead of yes/no, add `- Options: A, B` (sin
 - What: pick between two refinements of the report site's cloud icon (design/brand/cloud-a.svg "Variant A" and cloud-b.svg "Variant B"), shown on the report site /decisions/brand/.
 - Why: you asked to base the brand on the report site's cloud and make it more Apple-like and elegant.
 - Risk: low.
-- Options: A, B
-- If A: I produce the final SVG set from Variant A (Sky) and apply it to the mockup, sign-in, share page and report header.   If B: the same, from Variant B (Porcelain). If neither, say the change in the owner note.
+- If approved: approve means "I choose the variant named in my note" (A Sky or B Porcelain); I produce the final SVG set from it.   If denied: the note says what to change.
 - Owner note: DENIED (issue #5; the title said "choose A" but the body says deny, so treated as deny). "Follow Apple SF Symbol style. I hope the brand can present cloud drive at home." The designer redoes the icon.
+
+### A-004 [ ] Cloud icon: variant C (Hearth) or D (Roofline) — 2026-11-27 — requested by manager
+- What: approve one of two SF-Symbols-style "cloud drive at home" icons shown on the report site /decisions/brand/: C Hearth (a house drawn inside the cloud outline) or D Roofline (a cloud wearing a roof, with a doorway cut into its base). Write C or D in the issue note.
+- Why: you asked for an SF Symbols style that says "cloud drive at home". C is the more explicit picture and the one the owner's session recommends; D is a bolder silhouette that reads better at 16 px.
+- Risk: low. Nothing is applied to the product until you answer.
+- If approved: approve means "I choose the variant named in my note". I produce the final SVG set (app icon, maskable, favicon, light/dark, one-colour), usage rules, and apply it to the mockup, sign-in, share page and report-site header.   If denied: the note says what to change and the designer does another round.
