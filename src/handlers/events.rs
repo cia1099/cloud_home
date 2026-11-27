@@ -11,7 +11,7 @@ use tokio::sync::broadcast::error::RecvError;
 use tokio::time::{Instant, MissedTickBehavior, interval_at};
 
 use crate::auth::AuthUser;
-use crate::events::ChangeEvent;
+use crate::events::{ChangeEvent, ShareNoticeKind};
 use crate::models::event::FileChangeEvent;
 use crate::services::usage_service;
 use crate::state::AppState;
@@ -28,7 +28,7 @@ use crate::state::AppState;
     path = "/events/stream",
     tag = "usage",
     responses(
-        (status = 200, description = "SSE 事件流；`event: usage` 携带 UsageResponse，`event: files` 携带 FileChangeEvent",
+        (status = 200, description = "SSE 事件流；`event: usage` 携带 UsageResponse，`event: files` 携带 FileChangeEvent，`event: share.received` / `event: share.revoked` 携带 `{share_id}`",
          content_type = "text/event-stream", body = String),
         (status = 401, description = "认证失败", body = crate::error::ErrorResponse),
     ),
@@ -76,6 +76,18 @@ pub async fn stream(
                     }
                     Ok(ChangeEvent::Changed(_)) => {
                         // 其他账户的变更，与本连接无关。
+                    }
+                    Ok(ChangeEvent::Share(notice)) if notice.user_id == owner_id => {
+                        let name = match notice.kind {
+                            ShareNoticeKind::Received => "share.received",
+                            ShareNoticeKind::Revoked => "share.revoked",
+                        };
+                        if let Ok(ev) = Event::default().event(name).json_data(serde_json::json!({ "share_id": notice.share_id })) {
+                            yield Ok(ev);
+                        }
+                    }
+                    Ok(ChangeEvent::Share(_)) => {
+                        // 发给其他账户的分享通知。
                     }
                     Ok(ChangeEvent::UpdateAvailable(version)) => {
                         if let Ok(ev) = Event::default().event("update").json_data(serde_json::json!({ "version": version })) {

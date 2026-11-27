@@ -389,8 +389,19 @@ pub async fn thumbnail(
     Query(q): Query<ThumbnailQuery>,
 ) -> AppResult<Response> {
     let entry = file_service::get_owned(&state.db, &user.user_id, &id).await?;
+    thumbnail_response(&state, &user.user_id, &entry, q.size).await
+}
+
+/// 生成（或取缓存）缩略图响应。供本人访问与收件人访问共用；
+/// `owner_id` 是文件所有者，决定物理路径与缓存目录。
+pub async fn thumbnail_response(
+    state: &AppState,
+    owner_id: &str,
+    entry: &FileEntry,
+    size: u32,
+) -> AppResult<Response> {
     let data_root = state.drive_manager.require_data_root().await?;
-    let bytes = thumbnail_service::get_or_create(&data_root, &user.user_id, &entry, q.size).await?;
+    let bytes = thumbnail_service::get_or_create(&data_root, owner_id, entry, size).await?;
 
     let response = Response::builder()
         .status(StatusCode::OK)
@@ -681,7 +692,7 @@ pub async fn download_archive(
 }
 
 /// 从请求头中取出 `Range` 值（若存在）。
-fn range_header(headers: &HeaderMap) -> Option<&str> {
+pub fn range_header(headers: &HeaderMap) -> Option<&str> {
     headers.get(RANGE).and_then(|v| v.to_str().ok())
 }
 

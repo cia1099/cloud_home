@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- **Shared with you (backend, R-071).** Shares can now be addressed to specific
+  family members: `POST /shares` accepts `recipient_ids` (approved, active
+  users other than the owner); such a share has no public link. New endpoints:
+  `GET /shares/received` (newest first, with `seen_at`), `POST /shares/:id/seen`,
+  `PATCH /shares/:id` (replace the recipients), read-only recipient access by
+  session to the shared item and, for folders, its whole subtree
+  (`/shares/received/:id/files[/:file_id[/raw|/thumbnail|/download]]`, Range
+  supported, 404 for everyone who is not a recipient), and `GET /users/directory`
+  (only `id` and `display_name`). `GET /shares` now lists each share's
+  `recipients`; `token`/`url` are `null` for user-addressed shares. SSE gains
+  `share.received` and `share.revoked`. New table `share_recipients` (migration
+  `20240101000010`). Existing public links are unchanged.
+
 ### Changed
 - Internal cleanup, no behavior change: removed every `#[allow(dead_code)]` and
   the code behind it (unused `PayloadTooLarge` error variant, unused drive
