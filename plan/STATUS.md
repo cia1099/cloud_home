@@ -16,6 +16,7 @@ The report site (R-001) has its first edition built and published; it is in revi
 | Report site | first edition built, checked and published (R-001, in review) | owner review; next report after the next milestone |
 
 ## Active tasks
+- 2026-11-28 (session 8) · R-023 backend merged (clippy clean, 180+30+12+7 tests). Running: frontend R-023 buttons (agent/R-023-oauth-buttons), tester R-030 (on agent/manager, tests/ only; do not commit src changes). Then R-032, report deploy.
 - 2026-11-28 (session 8) · R-013+R-027 merged (review; build, 102 tests; 2 React-compiler lint warnings in UpdateWatcher.tsx, no live browser check). Still running: R-023 backend.
 - 2026-11-28 (session 8) · R-012 merged (review; build/lint/93 tests). Previous session was interrupted: recovered R-013 draft from worktree agent-a6b28db02ae7ccfb9 (uncommitted); running frontend (agent/R-013-update-page-2) and backend R-023 interface (agent/R-023-oauth-interface). Next: verify+merge both, then tester R-030/R-032, R-023 UI buttons, R-073.
 - 2026-11-27 (session 7) · merged R-007, R-008, R-009, R-010, R-011 (all `review`, UI build/lint/81 tests) and B-003 (cargo clippy clean, tests pass). Report 2026-11-28-0100-web-app-features deployed, live check passed. Screenshots moved to plan/media (reports/ allows only dated folders). Running: frontend R-012 (agent/R-012-account-settings), frontend R-013+R-027 (agent/R-013-update-page). Next: verify+merge, then tester (R-030, R-032 UI e2e), R-073 guides, R-023/R-025 as needed.
