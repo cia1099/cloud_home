@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router'
-import { createFolder, moveFile, renameFile, restoreFromTrash, trashFile, type FileItem } from '../api/files'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
+import { createFolder, moveFile, saveFile, renameFile, restoreFromTrash, trashFile, type FileItem } from '../api/files'
 import { ApiError } from '../api/client'
 import { errorKey } from '../api/errors'
 import { Icon } from '../components/Icon'
@@ -18,6 +18,8 @@ import { INTL_TAGS } from '../i18n/locale'
 import type { MessageKey } from '../i18n/messages/en'
 import { useI18n } from '../i18n/useI18n'
 import { ShareDialog } from '../shares/ShareDialog'
+import { galleryOf, mediaKind } from '../preview/model'
+import { Preview } from '../preview/Preview'
 import { useStreamEvent } from '../sse/useEventStream'
 import { useToast } from '../toast/useToast'
 import { useOnline } from '../shell/useOnline'
@@ -34,6 +36,13 @@ interface MenuState {
   anchor: MenuAnchor
   items: MenuItem[]
   label: string
+}
+
+function withPreview(prev: URLSearchParams, id: string | null) {
+  const next = new URLSearchParams(prev)
+  if (id) next.set('preview', id)
+  else next.delete('preview')
+  return next
 }
 
 type DialogName = 'new-folder' | 'move' | 'share' | null
@@ -56,6 +65,8 @@ export function FilesPage() {
   const navigate = useNavigate()
   const folderId = useParams().folderId ?? null
   const [params, setParams] = useSearchParams()
+  const location = useLocation()
+  const previewId = params.get('preview')
   const query = params.get('q')?.trim() ?? ''
   const searching = query !== ''
   const coarse = useCoarse()
@@ -67,6 +78,7 @@ export function FilesPage() {
   const [draft, setDraft] = useState(query)
   const [menu, setMenu] = useState<MenuState | null>(null)
   const [dialog, setDialog] = useState<DialogName>(null)
+  const [sharing, setSharing] = useState<FileItem | null>(null)
   const [renaming, setRenaming] = useState<{ id: string; error: string | null } | null>(null)
 
   const { listing: folderListing, reload: reloadFolder } = useFolderListing(folderId)
@@ -117,11 +129,18 @@ export function FilesPage() {
 
   const open = useCallback(
     (item: FileItem) => {
-      if (item.file_type !== 'folder') return // preview and download arrive with R-009 / R-010
-      setDraft('')
-      void navigate(`/files/${encodeURIComponent(item.id)}`)
+      if (item.file_type === 'folder') {
+        setDraft('')
+        void navigate(`/files/${encodeURIComponent(item.id)}`)
+      } else if (mediaKind(item)) {
+        // The preview lives in the URL so Back closes it and the folder underneath keeps its scroll and selection.
+        setParams((prev) => withPreview(prev, item.id), { state: { preview: true } })
+      } else {
+        saveFile(item.id, item.name)
+        toast({ text: t('preview.downloading', { name: item.name }) })
+      }
     },
-    [navigate],
+    [navigate, setParams, toast, t],
   )
 
   const select = useCallback(
@@ -202,6 +221,13 @@ export function FilesPage() {
       entries.push({ label: t('files.delete'), icon: 'trash', danger: true, separated: true, onSelect: () => void trash(targets) })
       setMenu({ anchor: at, items: entries, label: t('files.actions', { name: item.name }) })
     },
+  }
+
+  const previewItem = previewId ? items.find((item) => item.id === previewId) : undefined
+  const previewKind = previewItem ? mediaKind(previewItem) : null
+  const closePreview = () => {
+    if ((location.state as { preview?: boolean } | null)?.preview) void navigate(-1)
+    else setParams((prev) => withPreview(prev, null), { replace: true })
   }
 
   const destination = { id: folderId, name: trail.length > 0 ? trail[trail.length - 1].name : t('nav.files') }
@@ -336,6 +362,17 @@ export function FilesPage() {
         </div>
       )}
 
+      {previewItem && previewKind && (
+        <Preview
+          item={previewItem}
+          kind={previewKind}
+          gallery={galleryOf(items, previewItem)}
+          onGo={(id) => setParams((prev) => withPreview(prev, id), { replace: true, state: { preview: true } })}
+          onClose={closePreview}
+          onShare={() => setSharing(previewItem)}
+        />
+      )}
+      {sharing && <ShareDialog item={sharing} onClose={() => setSharing(null)} />}
       {menu && <Menu anchor={menu.anchor} items={menu.items} label={menu.label} onClose={closeMenu} />}
       {dialog === 'new-folder' && (
         <NewFolderDialog

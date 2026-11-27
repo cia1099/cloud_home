@@ -55,3 +55,17 @@ export async function searchFiles(query: string, page: number, signal?: AbortSig
 
 /** JPEG thumbnail; the server only makes them for images. */
 export const thumbnailUrl = (id: string) => `/api/v1/files/${encodeURIComponent(id)}/thumbnail?size=256`
+
+/** Inline stream for the preview; the server answers Range requests so media can seek. */
+export const rawUrl = (id: string) => `/api/v1/files/${encodeURIComponent(id)}/raw`
+
+/** Attachment download; the browser streams it straight to disk. */
+export const downloadUrl = (id: string) => `/api/v1/files/${encodeURIComponent(id)}/download`
+
+/** Starts a browser download of one file through a transient link. */
+export function saveFile(id: string, name: string) {
+  const link = document.createElement('a')
+  link.href = downloadUrl(id)
+  link.download = name
+  link.click()
+}

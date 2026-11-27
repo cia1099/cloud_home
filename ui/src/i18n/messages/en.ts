@@ -256,6 +256,16 @@ export const en = {
   'upload.cancel_all.text': '{n} items have not finished uploading. Closing stops them.',
   'upload.cancel_all.keep': 'Keep Uploading',
   'upload.cancel_all.confirm': 'Cancel Uploads',
+  'preview.label': 'Preview: {name}',
+  'preview.close': 'Close',
+  'preview.download': 'Download',
+  'preview.prev': 'Previous',
+  'preview.next': 'Next',
+  'preview.n_of_m': '{n} of {m}',
+  'preview.strip': 'Images in this folder',
+  'preview.error.title': 'This file can’t be played here',
+  'preview.error.text': 'Your browser doesn’t support this format. You can still download it.',
+  'preview.downloading': 'Downloading “{name}”…',
 } as const
 
 export type MessageKey = keyof typeof en
