@@ -6,6 +6,7 @@ import {
   register as apiRegister,
   type Credentials,
   type Registration,
+  type User,
 } from '../api/auth'
 import { ApiError, setUnauthorizedHandler } from '../api/client'
 import { SessionContext, type Session } from './useSession'
@@ -57,11 +58,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setSession({ phase: 'anon', expired: false })
   }, [])
 
+  const setUser = useCallback((user: User) => setSession({ phase: 'authed', user }), [])
+
   const retry = useCallback(() => {
     setSession({ phase: 'loading' })
     setAttempt((n) => n + 1)
   }, [])
 
-  const value = useMemo(() => ({ session, signIn, signUp, signOut, retry }), [session, signIn, signUp, signOut, retry])
+  const value = useMemo(() => ({ session, signIn, signUp, signOut, setUser, retry }), [session, signIn, signUp, signOut, setUser, retry])
   return <SessionContext value={value}>{children}</SessionContext>
 }

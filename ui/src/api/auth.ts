@@ -1,10 +1,22 @@
 import { api } from './client'
 
+export interface Identity {
+  provider: string
+  identifier: string
+  verified: boolean
+  /** Set when Google/Apple manage the identifier: it is read-only here. */
+  managed_by: string | null
+}
+
 export interface User {
   id: string
   username: string
   email: string | null
   phone: string | null
+  /** False for accounts that only sign in through a third party. */
+  has_password: boolean
+  /** Email, phone and third-party identifiers (never the password). */
+  identities: Identity[]
 }
 
 export interface Credentials {
