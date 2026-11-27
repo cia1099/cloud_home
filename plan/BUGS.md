@@ -85,3 +85,25 @@ disconnect that drops the handler future skips it as well.
   header comment there). Splitting `src/` into `lib.rs` + a thin `main.rs` would remove that boilerplate
   and also stop the mirrored unit tests from running twice.
 - `cargo test` reports `lifecycle.rs: method wait_idle is never used` (a pre-existing idle-code warning, R-070).
+
+## B-002 (P2, API contract) Malformed or ill-typed JSON bodies get a `text/plain` axum rejection, not the JSON error envelope
+
+**Status: open.** Found by the R-030 second round (`malformed_json_bodies_are_client_errors_and_change_nothing`,
+`tests/api_http.rs`; it asserts only "4xx, nothing changed", so the suite stays green until this is fixed;
+then tighten it to require the envelope).
+
+`spec/backend.md` line 298 says every error is `{ "error": { "code", "message" } }`. Every JSON endpoint uses the stock
+axum `Json` extractor, whose rejection bypasses `AppError` (no `JsonRejection` handling anywhere in `src/`).
+
+**Repro** (server running on `$PORT`, `$TOKEN` = any account's Bearer token):
+```
+curl -si -XPOST localhost:$PORT/api/v1/folders -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{not json'
+curl -si -XPOST localhost:$PORT/api/v1/files/download -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"ids":["<uuid>"],"format":"rar"}'
+```
+**Expected:** 400 (or 422) with `Content-Type: application/json` and body `{"error":{"code":...,"message":...}}`.
+**Actual:** `400`/`422` with `Content-Type: text/plain; charset=utf-8`, e.g.
+`Failed to deserialize the JSON body into the target type: format: unknown variant `rar`, expected `zip` or `tar.gz` at line 1 column 15`.
+Measured on `POST /folders`, `/shares`, `/files/download`, `PATCH /me`, `POST /me/password` with `{not json` (400),
+`[]` and `{"name": 5}` (422): all `text/plain`. A client that parses every error as JSON breaks on these.

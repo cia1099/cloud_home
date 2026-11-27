@@ -1407,9 +1407,15 @@ fn upload_over_2mb_succeeds_and_over_limit_gets_json_413() {
     );
     let mut first = head.into_bytes();
     first.extend(vec![7u8; 1 << 20]);
-    let chunks = [first, vec![7u8; 1 << 20], vec![7u8; 1 << 20], vec![7u8; 4096]];
+    let chunks = [
+        first,
+        vec![7u8; 1 << 20],
+        vec![7u8; 1 << 20],
+        vec![7u8; 4096],
+    ];
     for c in &chunks {
-        if s.write_all(format!("{:x}\r\n", c.len()).as_bytes()).is_err()
+        if s.write_all(format!("{:x}\r\n", c.len()).as_bytes())
+            .is_err()
             || s.write_all(c).is_err()
             || s.write_all(b"\r\n").is_err()
         {
@@ -2487,4 +2493,521 @@ fn share_notifications_reach_only_the_recipient_over_sse() {
             .is_some()
     );
     assert!(!carol_stream.sees("share.revoked", Duration::from_secs(1)));
+}
+
+// =====================================================================
+// 补充（R-030 第二轮）：收件人越权、回收站可达性、恶意文件名、令牌伪造、Range 边界、
+// 批量下载入参、管理员列表泄露、SSE 变更种类
+// =====================================================================
+
+/// 站内定向分享只给「通过分享路径读取」的权利：收件人拿到文件 / 资料夹 id 后，
+/// 不能用属主端点读、改、移、删、再分享、批量下载或搜索到它们。
+#[test]
+fn a_share_recipient_gets_no_owner_level_access_to_the_shared_items() {
+    let (srv, alice, bob) = two();
+    let folder = srv.folder(&alice, None, "Shared");
+    let inside = srv.upload(&alice, Some(&folder), "inside.txt", b"inside-secret");
+    let image = srv.upload(&alice, None, "pic.png", &png_bytes());
+    srv.share(&alice, &folder, json!({"recipient_ids": [bob.id]}));
+    srv.share(&alice, &image, json!({"recipient_ids": [bob.id]}));
+
+    // 前提：收件人确实能经分享路径读到（否则下面的 404 什么也证明不了）。
+    assert_eq!(srv.get(&bob, "/shares/received").items().len(), 2);
+
+    let ghost = uuid::Uuid::new_v4().to_string();
+    for id in [&folder, &inside, &image] {
+        for (method, tail, body) in [
+            ("GET", "", None),
+            ("GET", "/download", None),
+            ("GET", "/raw", None),
+            ("GET", "/thumbnail", None),
+            ("PATCH", "", Some(json!({"name": "hijacked"}))),
+            ("POST", "/move", Some(json!({"target_parent_id": null}))),
+            ("DELETE", "", None),
+        ] {
+            let r = srv.call(
+                Some(&bob),
+                method,
+                &format!("/files/{id}{tail}"),
+                body.as_ref(),
+            );
+            let g = srv.call(
+                Some(&bob),
+                method,
+                &format!("/files/{ghost}{tail}"),
+                body.as_ref(),
+            );
+            assert_eq!(
+                r.status, 404,
+                "收件人 {method} /files/{id}{tail}: {}",
+                r.body
+            );
+            assert_eq!(
+                r.body, g.body,
+                "收件人 {method} {tail}：与不存在的 id 响应不同"
+            );
+        }
+        // 不能把别人的东西再分享出去（含公开链接）。
+        let r = srv.call(Some(&bob), "POST", "/shares", Some(&json!({"file_id": id})));
+        assert_eq!(r.status, 404, "收件人转分享 {id}: {}", r.body);
+    }
+    assert_eq!(srv.list(&bob, Some(&folder)).status, 404);
+    let r = srv.call(
+        Some(&bob),
+        "POST",
+        "/files/download",
+        Some(&json!({"ids": [inside], "format": "zip"})),
+    );
+    assert_eq!(r.status, 404);
+    assert!(srv.get(&bob, "/search?q=inside").items().is_empty());
+    assert!(srv.get(&bob, "/search?q=pic").items().is_empty());
+    assert!(srv.list(&bob, None).items().is_empty());
+
+    // 属主的东西原封未动。
+    assert_eq!(srv.list(&alice, Some(&folder)).names(), ["inside.txt"]);
+    assert_eq!(
+        srv.get(&alice, &format!("/files/{inside}/download")).raw,
+        b"inside-secret"
+    );
+    assert_eq!(srv.get(&alice, "/shares").items().len(), 2);
+}
+
+/// 进了回收站的东西：本人和外人都读不到、下不了、搜不到、建不了分享；还原后一切恢复。
+#[test]
+fn trashed_items_are_unreachable_unshareable_and_unsearchable_until_restored() {
+    let (srv, alice, bob) = two();
+    let folder = srv.folder(&alice, None, "Box");
+    let inside = srv.upload(&alice, Some(&folder), "needle.txt", b"in-the-box");
+    let image = srv.upload(&alice, None, "needle.png", &png_bytes());
+    srv.delete_file(&alice, &folder);
+    srv.delete_file(&alice, &image);
+
+    for who in [&alice, &bob] {
+        for id in [&folder, &inside, &image] {
+            for tail in ["", "/download", "/raw", "/thumbnail"] {
+                let r = srv.get(who, &format!("/files/{id}{tail}"));
+                assert_eq!(r.status, 404, "{} 读回收站里的 {id}{tail}", who.email);
+            }
+        }
+        assert!(
+            srv.get(who, "/search?q=needle").items().is_empty(),
+            "{}",
+            who.email
+        );
+    }
+    assert_eq!(srv.list(&alice, Some(&folder)).status, 404);
+    for id in [&folder, &inside, &image] {
+        let r = srv.call(
+            Some(&alice),
+            "POST",
+            "/shares",
+            Some(&json!({"file_id": id})),
+        );
+        assert_eq!(r.status, 404, "给回收站里的 {id} 建分享：{}", r.body);
+    }
+    let r = srv.call(
+        Some(&alice),
+        "POST",
+        "/files/download",
+        Some(&json!({"ids": [image], "format": "zip"})),
+    );
+    assert_eq!(r.status, 404, "批量下载回收站里的东西");
+    // 二次删除同一个东西：404，回收站不重复。
+    assert_eq!(
+        srv.call(Some(&alice), "DELETE", &format!("/files/{image}"), None)
+            .status,
+        404
+    );
+    assert_eq!(srv.get(&alice, "/trash").items().len(), 2);
+
+    // 还原：整棵子树回来，内容完好。
+    let t = srv.trash_id(&alice, &folder);
+    let r = srv.call(Some(&alice), "POST", &format!("/trash/{t}/restore"), None);
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert_eq!(
+        srv.get(&alice, &format!("/files/{inside}/download")).raw,
+        b"in-the-box"
+    );
+    assert_eq!(srv.get(&alice, "/search?q=needle").items().len(), 1);
+    // 已还原的条目再还原：404。
+    assert_eq!(
+        srv.call(Some(&alice), "POST", &format!("/trash/{t}/restore"), None)
+            .status,
+        404
+    );
+}
+
+/// 恶意或古怪的文件名：绝不能写出账户目录；点文件与无扩展名文件的重名也要得到 `(1)`。
+#[test]
+fn hostile_upload_names_stay_inside_the_account_and_odd_names_still_dedupe() {
+    let (srv, alice, _bob) = two();
+    for name in [
+        "../../escape.txt",
+        "..\\..\\escape2.txt",
+        "/etc/escape3.txt",
+        "..",
+        ".",
+    ] {
+        let r = srv.upload_raw(&alice, None, name, b"payload");
+        assert!(
+            r.status == 400
+                || (r.status == 201 && !r.data()["name"].as_str().unwrap().contains(['/', '\\'])),
+            "{name:?} -> {} {}",
+            r.status,
+            r.body
+        );
+    }
+    let user_root = srv.dir.join("drive/cloud_home_data/users").join(&alice.id);
+    for f in srv.disk_files() {
+        assert!(
+            f.starts_with(&user_root),
+            "文件写到了账户目录之外：{}",
+            f.display()
+        );
+    }
+    let mut everything = Vec::new();
+    walk(&srv.dir.join("drive"), &mut everything);
+    assert!(
+        everything
+            .iter()
+            .all(|p| !p.to_string_lossy().contains("escape")),
+        "目录穿越：{everything:?}"
+    );
+
+    for name in ["README", ".env", "archive.tar.gz", "名字 with spaces.txt"] {
+        assert_eq!(
+            srv.upload_raw(&alice, None, name, b"1").data()["name"],
+            name
+        );
+        let again = srv.upload_raw(&alice, None, name, b"2");
+        let second = again.data()["name"].as_str().unwrap();
+        assert!(
+            second.contains("(1)") && second != name,
+            "{name} -> {second}"
+        );
+    }
+    // 空文件可以上传、下载回来仍是空的。
+    let empty = srv.upload(&alice, None, "empty.bin", b"");
+    let r = srv.get(&alice, &format!("/files/{empty}/download"));
+    assert_eq!((r.status, r.raw.len()), (200, 0));
+    // 没有 file 字段：400，不留任何条目。
+    let before = srv.list(&alice, None).items().len();
+    let r = srv.send(
+        "POST",
+        "/files/upload",
+        &[
+            ("Authorization".into(), format!("Bearer {}", alice.token)),
+            ("Content-Type".into(), format!("multipart/form-data; boundary={BOUNDARY}")),
+        ],
+        format!("--{BOUNDARY}\r\nContent-Disposition: form-data; name=\"other\"\r\n\r\nx\r\n--{BOUNDARY}--\r\n").as_bytes(),
+    );
+    assert_eq!(r.status, 400, "{}", r.body);
+    assert_eq!(srv.list(&alice, None).items().len(), before);
+}
+
+/// 令牌伪造：过期、别的密钥、alg=none、指向不存在账户的令牌一律 401；
+/// 同一个密钥签出的有效令牌则可用（证明测试能区分）。
+#[test]
+fn expired_foreign_keyed_none_alg_and_unknown_subject_tokens_are_rejected() {
+    let (srv, alice, _bob) = two();
+    let now = chrono::Utc::now().timestamp();
+    let sign = |sub: &str, exp: i64, secret: &str| {
+        jsonwebtoken::encode(
+            &jsonwebtoken::Header::new(jsonwebtoken::Algorithm::HS256),
+            &json!({"sub": sub, "iat": now - 10, "exp": exp}),
+            &jsonwebtoken::EncodingKey::from_secret(secret.as_bytes()),
+        )
+        .unwrap()
+    };
+    let as_acct = |token: String| Acct {
+        id: String::new(),
+        token,
+        email: String::new(),
+    };
+    let status = |token: String| srv.get(&as_acct(token), "/auth/me").status;
+
+    assert_eq!(
+        status(sign(&alice.id, now + 3600, "jwt-secret-for-api-tests")),
+        200
+    );
+    assert_eq!(
+        status(sign(&alice.id, now - 3600, "jwt-secret-for-api-tests")),
+        401,
+        "过期"
+    );
+    assert_eq!(
+        status(sign(&alice.id, now + 3600, "some-other-secret")),
+        401,
+        "别的密钥"
+    );
+    assert_eq!(
+        status(sign(
+            &uuid::Uuid::new_v4().to_string(),
+            now + 3600,
+            "jwt-secret-for-api-tests"
+        )),
+        401,
+        "不存在的账户"
+    );
+    let b64 = |s: &str| {
+        use base64::Engine;
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(s)
+    };
+    let none = format!(
+        "{}.{}.",
+        b64(r#"{"alg":"none","typ":"JWT"}"#),
+        b64(&json!({"sub": alice.id, "iat": now, "exp": now + 3600}).to_string())
+    );
+    assert_eq!(status(none), 401, "alg=none");
+    // 登录失败对「账户不存在」与「密码错误」给出同样的回答，不泄露账户是否存在。
+    let wrong = srv.call(
+        None,
+        "POST",
+        "/auth/login",
+        Some(&json!({"identifier": alice.email, "password": "nope-nope-nope"})),
+    );
+    let ghost = srv.call(
+        None,
+        "POST",
+        "/auth/login",
+        Some(&json!({"identifier": "ghost@home.test", "password": "nope-nope-nope"})),
+    );
+    assert_eq!((wrong.status, ghost.status), (401, 401));
+    assert_eq!(wrong.body, ghost.body);
+}
+
+/// Range 边界：无法解析的头与反向区间给出完整内容或 416，绝不是错误的字节；
+/// 空文件、收件人通道、公开分享也遵守。
+#[test]
+fn malformed_ranges_never_return_wrong_bytes() {
+    let (srv, alice, bob) = two();
+    let content: Vec<u8> = (0u8..50).collect();
+    let id = srv.upload(&alice, None, "r.bin", &content);
+    let path = format!("/files/{id}/raw");
+    for header in [
+        "bytes=abc",
+        "bytes=5-2",
+        "items=0-5",
+        "bytes=",
+        "bytes=0-5,10-15",
+        "bytes=-0",
+    ] {
+        let r = srv.call_h(Some(&alice), "GET", &path, None, &[("Range", header)]);
+        assert!(
+            (r.status == 200 && r.raw == content) || r.status == 416,
+            "Range {header:?} -> {} {} 字节",
+            r.status,
+            r.raw.len()
+        );
+    }
+    // 后缀比文件长：整个文件（206 或 200 均可，但字节必须是全部）。
+    let r = srv.call_h(
+        Some(&alice),
+        "GET",
+        &path,
+        None,
+        &[("Range", "bytes=-9999")],
+    );
+    assert!(
+        matches!(r.status, 200 | 206) && r.raw == content,
+        "{}",
+        r.status
+    );
+
+    // 收件人通道也支持 Range，且给出的是对的字节。
+    srv.share(&alice, &id, json!({"recipient_ids": [bob.id]}));
+    let sid = srv.get(&bob, "/shares/received").items()[0]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let r = srv.call_h(
+        Some(&bob),
+        "GET",
+        &format!("/shares/received/{sid}/files/{id}/raw"),
+        None,
+        &[("Range", "bytes=10-19")],
+    );
+    assert_eq!((r.status, r.raw.as_slice()), (206, &content[10..20]));
+
+    // 空文件：任何 Range 都不会得到字节。
+    let empty = srv.upload(&alice, None, "empty.bin", b"");
+    let r = srv.call_h(
+        Some(&alice),
+        "GET",
+        &format!("/files/{empty}/raw"),
+        None,
+        &[("Range", "bytes=0-0")],
+    );
+    assert!(r.raw.is_empty(), "空文件返回了 {} 字节", r.raw.len());
+}
+
+/// 批量下载的入参校验：空列表、非法格式、重复 id、回收站里的 id 都要得到干净的 4xx，
+/// 且不会产生半截压缩包。（JSON 解析类错误不是 JSON 信封，见 plan/BUGS.md B-002。）
+#[test]
+fn batch_download_rejects_bad_input_cleanly() {
+    let (srv, alice, _bob) = two();
+    let a = srv.upload(&alice, None, "a.txt", b"aaa");
+    let gone = srv.upload(&alice, None, "gone.txt", b"ggg");
+    srv.delete_file(&alice, &gone);
+    let post = |body: Value| srv.call(Some(&alice), "POST", "/files/download", Some(&body));
+
+    for body in [
+        json!({"ids": [], "format": "zip"}),
+        json!({"ids": [a], "format": "rar"}),
+        json!({"ids": ["not-a-uuid"], "format": "zip"}),
+        json!({"format": "zip"}),
+    ] {
+        let r = post(body.clone());
+        assert!(
+            (400..500).contains(&r.status),
+            "{body} -> {} {}",
+            r.status,
+            r.body
+        );
+    }
+    assert_eq!(post(json!({"ids": [gone], "format": "zip"})).status, 404);
+    assert_eq!(
+        post(json!({"ids": [a, gone], "format": "tar.gz"})).status,
+        404
+    );
+    // 重复 id 不会让同一文件在压缩包里出现两次。
+    let r = post(json!({"ids": [a, a], "format": "zip"}));
+    assert_eq!(r.status, 200);
+    let entries = read_zip(&r.raw);
+    assert_eq!(entries, [("a.txt".to_string(), b"aaa".to_vec())]);
+}
+
+/// 管理员列表不泄露密码哈希、令牌或验证码；软删除只是停用：磁盘上的字节原样保留。
+#[test]
+fn admin_listing_leaks_no_secrets_and_soft_delete_keeps_the_bytes() {
+    let (srv, alice, _bob) = two();
+    srv.upload(&alice, None, "keep.txt", b"keep-me");
+    let list = srv.call_h(
+        None,
+        "GET",
+        "/admin/users",
+        None,
+        &[("X-Admin-Password", ADMIN_PW)],
+    );
+    assert_eq!(list.status, 200);
+    let text = list.body.to_string();
+    for forbidden in ["argon2", "password_hash", &alice.token, "jwt-secret"] {
+        assert!(!text.contains(forbidden), "管理员列表含 {forbidden}");
+    }
+    let before = srv.disk_files();
+    assert_eq!(before.len(), 1);
+    assert_eq!(
+        srv.admin("/admin/users/delete", &json!({"identifier": alice.email}))
+            .status,
+        200
+    );
+    assert_eq!(srv.disk_files(), before, "软删除不得动磁盘上的文件");
+    // 已停用账户的邮箱不能被别人重新注册去「接管」。
+    let r = srv.call(
+        None,
+        "POST",
+        "/auth/register",
+        Some(&json!({"username": "alice2", "password": PASSWORD, "email": alice.email})),
+    );
+    assert_eq!(r.status, 409, "{}", r.body);
+    assert_eq!(
+        srv.admin("/admin/users/restore", &json!({"identifier": alice.email}))
+            .status,
+        200
+    );
+    assert_eq!(srv.get(&alice, "/files").names(), ["keep.txt"]);
+}
+
+/// SSE 覆盖每一种变更：重命名、移动、还原、永久删除都只通知所有者，并附带 usage。
+#[test]
+fn sse_reports_rename_move_restore_and_purge_to_the_owner_only() {
+    let (srv, alice, bob) = two();
+    let folder = srv.folder(&alice, None, "Dir");
+    let file = srv.upload(&alice, None, "one.txt", b"12345");
+    let mut a = srv.events(&alice);
+    let mut b = srv.events(&bob);
+    assert_eq!(a.next(Duration::from_secs(5)).unwrap().0, "usage");
+    assert_eq!(b.next(Duration::from_secs(5)).unwrap().0, "usage");
+
+    srv.call(
+        Some(&alice),
+        "PATCH",
+        &format!("/files/{file}"),
+        Some(&json!({"name": "two.txt"})),
+    );
+    let ev = a.wait_for("files", |d| {
+        d["kind"] == "updated" || d["kind"] == "renamed"
+    });
+    assert!(ev.is_some(), "没收到重命名事件");
+    srv.call(
+        Some(&alice),
+        "POST",
+        &format!("/files/{file}/move"),
+        Some(&json!({"target_parent_id": folder})),
+    );
+    assert!(
+        a.wait_for("files", |d| d["file"]["id"] == file).is_some(),
+        "没收到移动事件"
+    );
+    srv.delete_file(&alice, &file);
+    let t = srv.trash_id(&alice, &file);
+    assert!(a.wait_for("files", |d| d["kind"] == "deleted").is_some());
+    srv.call(Some(&alice), "POST", &format!("/trash/{t}/restore"), None);
+    assert!(
+        a.wait_for("files", |d| d["kind"] == "created"
+            || d["kind"] == "restored")
+            .is_some(),
+        "没收到还原事件"
+    );
+    assert!(
+        a.wait_for("usage", |d| d["used_bytes"] == 5).is_some(),
+        "还原后 usage 应回到 5"
+    );
+    srv.delete_file(&alice, &file);
+    let t = srv.trash_id(&alice, &file);
+    srv.call(Some(&alice), "DELETE", &format!("/trash/{t}"), None);
+    assert!(
+        a.wait_for("usage", |d| d["trashed_bytes"] == 0 && d["used_bytes"] == 0)
+            .is_some(),
+        "永久删除后 usage 应清零"
+    );
+
+    assert!(
+        !b.sees("files", Duration::from_secs(2)),
+        "事件泄露给了别的账户"
+    );
+}
+
+/// 探针（B-002 的取证）：各端点遇到坏 JSON 时的响应。只断言「不是 5xx、不改状态」，
+/// 响应格式的缺陷记在 plan/BUGS.md。
+#[test]
+fn malformed_json_bodies_are_client_errors_and_change_nothing() {
+    let (srv, alice, _bob) = two();
+    for (method, path) in [
+        ("POST", "/folders"),
+        ("POST", "/shares"),
+        ("POST", "/files/download"),
+        ("PATCH", "/me"),
+        ("POST", "/me/password"),
+    ] {
+        for payload in ["{not json", "[]", "{\"name\": 5}"] {
+            let r = srv.send(
+                method,
+                path,
+                &[
+                    ("Authorization".into(), format!("Bearer {}", alice.token)),
+                    ("Content-Type".into(), "application/json".into()),
+                ],
+                payload.as_bytes(),
+            );
+            assert!(
+                (400..500).contains(&r.status),
+                "{method} {path} {payload}: {}",
+                r.status
+            );
+        }
+    }
+    assert!(srv.list(&alice, None).items().is_empty());
+    assert!(srv.get(&alice, "/shares").items().is_empty());
+    assert_eq!(srv.get(&alice, "/auth/me").data()["username"], "alice");
 }
