@@ -16,6 +16,7 @@ The report site (R-001) has its first edition built and published; it is in revi
 | Report site | first edition built, checked and published (R-001, in review) | owner review; next report after the next milestone |
 
 ## Active tasks
+- R-030 · tester · worktree, branch agent/R-030-integration-tests · state: delegated · next: verify cargo test/clippy, merge. (R-026, R-031 merged and verified: e2e 100/100.)
 - R-031 UI part · tester · branch agent/R-031-ui-asserts · state: delegated · next: verify e2e_update.sh with UI assertions (R-026 merged f/ verified: 156+12+7 tests, clippy 0 warnings).
 - 2026-11-27 (session 5) · R-031/R-021 merged (004b7b7): e2e_update 40/40, e2e_install 52/52 (re-run by manager). Open: UI assertions need R-026. Next: R-026 (backend embeds UI), then R-030.
 - 2026-11-27 (session 4) · tester for R-031/R-021 stopped: Bash denied for compound cd/cargo/self-test calls, nothing run or committed. Tester notes: updater PUBLIC_KEY is compiled in (src/update/mod.rs:29), so the happy-path e2e needs a patched copy build (owner to confirm); UI embedding (R-026) not checked. Owner: allow worker Bash, then restart manager. Issue #6 handled.
