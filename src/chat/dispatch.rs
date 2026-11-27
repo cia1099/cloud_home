@@ -1,9 +1,10 @@
-//! 处理入站更新：指令（`/start /help /pair /pending /whoami`）与审批按钮。
+//! 处理入站更新：指令（`/start /help /pair /pending /whoami`，运维指令见 `admin_ops`）与审批按钮。
 //!
 //! 授权在**每条**更新上现查（`admin_chat_identities`），不是连接时一次性判定：
 //! 取消配对立即生效。陌生发送者一律沉默（只审计，限流），机器人不向陌生人暴露自己。
 
 use super::ChatService;
+use super::admin_ops::Action;
 use super::outbox::PENDING_LIST_MAX;
 use super::pairing::Identity;
 use super::provider::{Message, Sender, Update};
@@ -24,6 +25,13 @@ fn known_command(name: &str) -> &'static str {
         "pair" => "pair",
         "pending" => "pending",
         "whoami" => "whoami",
+        "users" => "users",
+        "status" => "status",
+        "restore" => "restore",
+        "delete" => "delete",
+        "purge" => "purge",
+        "confirm" => "confirm",
+        "cancel" => "cancel",
         _ => "other",
     }
 }
@@ -77,12 +85,25 @@ impl ChatService {
         );
 
         match &update {
-            Update::Command { name, .. } => match name.as_str() {
+            Update::Command { name, args, .. } => match name.as_str() {
                 "pair" => {
                     self.reply(&from.chat, self.inner.texts.already_paired())
                         .await
                 }
                 "pending" => self.on_pending(&admin).await?,
+                "users" => self.on_users(&admin, args).await?,
+                "status" => self.on_status(&admin).await?,
+                "restore" => self.on_restore(&admin, from, args).await?,
+                "delete" => {
+                    self.on_request_destructive(&admin, args, Action::Delete)
+                        .await?
+                }
+                "purge" => {
+                    self.on_request_destructive(&admin, args, Action::Purge)
+                        .await?
+                }
+                "confirm" => self.on_confirm(&admin, from, args).await?,
+                "cancel" => self.on_cancel(&admin).await,
                 "whoami" => {
                     let text = self.inner.texts.whoami(
                         &admin.label,
@@ -125,7 +146,7 @@ impl ChatService {
     }
 
     /// 直接回复（指令回应不进队列；失败只记日志）。
-    async fn reply(&self, chat: &str, text: String) {
+    pub(super) async fn reply(&self, chat: &str, text: String) {
         let Some(provider) = &self.inner.provider else {
             return;
         };

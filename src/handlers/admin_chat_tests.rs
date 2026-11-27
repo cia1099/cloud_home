@@ -85,6 +85,16 @@ async fn harness(kind: ChatProviderKind) -> Harness {
     .unwrap();
     let provider: Option<Arc<dyn ChatProvider>> = (kind != ChatProviderKind::None)
         .then(|| Arc::new(FakeProvider::default()) as Arc<dyn ChatProvider>);
+    let chat = ChatService::new(
+        db.clone(),
+        &chat_cfg,
+        provider,
+        crate::chat::AdminEnv {
+            drive_manager: drive_manager.clone(),
+            events: events.clone(),
+            trash_retention_days: 7,
+        },
+    );
     let state = AppState {
         db: db.clone(),
         config,
@@ -94,7 +104,7 @@ async fn harness(kind: ChatProviderKind) -> Harness {
         activity,
         shutdown,
         updater,
-        chat: ChatService::new(db.clone(), &chat_cfg, provider),
+        chat,
     };
     Harness {
         app: crate::handlers::build_router(state),

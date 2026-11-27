@@ -1,3 +1,4 @@
+pub mod admin_service;
 pub mod approval_service;
 pub mod archive_service;
 pub mod file_service;

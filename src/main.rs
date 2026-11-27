@@ -101,8 +101,16 @@ async fn main() -> anyhow::Result<()> {
         events.clone(),
     )?;
 
-    let chat =
-        chat::ChatService::from_config(pool.clone(), &config.chat).context("初始化聊天集成失败")?;
+    let chat = chat::ChatService::from_config(
+        pool.clone(),
+        &config.chat,
+        chat::AdminEnv {
+            drive_manager: drive_manager.clone(),
+            events: events.clone(),
+            trash_retention_days: config.trash_retention_days,
+        },
+    )
+    .context("初始化聊天集成失败")?;
 
     let state = AppState {
         db: pool.clone(),

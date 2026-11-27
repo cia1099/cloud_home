@@ -15,7 +15,6 @@ use axum::extract::{FromRequestParts, Query, State};
 use axum::http::request::Parts;
 
 use crate::error::{AppError, AppResult, ErrorResponse};
-use crate::models::event::{ChangeKind, FileChangeEvent};
 use crate::models::user::{
     APPROVAL_APPROVED, APPROVAL_PENDING, APPROVAL_REJECTED, AdminActionResponse,
     AdminApproveDto, AdminDecisionResponse, AdminPurgeResponse, AdminRejectDto, AdminTargetDto,
@@ -23,7 +22,7 @@ use crate::models::user::{
 };
 use crate::openapi::ApiResponse;
 use crate::services::approval_service::{self, Decision};
-use crate::services::{trash_service, user_service};
+use crate::services::{admin_service, user_service};
 use crate::state::AppState;
 
 /// 管理端点守卫：功能开关 → 来源网段 → 共享口令，任一不过即拒。
@@ -176,8 +175,11 @@ pub async fn list_users(
     Ok(ApiResponse::new(AdminUserListResponse { items }))
 }
 
+/// 运维端点作为操作发起者记入审计的名字。
+const ADMIN_ENDPOINT: &str = "admin-endpoint";
+
 /// 管理端点调用审批服务时记在 `approval_decided_by` 里的决定者。
-const DECIDED_BY: &str = "admin-endpoint";
+const DECIDED_BY: &str = ADMIN_ENDPOINT;
 
 /// POST /admin/users/approve — 批准待批准（或改判已拒绝）的账户；已批准则幂等返回。
 #[utoipa::path(
@@ -271,18 +273,13 @@ pub async fn delete_user(
 ) -> AppResult<ApiResponse<AdminActionResponse>> {
     let target = user_service::find_any(&state.db, dto.identifier.trim(), dto.provider.as_deref())
         .await?;
-    let (user, affected) =
-        user_service::soft_remove(&state.db, state.config.trash_retention_days, &target.id).await?;
-
-    crate::audit!(
-        info,
-        "admin.user.delete",
-        "success",
-        target_user_id = %user.id,
-        target_username = %user.username,
-        affected_items = affected,
-        "运维删除账户"
-    );
+    let (user, affected) = admin_service::delete_account(
+        &state.db,
+        state.config.trash_retention_days,
+        &target,
+        ADMIN_ENDPOINT,
+    )
+    .await?;
 
     Ok(ApiResponse::new(AdminActionResponse {
         user_id: user.id,
@@ -316,17 +313,8 @@ pub async fn restore_user(
 ) -> AppResult<ApiResponse<AdminActionResponse>> {
     let target = user_service::find_any(&state.db, dto.identifier.trim(), dto.provider.as_deref())
         .await?;
-    let (user, affected) = user_service::restore(&state.db, &target.id).await?;
-
-    crate::audit!(
-        info,
-        "admin.user.restore",
-        "success",
-        target_user_id = %user.id,
-        target_username = %user.username,
-        affected_items = affected,
-        "运维还原账户"
-    );
+    let (user, affected) =
+        admin_service::restore_account(&state.db, &target, ADMIN_ENDPOINT).await?;
 
     Ok(ApiResponse::new(AdminActionResponse {
         user_id: user.id,
@@ -365,31 +353,14 @@ pub async fn purge_trash(
     let target =
         user_service::find_any(&state.db, dto.identifier.trim(), dto.provider.as_deref()).await?;
 
-    // 先确认盘在：物理删除做不了就不该动数据库，否则会留下指向不存在文件的空记录。
-    let data_root = state.drive_manager.require_data_root().await?;
-    let (count, bytes) = trash_service::empty(&state.db, &data_root, &target.id).await?;
-
-    crate::audit!(
-        info,
-        "admin.trash.purge",
-        "success",
-        target_user_id = %target.id,
-        target_username = %target.username,
-        deleted_count = count,
-        freed_bytes = bytes,
-        "运维清空账户回收站"
-    );
-
-    if count > 0 {
-        state.events.notify(
-            &target.id,
-            FileChangeEvent {
-                kind: ChangeKind::Purged,
-                file: None,
-                parent_ids: Vec::new(),
-            },
-        );
-    }
+    let (count, bytes) = admin_service::purge_trash(
+        &state.db,
+        &state.drive_manager,
+        &state.events,
+        &target,
+        ADMIN_ENDPOINT,
+    )
+    .await?;
 
     Ok(ApiResponse::new(AdminPurgeResponse {
         user_id: target.id,

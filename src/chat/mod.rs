@@ -4,11 +4,13 @@
 //! - `provider`：提供方 trait 与归一化类型；`telegram`：长轮询实现（只出站）；
 //! - `pairing`：一次性配对码与管理员身份；
 //! - `outbox`：待发送队列（指数退避重试）、突发合并、每日提醒、决定后编辑原消息；
-//! - `dispatch`：处理指令与按钮点击。
+//! - `dispatch`：处理指令与按钮点击；
+//! - `admin_ops`：运维指令（`/users /status /delete /restore /purge`）与破坏性操作的确认。
 //!
 //! 审批本身永远走 `approval_service::decide`，与 `/admin/*` 端点权限、审计一致。
 //! 聊天不可用不影响注册与审批：申请照常 pending，消息留在队列里等恢复。
 
+mod admin_ops;
 mod dispatch;
 #[cfg(test)]
 mod flow_tests;
@@ -29,7 +31,9 @@ use tokio_util::sync::CancellationToken;
 
 use crate::config::{ChatConfig, ChatProviderKind};
 use crate::db::Db;
+use crate::drive::DriveManager;
 use crate::error::AppResult;
+use crate::events::ChangeNotifier;
 use crate::models::chat::{ChatAdminItem, ChatStatusResponse};
 use provider::ChatProvider;
 use text::Texts;
@@ -41,6 +45,14 @@ const OUTBOX_TICK: Duration = Duration::from_secs(15);
 /// 拉取更新失败后的等待。
 const POLL_RETRY: Duration = Duration::from_secs(5);
 
+/// 聊天指令执行运维操作所需的依赖（与 `/admin/*` 端点用的是同一批）。
+#[derive(Clone)]
+pub struct AdminEnv {
+    pub drive_manager: DriveManager,
+    pub events: ChangeNotifier,
+    pub trash_retention_days: i64,
+}
+
 /// 聊天服务句柄，可廉价克隆；`CHAT_PROVIDER=none` 时所有操作都是空操作。
 #[derive(Clone)]
 pub struct ChatService {
@@ -49,6 +61,9 @@ pub struct ChatService {
 
 struct Inner {
     db: Db,
+    env: AdminEnv,
+    /// 待确认的破坏性操作，按管理员身份 id 索引（内存；重启即作废，更安全）。
+    confirmations: Mutex<HashMap<String, admin_ops::Confirmation>>,
     kind: ChatProviderKind,
     provider: Option<Arc<dyn ChatProvider>>,
     texts: Texts,
@@ -65,20 +80,27 @@ struct Inner {
 
 impl ChatService {
     /// 按配置建立服务：`telegram` 时创建长轮询提供方，`none` 时为空操作。
-    pub fn from_config(db: Db, cfg: &ChatConfig) -> anyhow::Result<Self> {
+    pub fn from_config(db: Db, cfg: &ChatConfig, env: AdminEnv) -> anyhow::Result<Self> {
         let provider: Option<Arc<dyn ChatProvider>> = match (cfg.provider, &cfg.bot_token) {
             (ChatProviderKind::Telegram, Some(token)) => {
                 Some(Arc::new(telegram::TelegramProvider::new(token)?))
             }
             _ => None,
         };
-        Ok(Self::new(db, cfg, provider))
+        Ok(Self::new(db, cfg, provider, env))
     }
 
-    pub fn new(db: Db, cfg: &ChatConfig, provider: Option<Arc<dyn ChatProvider>>) -> Self {
+    pub fn new(
+        db: Db,
+        cfg: &ChatConfig,
+        provider: Option<Arc<dyn ChatProvider>>,
+        env: AdminEnv,
+    ) -> Self {
         Self {
             inner: Arc::new(Inner {
                 db,
+                env,
+                confirmations: Mutex::new(HashMap::new()),
                 kind: cfg.provider,
                 provider,
                 texts: Texts(cfg.language),

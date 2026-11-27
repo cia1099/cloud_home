@@ -29,14 +29,15 @@ pub(super) struct Identity {
     pub paired_at: String,
 }
 
-fn new_code() -> String {
-    (0..8)
+/// 生成 `len` 位随机码（配对码 8 位；破坏性操作的确认码 6 位）。
+pub(super) fn new_code(len: usize) -> String {
+    (0..len)
         .map(|_| ALPHABET[(rand::random::<u8>() & 31) as usize] as char)
         .collect()
 }
 
 /// 用户输入的配对码规整：去空白与连字符、转大写。
-fn normalize(code: &str) -> String {
+pub(super) fn normalize(code: &str) -> String {
     code.chars()
         .filter(|c| c.is_ascii_alphanumeric())
         .collect::<String>()
@@ -73,7 +74,7 @@ impl ChatService {
                 "聊天集成未启用（CHAT_PROVIDER=none）".into(),
             ));
         }
-        let code = new_code();
+        let code = new_code(8);
         let now = now_rfc3339();
         let expires_at = (Utc::now() + Duration::minutes(CODE_TTL_MINUTES)).to_rfc3339();
         sqlx::query("DELETE FROM chat_pairing_codes WHERE expires_at < ? OR used_at IS NOT NULL")

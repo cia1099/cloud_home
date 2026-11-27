@@ -1,14 +1,17 @@
 //! 聊天核心的流程测试：全部用 `FakeProvider`，不碰网络。
 
 use std::io;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::ChatService;
+use super::{AdminEnv, ChatService};
 use super::provider::{FakeProvider, MessageRef, Sender, Update};
 use crate::config::{
     ChatConfig, ChatLanguage, ChatProviderKind, RegistrationMode, RegistrationPolicy,
 };
 use crate::db::{Db, test_pool};
+use crate::drive::{DriveManager, path_resolver};
+use crate::events::ChangeNotifier;
 use crate::models::user::User;
 use crate::services::user_service::{self, NewAccount, RegisterSource};
 
@@ -16,6 +19,22 @@ struct H {
     svc: ChatService,
     fake: Arc<FakeProvider>,
     db: Db,
+    drive: DriveManager,
+    /// 数据盘挂载点（临时目录），清空回收站的测试在其下造真实文件。
+    mount: PathBuf,
+}
+
+/// 聊天运维指令的依赖：接一个临时目录当数据盘。
+async fn admin_env() -> (AdminEnv, PathBuf) {
+    let mount = std::env::temp_dir().join(format!("ch-chat-{}", uuid::Uuid::new_v4()));
+    let drive_manager = DriveManager::new("d");
+    drive_manager.set_active(Some(mount.clone())).await;
+    let env = AdminEnv {
+        drive_manager,
+        events: ChangeNotifier::new(),
+        trash_retention_days: 7,
+    };
+    (env, mount)
 }
 
 async fn harness() -> H {
@@ -27,8 +46,16 @@ async fn harness() -> H {
         language: ChatLanguage::En,
         mask_identifiers: true,
     };
-    let svc = ChatService::new(db.clone(), &cfg, Some(fake.clone()));
-    H { svc, fake, db }
+    let (env, mount) = admin_env().await;
+    let drive = env.drive_manager.clone();
+    let svc = ChatService::new(db.clone(), &cfg, Some(fake.clone()), env);
+    H {
+        svc,
+        fake,
+        db,
+        drive,
+        mount,
+    }
 }
 
 fn sender(id: &str) -> Sender {
@@ -115,6 +142,353 @@ async fn status_of(h: &H, id: &str) -> (String, i64, Option<String>) {
     (u.approval_status, u.is_active, u.approval_decided_by)
 }
 
+// ---- 运维指令（R-064） ----
+
+/// 开放注册下建一个直接可用的账户。
+async fn active_user(db: &Db, name: &str, email: &str) -> User {
+    let policy = RegistrationPolicy {
+        mode: RegistrationMode::Open,
+        rate_per_ip_per_hour: 1000,
+        pending_max: 1000,
+        pending_expire_days: 14,
+    };
+    user_service::register(
+        db,
+        &policy,
+        NewAccount {
+            username: name,
+            password: "password123",
+            email: Some(email),
+            phone: None,
+        },
+        RegisterSource {
+            ip: Some("127.0.0.1".into()),
+            is_local: true,
+        },
+    )
+    .await
+    .unwrap()
+    .0
+}
+
+/// 给账户造一个已进回收站的真实文件（数据库行 + 盘上文件），返回文件路径。
+async fn trashed_file(h: &H, owner: &str, name: &str) -> PathBuf {
+    sqlx::query(
+        "INSERT OR IGNORE INTO drives (id, mount_path, label, is_active, detected_at, last_seen_at) \
+         VALUES ('drv', '/x', 'x', 1, 'now', 'now')",
+    )
+    .execute(&h.db)
+    .await
+    .unwrap();
+    let id = uuid::Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO files (id, owner_id, parent_id, drive_id, name, file_type, size_bytes, \
+         created_at, updated_at, is_deleted) VALUES (?, ?, NULL, 'drv', ?, 'file', 5, 'now', 'now', 0)",
+    )
+    .bind(&id)
+    .bind(owner)
+    .bind(name)
+    .execute(&h.db)
+    .await
+    .unwrap();
+    let path = path_resolver::file_path(&path_resolver::data_root(&h.mount, "d"), owner, &id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(&path, b"hello").unwrap();
+    crate::services::trash_service::soft_delete(&h.db, 7, owner, &id)
+        .await
+        .unwrap();
+    path
+}
+
+async fn trash_count(h: &H, owner: &str) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM trash WHERE owner_id = ?")
+        .bind(owner)
+        .fetch_one(&h.db)
+        .await
+        .unwrap()
+}
+
+fn last_text(h: &H) -> String {
+    h.fake.sent().last().unwrap().1.text.clone()
+}
+
+/// 从确认提示里取出 `/confirm <码>` 的码。
+fn code_in(text: &str) -> String {
+    text.split("/confirm ")
+        .nth(1)
+        .and_then(|s| s.split_whitespace().next())
+        .expect("提示里应有确认码")
+        .to_string()
+}
+
+async fn is_active(h: &H, id: &str) -> bool {
+    user_service::get(&h.db, id).await.unwrap().is_active != 0
+}
+
+#[tokio::test]
+async fn users_lists_masked_identifiers_and_filters_by_status() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    active_user(&h.db, "Alice", "alice@gmail.com").await;
+    pending_user(&h.db, "Bob", "bob@x.org").await;
+
+    h.svc.handle_update(cmd("1", "users", "")).await;
+    let all = last_text(&h);
+    assert!(all.contains("Alice | a***@gmail.com | approved"), "{all}");
+    assert!(all.contains("Bob | b***@x.org | pending"), "{all}");
+    assert!(!all.contains("alice@gmail"), "未打码的邮箱不得外发");
+
+    h.svc.handle_update(cmd("1", "users", "pending")).await;
+    let only = last_text(&h);
+    assert!(only.contains("Bob") && !only.contains("Alice"), "{only}");
+
+    h.svc.handle_update(cmd("1", "users", "bogus")).await;
+    assert!(last_text(&h).starts_with("Usage: /users"));
+}
+
+#[tokio::test]
+async fn status_summarizes_drive_and_accounts() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    active_user(&h.db, "Alice", "alice@gmail.com").await;
+    pending_user(&h.db, "Bob", "bob@x.org").await;
+
+    h.svc.handle_update(cmd("1", "status", "")).await;
+    let t = last_text(&h);
+    assert!(t.contains("Drive: connected"), "{t}");
+    assert!(t.contains("1 active, 1 pending, 0 rejected, 0 deleted"), "{t}");
+
+    h.drive.set_active(None).await;
+    h.svc.handle_update(cmd("1", "status", "")).await;
+    assert!(last_text(&h).contains("Drive: NOT available"));
+}
+
+#[tokio::test]
+async fn delete_needs_confirmation_then_restore_brings_it_back() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    let u = active_user(&h.db, "Alice", "alice@gmail.com").await;
+
+    h.svc
+        .handle_update(cmd("1", "delete", "alice@gmail.com"))
+        .await;
+    let prompt = last_text(&h);
+    assert!(prompt.contains("a***@gmail.com"), "{prompt}");
+    assert!(!prompt.contains("IRREVERSIBLE"));
+    assert!(is_active(&h, &u.id).await, "确认前什么都不能发生");
+
+    let logs = capture_logs();
+    h.svc
+        .handle_update(cmd("1", "confirm", &code_in(&prompt).to_lowercase()))
+        .await;
+    assert!(last_text(&h).starts_with("Deleted \"Alice\""));
+    assert!(!is_active(&h, &u.id).await);
+    let logged = logs.text();
+    assert!(
+        logged.contains("admin.user.delete") && logged.contains("chat:telegram:1"),
+        "{logged}"
+    );
+
+    // 同一个确认不能再用一次。
+    h.svc.handle_update(cmd("1", "confirm", &code_in(&prompt))).await;
+    assert!(last_text(&h).starts_with("Nothing is waiting"));
+
+    h.svc
+        .handle_update(cmd("1", "restore", "alice@gmail.com"))
+        .await;
+    assert!(last_text(&h).starts_with("Restored \"Alice\""));
+    assert!(is_active(&h, &u.id).await);
+}
+
+#[tokio::test]
+async fn wrong_code_does_nothing_and_cancels_the_pending_operation() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    let u = active_user(&h.db, "Alice", "alice@gmail.com").await;
+
+    h.svc
+        .handle_update(cmd("1", "delete", "alice@gmail.com"))
+        .await;
+    let code = code_in(&last_text(&h));
+
+    let logs = capture_logs();
+    h.svc.handle_update(cmd("1", "confirm", "ZZZZZZ")).await;
+    assert!(last_text(&h).starts_with("Wrong code"));
+    assert!(logs.text().contains("invalid_confirmation"));
+    assert!(is_active(&h, &u.id).await);
+
+    // 猜错一次就作废：此后连正确的码也不行。
+    h.svc.handle_update(cmd("1", "confirm", &code)).await;
+    assert!(last_text(&h).starts_with("Nothing is waiting"));
+    assert!(is_active(&h, &u.id).await);
+}
+
+#[tokio::test]
+async fn expired_confirmation_does_nothing() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    let u = active_user(&h.db, "Alice", "alice@gmail.com").await;
+
+    h.svc
+        .handle_update(cmd("1", "delete", "alice@gmail.com"))
+        .await;
+    let code = code_in(&last_text(&h));
+    for c in h.svc.inner.confirmations.lock().unwrap().values_mut() {
+        c.expires = std::time::Instant::now();
+    }
+
+    h.svc.handle_update(cmd("1", "confirm", &code)).await;
+    assert!(last_text(&h).contains("expired"));
+    assert!(is_active(&h, &u.id).await);
+}
+
+#[tokio::test]
+async fn cancel_and_newer_request_replace_the_pending_confirmation() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    let a = active_user(&h.db, "Alice", "alice@gmail.com").await;
+    let b = active_user(&h.db, "Bob", "bob@x.org").await;
+
+    h.svc
+        .handle_update(cmd("1", "delete", "alice@gmail.com"))
+        .await;
+    let code_a = code_in(&last_text(&h));
+    h.svc.handle_update(cmd("1", "cancel", "")).await;
+    h.svc.handle_update(cmd("1", "confirm", &code_a)).await;
+    assert!(is_active(&h, &a.id).await);
+
+    // 先申请 Alice 再申请 Bob：旧码作废，只有 Bob 的码执行 Bob。
+    h.svc
+        .handle_update(cmd("1", "delete", "alice@gmail.com"))
+        .await;
+    h.svc.handle_update(cmd("1", "delete", "bob@x.org")).await;
+    let code_b = code_in(&last_text(&h));
+    h.svc.handle_update(cmd("1", "confirm", &code_b)).await;
+    assert!(is_active(&h, &a.id).await);
+    assert!(!is_active(&h, &b.id).await);
+}
+
+#[tokio::test]
+async fn confirmation_is_bound_to_the_admin_who_asked() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    pair(&h, "2").await;
+    let u = active_user(&h.db, "Alice", "alice@gmail.com").await;
+
+    h.svc
+        .handle_update(cmd("1", "delete", "alice@gmail.com"))
+        .await;
+    let code = code_in(&last_text(&h));
+
+    h.svc.handle_update(cmd("2", "confirm", &code)).await;
+    assert!(last_text(&h).starts_with("Nothing is waiting"));
+    assert!(is_active(&h, &u.id).await);
+}
+
+#[tokio::test]
+async fn purge_warns_irreversible_and_only_empties_the_target_trash() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    let a = active_user(&h.db, "Alice", "alice@gmail.com").await;
+    let b = active_user(&h.db, "Bob", "bob@x.org").await;
+    let file_a = trashed_file(&h, &a.id, "a.txt").await;
+    let file_b = trashed_file(&h, &b.id, "b.txt").await;
+
+    h.svc
+        .handle_update(cmd("1", "purge", "alice@gmail.com"))
+        .await;
+    let prompt = last_text(&h);
+    assert!(prompt.contains("IRREVERSIBLE"), "{prompt}");
+    assert!(file_a.exists() && trash_count(&h, &a.id).await == 1, "确认前不动");
+
+    // 先拔盘再确认：什么都不动。
+    let code = code_in(&prompt);
+    h.drive.set_active(None).await;
+    h.svc.handle_update(cmd("1", "confirm", &code)).await;
+    assert!(last_text(&h).contains("drive is not available"));
+    assert!(file_a.exists() && trash_count(&h, &a.id).await == 1);
+
+    h.drive.set_active(Some(h.mount.clone())).await;
+    h.svc
+        .handle_update(cmd("1", "purge", "alice@gmail.com"))
+        .await;
+    h.svc
+        .handle_update(cmd("1", "confirm", &code_in(&last_text(&h))))
+        .await;
+    assert!(last_text(&h).starts_with("Purged the trash of \"Alice\": 1 item(s)"));
+    assert!(!file_a.exists());
+    assert_eq!(trash_count(&h, &a.id).await, 0);
+    // 另一个账户不受影响。
+    assert!(file_b.exists());
+    assert_eq!(trash_count(&h, &b.id).await, 1);
+}
+
+#[tokio::test]
+async fn bad_targets_get_usage_or_not_found_and_stage_nothing() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    h.svc.handle_update(cmd("1", "delete", "")).await;
+    assert!(last_text(&h).starts_with("Usage: /delete"));
+    h.svc.handle_update(cmd("1", "purge", "ghost@x.org")).await;
+    assert!(last_text(&h).starts_with("No such account"));
+    h.svc.handle_update(cmd("1", "restore", "ghost@x.org")).await;
+    assert!(last_text(&h).starts_with("No such account"));
+    assert!(h.svc.inner.confirmations.lock().unwrap().is_empty());
+
+    // 账户未被停用时 /restore 不适用。
+    active_user(&h.db, "Alice", "alice@gmail.com").await;
+    h.svc
+        .handle_update(cmd("1", "restore", "alice@gmail.com"))
+        .await;
+    assert!(last_text(&h).starts_with("Not done"));
+}
+
+#[tokio::test]
+async fn unpaired_and_group_senders_cannot_run_admin_commands() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    let u = active_user(&h.db, "Alice", "alice@gmail.com").await;
+    let sent_before = h.fake.sent().len();
+
+    for name in ["users", "status", "delete", "restore", "purge", "confirm", "cancel"] {
+        h.svc
+            .handle_update(cmd("666", name, "alice@gmail.com"))
+            .await;
+    }
+    // 已配对的管理员在群聊里发也不行。
+    let mut in_group = sender("1");
+    in_group.private = false;
+    h.svc
+        .handle_update(Update::Command {
+            from: in_group,
+            name: "delete".into(),
+            args: "alice@gmail.com".into(),
+        })
+        .await;
+
+    assert_eq!(h.fake.sent().len(), sent_before, "没有任何回复");
+    assert!(h.svc.inner.confirmations.lock().unwrap().is_empty());
+    assert!(is_active(&h, &u.id).await);
+}
+
+#[tokio::test]
+async fn unpairing_revokes_the_ability_to_confirm() {
+    let h = harness().await;
+    pair(&h, "1").await;
+    let u = active_user(&h.db, "Alice", "alice@gmail.com").await;
+    h.svc
+        .handle_update(cmd("1", "delete", "alice@gmail.com"))
+        .await;
+    let code = code_in(&last_text(&h));
+
+    let id = h.svc.status().await.unwrap().admins[0].id.clone();
+    h.svc.unpair(&id).await.unwrap();
+    let sent = h.fake.sent().len();
+    h.svc.handle_update(cmd("1", "confirm", &code)).await;
+    assert_eq!(h.fake.sent().len(), sent);
+    assert!(is_active(&h, &u.id).await);
+}
+
 #[tokio::test]
 async fn pairing_code_works_once_and_strangers_get_silence() {
     let h = harness().await;
@@ -173,7 +547,7 @@ async fn pairing_is_unavailable_when_provider_is_none() {
         language: ChatLanguage::En,
         mask_identifiers: true,
     };
-    let svc = ChatService::new(db, &cfg, None);
+    let svc = ChatService::new(db, &cfg, None, admin_env().await.0);
     assert!(svc.create_pairing_code().await.is_err());
     let s = svc.status().await.unwrap();
     assert_eq!((s.provider.as_str(), s.connected), ("none", false));
@@ -216,10 +590,14 @@ async fn unmasked_when_configured() {
         language: ChatLanguage::ZhHans,
         mask_identifiers: false,
     };
+    let (env, mount) = admin_env().await;
+    let drive = env.drive_manager.clone();
     let h = H {
-        svc: ChatService::new(db.clone(), &cfg, Some(fake.clone())),
+        svc: ChatService::new(db.clone(), &cfg, Some(fake.clone()), env),
         fake,
         db,
+        drive,
+        mount,
     };
     pair(&h, "1").await;
     register_and_deliver(&h, "Bob", "bob@x.org").await;

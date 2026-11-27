@@ -274,7 +274,16 @@ mod tests {
             events.clone(),
         )
         .unwrap();
-        let chat = crate::chat::ChatService::from_config(db.clone(), &config.chat).unwrap();
+        let chat = crate::chat::ChatService::from_config(
+            db.clone(),
+            &config.chat,
+            crate::chat::AdminEnv {
+                drive_manager: drive_manager.clone(),
+                events: events.clone(),
+                trash_retention_days: config.trash_retention_days,
+            },
+        )
+        .unwrap();
         let state = AppState {
             db,
             config,
