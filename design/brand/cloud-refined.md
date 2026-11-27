@@ -1,35 +1,37 @@
-# Cloud Home mark: the report-site cloud, refined (R-072 redo)
+# Cloud Home mark: cloud drive at home (R-072, round 2)
 
-Supersedes the A/B/C directions (denied by the owner: "I can't feel Apple design, not elegant. I like that icon: it represents a cloud."). The base is `LOGO` in `manager-site/src/shared/icons.ts`: blue tile, white cloud. The cloud path is kept as drawn (same three lobes, same flat base, scaled x36.57 to a 1024 grid); only the finish changes.
+The owner denied variants A and B (plan/APPROVALS.md A-003) and asked: "Follow Apple SF Symbol style. I hope the brand can present cloud drive at home." This file replaces the earlier A/B notes. `cloud-a.svg`, `cloud-b.svg` and the A/B favicon/dark files are the denied directions and are still in the folder; they should be removed with `git rm` once the owner picks C or D (this session had no shell, so nothing was deleted).
 
-## What changed, and why
-
-| Was | Now | Why |
-|---|---|---|
-| Rounded rectangle, rx 7/28 (circular corners) | Squircle: continuous-curvature corner (cubic path, control points at 0.72 of the half-width) | Apple icons use continuous corners; circular arcs show a visible tangent break and read as "web". |
-| Flat white cloud | Vertical gradient #fff to #dcebff, plus a soft blue lower-edge inner shade | Gives the cloud a quiet volume without a drawn outline. |
-| No depth | One soft drop shadow (dy 22, blur 26, #04307a at 38%) | Lifts the cloud off the tile; single light source from above. |
-| Gradient #42a5ff to #0a5fd8 | #4aa8ff to #0a58d0, plus a faint radial sheen at the top-left | Same blue, slightly deeper end so the white cloud keeps contrast. |
+The base is unchanged: the report-site cloud (same path, three lobes and a flat base, 1024 grid) on the brand-blue squircle tile. The two new variants add the "home" half of the idea using SF Symbols rules (`sf-symbols.md`, `icons.md`): one stroke weight per glyph, round caps and joins, simple geometry, optical balance, and a form that survives in a single colour.
 
 ## Variants
 
-- **A, Sky** (`cloud-a.svg`): the owner's icon, finished. Blue tile, white cloud. Use for the report-site header logo, social/OG images and the product app icon.
-- **A small** (`cloud-a-favicon.svg`): same shape with no filter, sheen or inner shade, and the cloud enlarged 1.18x so it fills more of the tile. Use for the favicon at 16/32px. White on the mid-tile blue is about 4.5:1 or better and 6.4:1 on the darkest stop; the graphic-object floor is 3:1.
-- **B, Porcelain** (`cloud-b.svg`, `cloud-b-dark.svg`): inverse treatment, a pale (dark: graphite) tile with a blue gradient cloud and a top highlight. Quieter and closer to a system-app feel; use where the blue tile would be too loud, such as the sign-in screen or a monochrome-friendly context. The dark file swaps the tile to #3a3a3c to #1c1c1e and lightens the cloud to #6cb8ff to #2a7af0.
+| | Idea | Style | Files |
+|---|---|---|---|
+| **C, Hearth** | A house sits inside the cloud: the drive is the cloud, home is what it holds. Reads like `cloud` + `house` composed as a symbol. | Outline. Cloud 46 u stroke, house 34 u (inner glyph lighter, as SF composed symbols do). Round caps and joins. | `cloud-c.svg`, `cloud-c-dark.svg`, `cloud-c-favicon.svg` |
+| **D, Roofline** | The cloud is the house: a roof chevron over a solid cloud body, with an arched doorway cut through the cloud's base. A cloud wearing a roof is a home. | Filled body plus one 56 u stroke for the roof, same round terminals. The door is a true knock-out (SVG mask), so it works on any background. | `cloud-d.svg`, `cloud-d-dark.svg`, `cloud-d-favicon.svg` |
 
-Recommendation: A for the logo and favicon (it is the icon the owner said they like, so keep the white-on-blue identity), B only as an alternate.
+Units are viewBox units on the 1024 tile. Favicons are heavier and simplified: C becomes a solid white cloud with a solid blue house cut into it (no outline, no gradient, no filter); D uses an 84 u roof stroke and a wider 72 u door. Both are flat #1668e0 with white, about 5.4:1, above the 3:1 graphic-object floor.
 
-## Rules
+## Light, dark, monochrome
 
-- The tiles here are 1024 squircles for the site logo. For an OS app icon, supply a full-bleed square and let the system mask it (`app-icons.md`): the same artwork with the tile path replaced by a plain rect.
-- No text in the mark. The wordmark stays "Cloud Home" in the system font.
-- Clear space: one cloud-lobe radius (about 12% of the tile) on all sides. Minimum size 16px, and below 24px use the small file.
-- One colour means one thing: this blue is the brand blue and already the interactive accent in `design/system.md`; do not add a second brand colour.
-- Dark mode: A works unchanged on dark and light backgrounds; B has a dark file.
+- Light: blue tile #4aa8ff to #0a58d0, white glyph (D body gets a #fff to #dcebff gradient), one soft shadow under the glyph.
+- Dark: graphite tile #3a3a3c to #1c1c1e, glyph in blue #6cb8ff to #2a7af0 (same pairing the old B-dark used). Blue on graphite is above 4.5:1 at its darkest stop.
+- Monochrome: both glyphs are one colour with no inner fill tricks (D's door is a cut, C's house is a stroke), so they work as a template glyph in the product's `currentColor` icon slot or a one-colour print. Strip the tile and gradients, keep the glyph paths.
+
+## Recommendation
+
+D at small sizes (favicon, tab, 16 to 24 px): the roof and door read as one bold silhouette, and "home" is visible even at 16 px. C at large sizes (logo, sign-in, OG image): it is the more explicit "cloud with a house in it" and the house detail needs about 48 px to resolve. If one mark must serve every size, choose D. Unrendered caveat below applies to both.
+
+## Rules (carried over)
+
+- No text in the mark; the wordmark "Cloud Home" is set in the system font.
+- OS app icon: supply a full-bleed square and let the system mask it (`app-icons.md`); replace the tile path with a plain rect. Clear space: about 12% of the tile.
+- Minimum 16 px using the favicon file. Do not add a second brand colour.
+- When several SVGs are inlined on one page, `id`s must be unique. The ids here are prefixed per file (`c-`, `cd-`, `d-`, `dd-`, `df-`).
 
 ## Not yet done
 
-- No PNG renders (no shell in this session); the manager will render and commit. Check the 16px result of `cloud-a-favicon.svg` visually.
-- Corner curve is a cubic approximation of a continuous corner, not Apple's exact curve; adequate for web, review before shipping an OS icon.
-- `design/brand/README.md` (A-001 notes) still lists directions A/B/C. It should be marked superseded by this file and the `direction-*` folders removed once the owner approves the refined cloud, per the no-leftovers rule.
-- Applying it to `manager-site` (LOGO constant, favicon) is for the frontend; the replacement is the contents of `cloud-a.svg` / `cloud-a-favicon.svg`. Note `id`s (`tile`, `cloud`, ...) must be unique if inlined more than once on a page.
+- Not rendered: there was no shell in this session, so there are no PNG previews. Check each SVG at 16, 32 and 256 px in a browser, `rsvg-convert` or `qlmanage -t -s 256 file.svg`. Likely tuning points: the house/roof proportions in C, and the door width in D at 16 px.
+- Corner curve is the same cubic approximation of a continuous corner used before; review before shipping an OS icon.
+- Applying the chosen mark to `manager-site/` (LOGO constant, favicon) is for the frontend. `design/brand/README.md` still lists the old A-001 directions and should be marked superseded.
