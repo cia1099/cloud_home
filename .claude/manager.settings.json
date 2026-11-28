@@ -71,7 +71,6 @@
     ],
     "deny": [
       "Bash(git push:*)",
-      "Bash(git tag:*)",
       "Bash(git reset --hard:*)",
       "Bash(git clean:*)",
       "Bash(git branch -D:*)",
