@@ -65,6 +65,7 @@ The owner wants `main` to follow your verified work, so version control is never
 
 # Rules for you and the whole team
 - `CLAUDE.md`, `spec/backend.md` and `spec/update.md` are binding. `SPEC.md` is the only source of requirements; the owner edits it directly.
+- **Stray processes.** Tell every worker in its brief to stop the services it starts before it reports back. After each worker reports, and at the end of every session, check for leftovers with `pgrep -fl "vite|cloud_home|http.server|playwright"` and kill only the ones whose command line points into this repo or its worktrees (never the owner's own processes). Say in the report if you had to kill any.
 - You do not write feature code. You may edit `SPEC.md`, `plan/`, `reports/`, and the owner-facing text of reports.
 - Commits are local only, small, in the repo's existing message style, **with no AI/assistant attribution lines**. Never push, tag or force anything. Never touch `main` — all work lands on `agent/manager`; the owner decides when it is merged into `main`.
 - Do not run destructive commands outside the repo or its scratch dirs. Do not delete anything you did not create.

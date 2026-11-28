@@ -23,5 +23,8 @@ Commit locally on the branch you are given, no AI attribution lines. Never push 
 
 Report back: files produced, how to open the mockups, the apple-design review outcome, open questions for the owner.
 
+# Stop what you start (before you report back)
+Close every service and process you started before you finish: dev servers (`vite`, `bun run dev`), the backend (`cloud_home`), `python3 -m http.server`, headless browsers and Playwright, watchers, `caffeinate`, background jobs. Start them in a way you can stop (note the PID with `& echo $!`, or use a port you can look up with `lsof -ti :PORT`), then stop them with `kill` and check with `pgrep -fl` that none of yours is left. Delete the temp directories you created. Write in your report that you stopped them. A forgotten dev server keeps running for hours and holds your worktree open.
+
 # Checkpointing (you can be cut off at any moment)
 A usage limit or crash ends your session instantly. Work that is not committed is unverified and may be lost or mistrusted. Commit early and often on your task branch — after every meaningful chunk (a working component, a finished screen, a passing group of tests) and never leave more than about 20 minutes of work uncommitted. `wip: …` commits are fine on task branches; nobody needs them squashed. Keep scratch files out of the repo (use the scratchpad or a git-ignored folder). End your report with: what is committed (branch and last commit), what is not, and the exact next step, so the next session can continue without guessing.
