@@ -109,11 +109,18 @@ for ((attempt = 0; attempt <= max_waits; attempt++)); do
   status=${PIPESTATUS[0]}
   set -e
 
-  # Only a failed run whose last lines are the limit message counts; a report that merely
-  # quotes the phrase must not trigger a restart.
-  limit_line="$(tail -n 5 "$log" | grep -iE "hit your .*limit" | tail -n 1 || true)"
-  if [ "$status" -eq 0 ] || [ -z "$limit_line" ]; then
+  # The run counts as stopped by the limit when the limit message is among the last lines (background
+  # workers may print a few lines after it). A clean exit (status 0) only counts when the message is
+  # the very last line, so a report that merely quotes the phrase does not trigger a restart.
+  limit_line="$(tail -n 15 "$log" | grep -iE "hit your .*limit" | tail -n 1 || true)"
+  last_line="$(grep -v '^[[:space:]]*$' "$log" | tail -n 1 || true)"
+  if [ -n "$limit_line" ]; then found=yes; else found=no; fi
+  echo "[run_manager] claude exited with status $status; limit message in the last lines: $found" >&2
+  if [ -z "$limit_line" ]; then
     exit "$status"
+  fi
+  if [ "$status" -eq 0 ] && [ "$last_line" != "$limit_line" ]; then
+    exit 0
   fi
   if [ "$attempt" -eq "$max_waits" ]; then
     echo "[run_manager] usage limit hit $((max_waits + 1)) times; giving up. Last message: $limit_line" >&2
