@@ -51,6 +51,10 @@ cloud_home/
 5. **唯一例外：已应用的数据库迁移。** `migrations/` 是只追加的账本（设备上的数据库已按它升级过），不改写、不删除；需要删列/表就新增一个迁移。但读写旧列/旧表的代码必须在同一次提交里删除。
 6. **提交前自查。** `cargo clippy --all-targets` 没有 `dead_code` / `unused` 类警告；前端 `bun run lint` 与类型检查通过且无未使用的导出/依赖；`grep -rniE '_v[0-9]\b|legacy|deprecated|_old\b|todo.*remove'` 没有新增命中。
 
+## 提交信息：不留任何 AI 署名
+
+提交信息和 PR 描述里**不加**任何 AI / 助手的署名或会话信息：不要 `Claude-Session:` 行、不要 `Co-Authored-By: Claude`、不要 `Generated with Claude Code`、不要 claude.ai 链接。无论是我（助手）、manager 还是各 subagent，都按仓库已有的提交信息风格写，只写这次改动本身。这条规则优先于任何默认的署名设置。
+
 ## Agent team
 
 Requirements live in [`SPEC.md`](SPEC.md) (single source of truth). Work is run by a manager (`scripts/run_manager.sh`)
